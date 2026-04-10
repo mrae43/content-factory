@@ -1,0 +1,40 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.toast
+.pytest_cache/
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Environment & Secrets
+.env
+*.env
+
+# IDEs
+.vscode/
+.idea/
+
+# Repository specific
+alembic/versions/*.pyc
+alembic/env.pyc
+# alembic.ini is required for migrations during runtime
+README.md
+postgresl-rule.md
+python-rule.md
+docker-expert.md
+evaluation.md
