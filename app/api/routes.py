@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends, status, BackgroundTasks
+from sqlalchemy.orm import Session, joinedload
 from pydantic import BaseModel
 from uuid import UUID
 import logging
@@ -148,9 +149,9 @@ def approve_script(
       latest_script.feedback_history = feedback_history
       
     db.commit()
-        db.refresh(job)
-        
-        # Trigger the pipeline to re-run the copywriter agent
-        background_tasks.add_task(run_content_factory_pipeline, job_id=job.id)
+    db.refresh(job)
+    
+    # Trigger the pipeline to re-run the copywriter agent
+    background_tasks.add_task(run_content_factory_pipeline, job_id=job.id)
 
   return job

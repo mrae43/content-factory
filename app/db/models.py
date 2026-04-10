@@ -118,7 +118,7 @@ class Script(Base):
     claims = relationship("FactCheckClaim", back_populates="script", cascade="all, delete-orphan")
 
 class FactCheckClaim(Base):
-  """
+    """
     Step 4 & 6: The Red Team Evaluator outputs. Strict constraints applied.
     """
     __tablename__ = 'fact_check_claims'
@@ -142,7 +142,7 @@ class FactCheckClaim(Base):
     script = relationship("Script", back_populates="claims")
 
 class Asset(Base):
-   """
+    """
     Step 7: Multi-modal asset generation (Veo clips, Lyria audio, Charts).
     """
     __tablename__ = 'assets'
