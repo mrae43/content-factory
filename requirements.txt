@@ -17,4 +17,3 @@ python-dotenv==1.0.0
 # AI/ML & Pipeline (based on codebase requirements)
 # Note: These are base requirements for the inferred pipeline
 aiohttp==3.9.1
-asyncio==3.4.3

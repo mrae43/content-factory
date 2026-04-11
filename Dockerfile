@@ -56,4 +56,5 @@ USER appuser
 EXPOSE 8000
 
 # Graceful shutdown support and execution via Uvicorn
-ENTRYPOINT ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+ENTRYPOINT ["uvicorn"]
+CMD ["app.main:app", "--host", "0.0.0.0", "--port", "8000"]
