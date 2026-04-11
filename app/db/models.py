@@ -85,7 +85,7 @@ class ResearchChunk(Base):
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    job_id = Column(UUID(as_uuid=True), ForeignKey('factory.render_jobs.id', ondelete='CASCADE'), nullable=False)
+    job_id = Column(UUID(as_uuid=True), ForeignKey('factory.render_jobs.id', ondelete='CASCADE'), nullable=False, index=True)
     
     content = Column(String, nullable=False)
     # Gemini 3.1 Embeddings (typically 768 or 1536 dims)
@@ -106,7 +106,7 @@ class Script(Base):
     __table_args__ = {'schema': 'factory'}
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    job_id = Column(UUID(as_uuid=True), ForeignKey('factory.render_jobs.id', ondelete='CASCADE'), nullable=False)
+    job_id = Column(UUID(as_uuid=True), ForeignKey('factory.render_jobs.id', ondelete='CASCADE'), nullable=False, index=True)
     
     version = Column(Integer, nullable=False, default=1)
     content = Column(String, nullable=False)
@@ -134,7 +134,7 @@ class FactCheckClaim(Base):
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    script_id = Column(UUID(as_uuid=True), ForeignKey('factory.scripts.id', ondelete='CASCADE'), nullable=False)
+    script_id = Column(UUID(as_uuid=True), ForeignKey('factory.scripts.id', ondelete='CASCADE'), nullable=False, index=True)
     
     claim_text = Column(String, nullable=False)
     verdict = Column(VerdictEnum, nullable=False)
@@ -155,7 +155,7 @@ class Asset(Base):
     __table_args__ = {'schema': 'factory'}
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    job_id = Column(UUID(as_uuid=True), ForeignKey('factory.render_jobs.id', ondelete='CASCADE'), nullable=False)
+    job_id = Column(UUID(as_uuid=True), ForeignKey('factory.render_jobs.id', ondelete='CASCADE'), nullable=False, index=True)
     
     asset_type = Column(AssetTypeEnum, nullable=False)
     url_or_path = Column(String, nullable=False)
