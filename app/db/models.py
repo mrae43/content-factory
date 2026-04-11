@@ -103,7 +103,10 @@ class Script(Base):
     Step 5: Output from the Copywriter Agent.
     """
     __tablename__ = 'scripts'
-    __table_args__ = {'schema': 'factory'}
+    __table_args__ = (
+        UniqueConstraint('job_id', 'version', name='uq_script_job_version')
+        {'schema': 'factory'}
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     job_id = Column(UUID(as_uuid=True), ForeignKey('factory.render_jobs.id', ondelete='CASCADE'), nullable=False, index=True)
