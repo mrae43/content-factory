@@ -1,10 +1,11 @@
 import uuid
 from datetime import datetime
 from sqlalchemy import (
-    Column, String, Boolean, Float, Integer, ForeignKey, 
-    DateTime, text, CheckConstraint, Index, DDL, event
+    Column, String, Boolean, Float, Integer, ForeignKey,
+    DateTime, text, CheckConstraint, Index, DDL, event,
+    UniqueConstraint
 )
-from sqlalchemy.dialects.postgresql import UUID, JSONB, ENUM, TSVECTOR
+from sqlalchemy.dialects.postgresql import UUID, JSONB, ENUM
 from sqlalchemy.orm import declarative_base, relationship
 from pgvector.sqlalchemy import Vector
 
@@ -14,8 +15,8 @@ Base = declarative_base()
 # 1. ENUMS (Strict State Management)
 # ==========================================
 JobStatusEnum = ENUM(
-    'PENDING', 'RESEARCHING', 'FACT_CHECKING_RESEARCH', 
-    'SCRIPTING', 'FACT_CHECKING_SCRIPT', 'ASSET_GENERATION', 
+    'PENDING', 'RESEARCHING', 'FACT_CHECKING_RESEARCH',
+    'SCRIPTING', 'FACT_CHECKING_SCRIPT', 'ASSET_GENERATION',
     'COMPLETED', 'FAILED', 'HUMAN_REVIEW_NEEDED',
     name='job_status',
     schema='factory',
@@ -89,8 +90,8 @@ class ResearchChunk(Base):
     
     content = Column(String, nullable=False)
     # Gemini 3.1 Embeddings (typically 768 or 1536 dims)
-    embedding = Column(Vector(768), nullable=True) 
-    
+    embedding = Column(Vector(768), nullable=True)
+
     # Stores sources, URLs, credibility scores
     meta = Column(JSONB, nullable=False, server_default='{}')
 
@@ -104,7 +105,7 @@ class Script(Base):
     """
     __tablename__ = 'scripts'
     __table_args__ = (
-        UniqueConstraint('job_id', 'version', name='uq_script_job_version')
+        UniqueConstraint('job_id', 'version', name='uq_script_job_version'),
         {'schema': 'factory'}
     )
 
@@ -138,7 +139,7 @@ class FactCheckClaim(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     script_id = Column(UUID(as_uuid=True), ForeignKey('factory.scripts.id', ondelete='CASCADE'), nullable=False, index=True)
-    
+
     claim_text = Column(String, nullable=False)
     verdict = Column(VerdictEnum, nullable=False)
     confidence = Column(Float, nullable=False)
