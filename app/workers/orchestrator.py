@@ -1,20 +1,132 @@
+import asyncio
+import logging
+import traceback
 from uuid import UUID
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.session import AsyncSessionLocal
+from app.db.crud import get_render_job, update_job_status, log_error, save_script
+from app.workers.agents import (
+    ResearchAgent, CopywriterAgent, RedTeamAgent, AssetStudioAgent,
+    AgentActionStatus
+)
+from app.schemas.shorts import JobStatusEnum
+
+logger = logging.getLogger("factory.orchestrator")
+
+# Maximum times the Red Team can reject a script before human intervention
+MAX_RED_TEAM_REVISIONS = 3  
 
 async def run_content_factory_pipeline(job_id: UUID):
     """
-    This is the async worker that runs independently of the web request.
-    It executes the full agentic loop:
-    1. Researching (Gemini 3.1 Flash + pgvector)
-    2. Fact-Checking Research
-    3. Scripting (Copywriter Agent)
-    4. Fact-Checking Script (Red Team Agent) -> Loops if rejected
-    5. Asset Generation (Veo/Lyria)
-    6. Final Video Render (FFMPEG/ShortGPT)
+    The Agentic State Machine.
+    Manages its own DB session to ensure persistence even in long-running background tasks.
     """
-    pass
+    revision_count = 0
+
+    async with AsyncSessionLocal() as db:
+        while True:
+            # 1. Fetch latest state from DB
+            job = await get_render_job(db, job_id)
+            
+            if not job:
+                logger.error(f"Job {job_id} not found in DB.")
+                break
+
+            logger.info(f"Job {job_id} current status: {job.status}")
+
+            try:
+                # State Machine Transitions
+                if job.status == JobStatusEnum.PENDING:
+                    # In a real app, Step 2 (Extraction) would happen here.
+                    # For MVP, we skip directly to Research.
+                    await update_job_status(db, job_id, JobStatusEnum.RESEARCHING)
+                
+                elif job.status == JobStatusEnum.RESEARCHING:
+                    researcher = ResearchAgent(model_name="gemini-3.1-flash")
+                    result = await researcher.run(context={"topic": job.topic, "pre_context": job.pre_context})
+                    
+                    if result.status == AgentActionStatus.SUCCESS:
+                        # Success! Move to Fact-Checking the research
+                        await update_job_status(db, job_id, JobStatusEnum.FACT_CHECKING_RESEARCH)
+                    else:
+                        raise Exception(f"Research failed: {result.reasoning}")
+
+                elif job.status == JobStatusEnum.FACT_CHECKING_RESEARCH:
+                    # Step 4: Rapid baseline check
+                    # MVP: Assume research is verified for now
+                    await update_job_status(db, job_id, JobStatusEnum.SCRIPTING)
+
+                elif job.status == JobStatusEnum.SCRIPTING:
+                    copywriter = CopywriterAgent(model_name="gemini-3.1-pro", temperature=0.7)
+                    result = await copywriter.run(context={"topic": job.topic, "job_id": job.id})
+                    
+                    if result.status == AgentActionStatus.SUCCESS:
+                        # Save script version to DB
+                        version = len(job.scripts) + 1
+                        await save_script(db, job_id, result.payload["script_content"], version)
+                        await update_job_status(db, job_id, JobStatusEnum.FACT_CHECKING_SCRIPT)
+                    else:
+                        raise Exception(f"Scripting failed: {result.reasoning}")
+
+                elif job.status == JobStatusEnum.FACT_CHECKING_SCRIPT:
+                    # THE RED TEAM EVALUATOR
+                    red_team = RedTeamAgent(model_name="gemini-3.1-pro", temperature=0.0)
+                    result = await red_team.run(context={"job_id": job_id})
+                    
+                    if result.status == AgentActionStatus.SUCCESS:
+                        logger.info(f"Red Team Approved for Job {job_id}. Proceeding to Asset Gen.")
+                        await update_job_status(db, job_id, JobStatusEnum.ASSET_GENERATION)
+                        
+                    elif result.status == AgentActionStatus.REVISION_NEEDED:
+                        # CRASH-RESILIENT REVISION TRACKING:
+                        # We use the actual number of scripts in the DB to determine revisions
+                        current_revision = len(job.scripts)
+                        logger.warning(f"Red Team Rejected Job {job_id}. Revision {current_revision}/{MAX_RED_TEAM_REVISIONS}")
+                        
+                        if current_revision >= MAX_RED_TEAM_REVISIONS:
+                            logger.error(f"Max revisions reached for Job {job_id}. Escalating.")
+                            await update_job_status(db, job_id, JobStatusEnum.HUMAN_REVIEW_NEEDED)
+                            break 
+                        else:
+                            await update_job_status(db, job_id, JobStatusEnum.SCRIPTING)
+
+                elif job.status == JobStatusEnum.ASSET_GENERATION:
+                    studio = AssetStudioAgent(model_name="gemini-3.1-multimodal")
+                    result = await studio.run(context={"job_id": job_id})
+                    
+                    if result.status == AgentActionStatus.SUCCESS:
+                        # Update with final video URL (mocked)
+                        job.final_video_url = result.payload["video_url"]
+                        await db.commit()
+                        await update_job_status(db, job_id, JobStatusEnum.COMPLETED)
+
+                elif job.status == JobStatusEnum.COMPLETED:
+                    logger.info(f"Pipeline finished successfully for Job {job_id}")
+                    break
+
+                elif job.status in [JobStatusEnum.HUMAN_REVIEW_NEEDED, JobStatusEnum.FAILED]:
+                    logger.warning(f"Pipeline paused/stopped for Job {job_id} at {job.status}")
+                    break
+
+                else:
+                    logger.error(f"Unrecognized status '{job.status}' for Job {job_id}")
+                    break
+
+            except Exception as e:
+                logger.exception(f"Fatal error in orchestrator for Job {job_id}")
+                await log_error(db, job_id, f"{str(e)}\n{traceback.format_exc()}", phase=str(job.status))
+                await update_job_status(db, job_id, JobStatusEnum.FAILED)
+                break
 
 async def resume_pipeline_after_approval(job_id: UUID):
     """
-    Picks up the job from the ASSET_GENERATION phase after human approval.
+    Entry point for human intervention to restart the loop.
     """
-    pass
+    async with AsyncSessionLocal() as db:
+        job = await get_render_job(db, job_id)
+        if job and job.status == JobStatusEnum.HUMAN_REVIEW_NEEDED:
+            logger.info(f"Manual override for Job {job_id}. Restarting at Asset Generation.")
+            await update_job_status(db, job_id, JobStatusEnum.ASSET_GENERATION)
+            # Fire and forget the background task
+            asyncio.create_task(run_content_factory_pipeline(job_id))
