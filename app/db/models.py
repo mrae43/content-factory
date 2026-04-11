@@ -75,6 +75,12 @@ class ResearchChunk(Base):
     __tablename__ = 'research_chunks'
     __table_args__ = (
         Index('ix_research_meta_gin', 'meta', postgresql_using='gin'),
+        Index(
+            'ix_research_embedding_hnsw',
+            postgresql_using='hnsw',
+            postgresql_with={'m': 16, 'ef_construction': 64},
+            postgresql_ops={'embedding': 'vector_cosine_ops'}
+        ),
         {'schema': 'factory'}
     )
 
