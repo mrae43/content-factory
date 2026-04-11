@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from app.api.routes import router
 
-app = FastAPI(title="Epistemic Content Factory API (2026)")
+app = FastAPI(title="Content Factory API (2026)")
 
 app.include_router(router)
 
