@@ -46,7 +46,14 @@ class RenderJob(Base):
     Step 1 & 8: The master orchestrator for the Content Factory.
     """
     __tablename__ = 'render_jobs'
-    __table_args__ = {'schema': 'factory'}
+    __table_args__ = (
+        Index(
+            'ix_render_jobs_active_queue',
+            'status',
+            postgresql_where=text("status NOT IN ('COMPLETED', 'FAILED')")
+        ),
+        {'schema': 'factory'}
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     topic = Column(String, nullable=False)
