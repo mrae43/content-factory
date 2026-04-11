@@ -1,10 +1,11 @@
 import uuid
 from datetime import datetime
 from sqlalchemy import (
-    Column, String, Boolean, Float, Integer, ForeignKey, 
-    DateTime, text, CheckConstraint, Index, DDL, event
+    Column, String, Boolean, Float, Integer, ForeignKey,
+    DateTime, text, CheckConstraint, Index, DDL, event,
+    UniqueConstraint
 )
-from sqlalchemy.dialects.postgresql import UUID, JSONB, ENUM, TSVECTOR
+from sqlalchemy.dialects.postgresql import UUID, JSONB, ENUM
 from sqlalchemy.orm import declarative_base, relationship
 from pgvector.sqlalchemy import Vector
 
@@ -14,8 +15,8 @@ Base = declarative_base()
 # 1. ENUMS (Strict State Management)
 # ==========================================
 JobStatusEnum = ENUM(
-    'PENDING', 'RESEARCHING', 'FACT_CHECKING_RESEARCH', 
-    'SCRIPTING', 'FACT_CHECKING_SCRIPT', 'ASSET_GENERATION', 
+    'PENDING', 'RESEARCHING', 'FACT_CHECKING_RESEARCH',
+    'SCRIPTING', 'FACT_CHECKING_SCRIPT', 'ASSET_GENERATION',
     'COMPLETED', 'FAILED', 'HUMAN_REVIEW_NEEDED',
     name='job_status',
     schema='factory',
@@ -45,7 +46,14 @@ class RenderJob(Base):
     Step 1 & 8: The master orchestrator for the Content Factory.
     """
     __tablename__ = 'render_jobs'
-    __table_args__ = {'schema': 'factory'}
+    __table_args__ = (
+        Index(
+            'ix_render_jobs_active_queue',
+            'status',
+            postgresql_where=text("status NOT IN ('COMPLETED', 'FAILED')")
+        ),
+        {'schema': 'factory'}
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     topic = Column(String, nullable=False)
@@ -75,16 +83,22 @@ class ResearchChunk(Base):
     __tablename__ = 'research_chunks'
     __table_args__ = (
         Index('ix_research_meta_gin', 'meta', postgresql_using='gin'),
+        Index(
+            'ix_research_embedding_hnsw',
+            postgresql_using='hnsw',
+            postgresql_with={'m': 16, 'ef_construction': 64},
+            postgresql_ops={'embedding': 'vector_cosine_ops'}
+        ),
         {'schema': 'factory'}
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    job_id = Column(UUID(as_uuid=True), ForeignKey('factory.render_jobs.id', ondelete='CASCADE'), nullable=False)
+    job_id = Column(UUID(as_uuid=True), ForeignKey('factory.render_jobs.id', ondelete='CASCADE'), nullable=False, index=True)
     
     content = Column(String, nullable=False)
     # Gemini 3.1 Embeddings (typically 768 or 1536 dims)
-    embedding = Column(Vector(768), nullable=True) 
-    
+    embedding = Column(Vector(768), nullable=True)
+
     # Stores sources, URLs, credibility scores
     meta = Column(JSONB, nullable=False, server_default='{}')
 
@@ -97,10 +111,13 @@ class Script(Base):
     Step 5: Output from the Copywriter Agent.
     """
     __tablename__ = 'scripts'
-    __table_args__ = {'schema': 'factory'}
+    __table_args__ = (
+        UniqueConstraint('job_id', 'version', name='uq_script_job_version'),
+        {'schema': 'factory'}
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    job_id = Column(UUID(as_uuid=True), ForeignKey('factory.render_jobs.id', ondelete='CASCADE'), nullable=False)
+    job_id = Column(UUID(as_uuid=True), ForeignKey('factory.render_jobs.id', ondelete='CASCADE'), nullable=False, index=True)
     
     version = Column(Integer, nullable=False, default=1)
     content = Column(String, nullable=False)
@@ -128,8 +145,8 @@ class FactCheckClaim(Base):
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    script_id = Column(UUID(as_uuid=True), ForeignKey('factory.scripts.id', ondelete='CASCADE'), nullable=False)
-    
+    script_id = Column(UUID(as_uuid=True), ForeignKey('factory.scripts.id', ondelete='CASCADE'), nullable=False, index=True)
+
     claim_text = Column(String, nullable=False)
     verdict = Column(VerdictEnum, nullable=False)
     confidence = Column(Float, nullable=False)
@@ -146,10 +163,13 @@ class Asset(Base):
     Step 7: Multi-modal asset generation (Veo clips, Lyria audio, Charts).
     """
     __tablename__ = 'assets'
-    __table_args__ = {'schema': 'factory'}
+    __table_args__ = (
+        Index('ix_assets_job_type', 'job_id', 'asset_type'),
+        {'schema': 'factory'}
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    job_id = Column(UUID(as_uuid=True), ForeignKey('factory.render_jobs.id', ondelete='CASCADE'), nullable=False)
+    job_id = Column(UUID(as_uuid=True), ForeignKey('factory.render_jobs.id', ondelete='CASCADE'), nullable=False, index=True)
     
     asset_type = Column(AssetTypeEnum, nullable=False)
     url_or_path = Column(String, nullable=False)
