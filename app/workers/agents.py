@@ -95,7 +95,23 @@ class CopywriterAgent(BaseAgent):
         research_chunks = context.get("research_chunks", [])
         feedback = context.get("feedback", "")
 
-        prompt = ChatPromptTemplate.from_messages([])
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", (
+                "You are the Lead Scriptwriter for the AI Content Factory. Your mission is to write high-retention scripts.\n"
+                "STRATEGY: Use the Hook-Value-Loop framework. Ensure every 3 seconds has a visual 'pattern interrupt'.\n"
+                "CONSTRAINTS:\n"
+                "1. ZERO HALLUCINATION: Use only facts from <research_chunks>. If a claim isn't there, don't use it.\n"
+                "2. MULTI-MODAL: Provide clear prompts for visual generation (Veo) and audio/SFX (Lyria).\n"
+                "3. DATA VIZ: Specify when to show a Python-generated chart to support key numbers."
+            )),
+            ("human", (
+                "Create a viral script and storyboard for this topic:\n"
+                "<topic>\n{topic}\n</topic>\n"
+                "<research_chunks>\n{research_chunks}\n</research_chunks>\n"
+                "<feedback>\n{feedback}\n</feedback>\n"
+                "Analyze the narrative arc step-by-step, then generate the script and storyboard JSON structure."
+            ))
+        ])
 
         chain = prompt | self.llm.with_structured_output(CopywriterSchema)
         result: CopywriterSchema = await chain.ainvoke({
