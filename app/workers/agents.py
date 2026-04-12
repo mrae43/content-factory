@@ -7,6 +7,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 from langchain_core.prompts import ChatPromptTemplate
 
 from app.services.llm import get_llm
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
