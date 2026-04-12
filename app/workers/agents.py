@@ -141,7 +141,23 @@ class RedTeamAgent(BaseAgent):
         script_content = context.get("script_content", "")
         research_chunks = context.get("research_chunks", [])
 
-        prompt = ChatPromptTemplate.from_messages([])
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", (
+                "You are the Lead Red Team Auditor at the AI Content Factory. Your mission: Destroy Hallucinations.\n"
+                "Your reputation depends on catching every single unsupported claim.\n"
+                "METHODOLOGY:\n"
+                "1. Break the script into atomic factual claims.\n"
+                "2. Cross-reference each claim against the <research_sources>.\n"
+                "3. If a claim is an exaggeration, a misinterpretation, or not mentioned, mark it UNSUPPORTED.\n"
+                "VERDICT: Only 'SUPPORTED' if 100% of claims are verified."
+            )),
+            ("human", (
+                "Audit the following script against the research data:\n"
+                "<research_sources>\n{research_chunks}\n</research_sources>\n"
+                "<target_script>\n{script_content}\n</target_script>\n"
+                "Analyze the claims step-by-step, then output the structured report."
+            ))
+        ])
 
         chain = prompt | self.llm.with_structured_output(RedTeamSchema)
         result: RedTeamSchema = await chain.ainvoke({
