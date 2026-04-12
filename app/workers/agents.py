@@ -4,14 +4,17 @@ from pydantic import BaseModel, Field
 from enum import Enum
 import logging
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from langchain_core.prompts import ChatPromptTemplate
+
+from app.services.llm import get_llm
 
 logger = logging.getLogger(__name__)
 
 class AgentActionStatus(str, Enum):
-    SUCCESS = "SUCCESS"          # Passed and ready for next stage
-    REVISION_NEEDED = "REVISION_NEEDED" # Red Team rejected, back to drawing board
-    ESCALATE = "ESCALATE"        # Failed max retries, humans need to look
-    ERROR = "ERROR"              # System/API failure
+    SUCCESS = "SUCCESS"          
+    REVISION_NEEDED = "REVISION_NEEDED" 
+    ESCALATE = "ESCALATE"        
+    ERROR = "ERROR"              
 
 class AgentResult(BaseModel):
     """The standard currency of the Content Factory."""
@@ -19,7 +22,7 @@ class AgentResult(BaseModel):
     payload: Dict[str, Any] = Field(description="The structured output (Research, Script, etc.)")
     reasoning: str = Field(description="Chain-of-Thought log for audit trails and Red Team debates.")
     confidence_score: float = Field(ge=0.0, le=1.0, description="Self-assessed or Evaluator-assessed confidence.")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Token usage, model version, latency.")
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
 class BaseAgent(ABC):
   """
@@ -30,6 +33,7 @@ class BaseAgent(ABC):
   def __init__(self, model_name: str = "gemini-3.1-flash", temperature: float = 0.2):
     self.model_name = model_name
     self.temperature = temperature
+    self.llm = get_llm(model_name=self.model_name, temperature=self.temperature)
 
   # Robustness: Agents automatically retry on failure using exponential backoff (e.g. 2s, 4s, 8s)
   @retry(
@@ -49,6 +53,11 @@ class BaseAgent(ABC):
   async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
     """The actual implementation required by child agents."""
     pass
+
+class ResearchSchema(BaseModel):
+    chunks: List[str] = Field(description="Extracted highly-credible data chunks.")
+    reasoning: str = Field(description="Why these facts were prioritized.")
+    confidence: float = Field(description="Confidence in factual accuracy (0.0 to 1.0).")
 
 class ResearchAgent(BaseAgent):
     async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
