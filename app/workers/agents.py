@@ -186,7 +186,22 @@ class AssetStudioAgent(BaseAgent):
         script = context.get("script_content", "")
         storyboard = context.get("storyboard", [])
 
-        prompt = ChatPromptTemplate.from_messages([])
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", (
+                "You are the Multi-Modal Art Director for the AI Content Factory.\n"
+                "Your mission: Translate creative storyboards into technical directives for production-grade AI models.\n"
+                "TECHNICAL SPECS:\n"
+                "1. VEO (Video): Create cinematic 4K prompts. Define camera style (drone, close-up) and lighting (golden hour, high-contrast).\n"
+                "2. LYRIA (Audio): Define orchestral/electronic scoring themes and precise voiceover pacing directives.\n"
+                "3. PYTHON (Data Viz): For charts, specify titles, axis labels, and chart types (e.g., 'Moving average line chart of BRICS GDP')."
+            )),
+            ("human", (
+                "Refine the technical assets for the following script and storyboard:\n"
+                "<script>\n{script}\n</script>\n"
+                "<storyboard>\n{storyboard}\n</storyboard>\n"
+                "Analyze the scene transitions first, then generate the final prompt set."
+            ))
+        ])
 
         chain = prompt | self.llm.with_structured_output(StudioPromptSchema)
         result: StudioPromptSchema = await chain.ainvoke({
