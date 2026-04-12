@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 from pydantic import BaseModel, Field
 from enum import Enum
 import logging
@@ -26,16 +26,13 @@ class AgentResult(BaseModel):
 
 class BaseAgent(ABC):
   """
-  Abstract Base Agent. 
-  In 2026, we default to Gemini 3.1 Flash for high-volume tasks, 
-  and Gemini 3.1 Pro for deep reasoning (Red Team / Strategy).
+  Abstract Base Agent leveraging LangChain and Gemini 3.1.
   """
   def __init__(self, model_name: str = "gemini-3.1-flash", temperature: float = 0.2):
     self.model_name = model_name
     self.temperature = temperature
     self.llm = get_llm(model_name=self.model_name, temperature=self.temperature)
 
-  # Robustness: Agents automatically retry on failure using exponential backoff (e.g. 2s, 4s, 8s)
   @retry(
       stop=stop_after_attempt(3),
       wait=wait_exponential(multiplier=1, min=2, max=10),
@@ -43,10 +40,7 @@ class BaseAgent(ABC):
       before_sleep=lambda retry_state: logger.warning(f"Agent API Error. Retrying in {retry_state.next_action.sleep}s...")
   )
   async def run(self, context: Dict[str, Any], **kwargs) -> AgentResult:
-    """
-    Executes the agent's core loop, with automatic crash-resilience.
-    Call _execute internally.
-    """
+    """Core loop with automatic crash-resilience."""
     return await self._execute(context, **kwargs)
 
   @abstractmethod
@@ -62,11 +56,19 @@ class ResearchSchema(BaseModel):
 class ResearchAgent(BaseAgent):
     async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
         topic = context.get("topic", "Unknown Topic")
+        pre_context = context.get("pre_context", "")
+
+        prompt = ChatPromptTemplate.from_messages([])
+
+        chain = prompt | self.llm.with_structured_output(ResearchSchema)
+        result: ResearchSchema = await chain.ainvoke({"topic": topic, "pre_context": pre_context})
+
         return AgentResult(
             status=AgentActionStatus.SUCCESS,
-            payload={"chunks": [f"Deep research on {topic}", "Historical data extracted."]},
-            reasoning="Simulated RAG extraction using high-context lookup.",
-            confidence_score=0.95
+            payload={"chunks": result.chunks},
+            reasoning=result.reasoning,
+            confidence_score=result.confidence,
+            metadata={"model": self.model_name}
         )
 
 class CopywriterAgent(BaseAgent):
