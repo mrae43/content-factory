@@ -2,6 +2,10 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 from pydantic import BaseModel, Field
 from enum import Enum
+import logging
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+
+logger = logging.getLogger(__name__)
 
 class AgentActionStatus(str, Enum):
     SUCCESS = "SUCCESS"          # Passed and ready for next stage
@@ -27,16 +31,27 @@ class BaseAgent(ABC):
     self.model_name = model_name
     self.temperature = temperature
 
-  @abstractmethod
+  # Robustness: Agents automatically retry on failure using exponential backoff (e.g. 2s, 4s, 8s)
+  @retry(
+      stop=stop_after_attempt(3),
+      wait=wait_exponential(multiplier=1, min=2, max=10),
+      reraise=True,
+      before_sleep=lambda retry_state: logger.warning(f"Agent API Error. Retrying in {retry_state.next_action.sleep}s...")
+  )
   async def run(self, context: Dict[str, Any], **kwargs) -> AgentResult:
     """
-    Executes the agent's core loop.
-    Must return a strictly typed AgentResult.
+    Executes the agent's core loop, with automatic crash-resilience.
+    Call _execute internally.
     """
+    return await self._execute(context, **kwargs)
+
+  @abstractmethod
+  async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
+    """The actual implementation required by child agents."""
     pass
 
 class ResearchAgent(BaseAgent):
-    async def run(self, context: Dict[str, Any], **kwargs) -> AgentResult:
+    async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
         topic = context.get("topic", "Unknown Topic")
         return AgentResult(
             status=AgentActionStatus.SUCCESS,
@@ -46,7 +61,7 @@ class ResearchAgent(BaseAgent):
         )
 
 class CopywriterAgent(BaseAgent):
-    async def run(self, context: Dict[str, Any], **kwargs) -> AgentResult:
+    async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
         return AgentResult(
             status=AgentActionStatus.SUCCESS,
             payload={"script_content": "Simulated Viral Script: The truth about {topic}."},
@@ -55,7 +70,7 @@ class CopywriterAgent(BaseAgent):
         )
 
 class RedTeamAgent(BaseAgent):
-    async def run(self, context: Dict[str, Any], **kwargs) -> AgentResult:
+    async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
         # Mock simple logic: usually succeeds, but could simulate rejection logic if needed
         return AgentResult(
             status=AgentActionStatus.SUCCESS,
@@ -65,7 +80,7 @@ class RedTeamAgent(BaseAgent):
         )
 
 class AssetStudioAgent(BaseAgent):
-    async def run(self, context: Dict[str, Any], **kwargs) -> AgentResult:
+    async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
         return AgentResult(
             status=AgentActionStatus.SUCCESS,
             payload={"video_url": "s3://factory/renders/mock_video.mp4"},
