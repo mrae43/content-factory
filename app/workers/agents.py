@@ -58,7 +58,19 @@ class ResearchAgent(BaseAgent):
         topic = context.get("topic", "Unknown Topic")
         pre_context = context.get("pre_context", "")
 
-        prompt = ChatPromptTemplate.from_messages([])
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", (
+                "You are the Deep Research Agent of the AI Content Factory. Your mission is to establish the ground truth.\n"
+                "Prioritize historically accurate, verifiable, and high-impact data points. Ignore opinion, fluff, and low-confidence claims.\n"
+                "Truth and Guardrails are first-class citizens. If context is insufficient, state it in your reasoning."
+            )),
+            ("human", (
+                "Identify the most critical facts about the following topic using the provided context.\n"
+                "<topic>\n{topic}\n</topic>\n"
+                "<pre_context>\n{pre_context}\n</pre_context>\n"
+                "First, analyze the input step-by-step. Then, extract the data chunks."
+            ))
+        ])
 
         chain = prompt | self.llm.with_structured_output(ResearchSchema)
         result: ResearchSchema = await chain.ainvoke({"topic": topic, "pre_context": pre_context})
