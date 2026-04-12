@@ -175,11 +175,32 @@ class RedTeamAgent(BaseAgent):
             metadata={"model": self.model_name}
         )
 
+class StudioPromptSchema(BaseModel):
+    visual_prompts: List[str] = Field(description="Prompts tailored for Veo video generation")
+    audio_prompts: str = Field(description="Prompts tailored for Lyria background scoring")
+
 class AssetStudioAgent(BaseAgent):
     async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
+        # In V1, we use Gemini Multi-modal to generate the PROMPTS for Veo/Lyria,
+        # rather than fully generating the video in python yet.
+        script = context.get("script_content", "")
+        storyboard = context.get("storyboard", [])
+
+        prompt = ChatPromptTemplate.from_messages([])
+
+        chain = prompt | self.llm.with_structured_output(StudioPromptSchema)
+        result: StudioPromptSchema = await chain.ainvoke({
+            "script": script,
+            "storyboard": storyboard
+        })
+
+        # Mocking the actual generation URL return for MVP
+        video_url = f"s3://factory/renders/{context.get('job_id', 'mock')}_rendered.mp4"
+
         return AgentResult(
             status=AgentActionStatus.SUCCESS,
-            payload={"video_url": "s3://factory/renders/mock_video.mp4"},
-            reasoning="Generated parallel assets via Veo and Lyria.",
-            confidence_score=0.9
+            payload={"video_url": video_url, "prompts": result.dict()},
+            reasoning="Visual/Audio directives optimized for cinematic output and data accuracy.",
+            confidence_score=0.9,
+            metadata={"model": self.model_name, "synth_id_enabled": settings.synthid_watermark_enabled}
         )
