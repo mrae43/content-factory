@@ -6,182 +6,195 @@ from uuid import UUID
 import logging
 
 # Import schemas and models
-from app.schemas.shorts import JobCreateRequest, RenderJobResponse, ScriptApprovalRequest, JobStatusEnum
+from app.schemas.shorts import (
+    JobCreateRequest,
+    RenderJobResponse,
+    ScriptApprovalRequest,
+    JobStatusEnum,
+)
 from app.db.models import RenderJob, Script
 from app.db.session import get_db
 
 # Import agentic orchestrator
-from app.workers.orchestrator import run_content_factory_pipeline, resume_pipeline_after_approval
+from app.workers.orchestrator import (
+    run_content_factory_pipeline,
+    resume_pipeline_after_approval,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/jobs", tags=["Content Factory"])
 
+
 # ==========================================
 # 1. CREATE JOB & TRIGGER PIPELINE
 # ==========================================
 @router.post(
-    "/", 
-    response_model=RenderJobResponse, 
-    status_code=status.HTTP_202_ACCEPTED
+    "/", response_model=RenderJobResponse, status_code=status.HTTP_202_ACCEPTED
 )
 async def create_render_job(
-  request: JobCreateRequest,
-  background_tasks: BackgroundTasks,
-  db: AsyncSession = Depends(get_db)
+    request: JobCreateRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
 ):
-  """
-  Step 1: User submits a topic and context.
-  Creates a new RenderJob and triggers the Agentic background pipeline.
-  """
-  try:
-    # Create DB record using Pydantic validation
-    new_job = RenderJob(
-      topic=request.topic,
-      pre_context=request.pre_context.model_dump(mode='json'),
-      strict_compliance_mode=request.strict_compliance_mode,
-      status=JobStatusEnum.PENDING
-    )
-    db.add(new_job)
-    await db.commit()
-    # Reload the job with relationships loaded to satisfy the Pydantic response model (RenderJobResponse)
-    # in an async context (prevents MissingGreenlet error).
-    stmt = (
-        select(RenderJob)
-        .options(
-            selectinload(RenderJob.scripts),
-            selectinload(RenderJob.assets)
+    """
+    Step 1: User submits a topic and context.
+    Creates a new RenderJob and triggers the Agentic background pipeline.
+    """
+    try:
+        # Create DB record using Pydantic validation
+        new_job = RenderJob(
+            topic=request.topic,
+            pre_context=request.pre_context.model_dump(mode="json"),
+            strict_compliance_mode=request.strict_compliance_mode,
+            status=JobStatusEnum.PENDING,
         )
-        .filter(RenderJob.id == new_job.id)
-    )
-    result = await db.execute(stmt)
-    job_to_return = result.scalar_one()
+        db.add(new_job)
+        await db.commit()
+        # Reload the job with relationships loaded to satisfy the Pydantic response model (RenderJobResponse)
+        # in an async context (prevents MissingGreenlet error).
+        stmt = (
+            select(RenderJob)
+            .options(selectinload(RenderJob.scripts), selectinload(RenderJob.assets))
+            .filter(RenderJob.id == new_job.id)
+        )
+        result = await db.execute(stmt)
+        job_to_return = result.scalar_one()
 
-    # Trigger the Agentic Workflow in the background
-    background_tasks.add_task(run_content_factory_pipeline, job_id=job_to_return.id)
+        # Trigger the Agentic Workflow in the background
+        background_tasks.add_task(run_content_factory_pipeline, job_id=job_to_return.id)
 
-    logger.info(f"Created RenderJob {job_to_return.id} for topic: {job_to_return.topic}")
-    return job_to_return
+        logger.info(
+            f"Created RenderJob {job_to_return.id} for topic: {job_to_return.topic}"
+        )
+        return job_to_return
 
-  except Exception as e:
-    await db.rollback()
-    logger.error(f"Failed to create job: {str(e)}")
-    raise HTTPException(status_code=500, detail=f"Database transaction failed: {str(e)}")
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to create job: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Database transaction failed: {str(e)}"
+        )
+
 
 # ==========================================
 # 2. POLL JOB STATUS
 # ==========================================
 @router.get(
-    "/{job_id}", 
-    response_model=RenderJobResponse, 
-    status_code=status.HTTP_200_OK
+    "/{job_id}", response_model=RenderJobResponse, status_code=status.HTTP_200_OK
 )
 async def get_render_job(job_id: UUID, db: AsyncSession = Depends(get_db)):
-  """
-  Step 8: Check status. 
-  Eager loads scripts, claims, and assets to prevent N+1 query performance hits.
-  """
-  # Modern Select pattern for Async
-  stmt = (
-      select(RenderJob)
-      .options(
-          selectinload(RenderJob.scripts).selectinload(Script.claims),
-          selectinload(RenderJob.assets)
-      )
-      .filter(RenderJob.id == job_id)
-  )
-  
-  result = await db.execute(stmt)
-  job = result.unique().scalar_one_or_none()
+    """
+    Step 8: Check status.
+    Eager loads scripts, claims, and assets to prevent N+1 query performance hits.
+    """
+    # Modern Select pattern for Async
+    stmt = (
+        select(RenderJob)
+        .options(
+            selectinload(RenderJob.scripts).selectinload(Script.claims),
+            selectinload(RenderJob.assets),
+        )
+        .filter(RenderJob.id == job_id)
+    )
 
-  if not job:
-    raise HTTPException(status_code=404, detail="RenderJob not found")
+    result = await db.execute(stmt)
+    job = result.unique().scalar_one_or_none()
 
-  return job
+    if not job:
+        raise HTTPException(status_code=404, detail="RenderJob not found")
+
+    return job
+
 
 # ==========================================
 # 3. HUMAN-IN-THE-LOOP APPROVAL (Red Team Override)
 # ==========================================
 @router.post(
-    "/{job_id}/approve-script", 
+    "/{job_id}/approve-script",
     response_model=RenderJobResponse,
-    status_code=status.HTTP_200_OK
+    status_code=status.HTTP_200_OK,
 )
 async def approve_script(
-    job_id: UUID, 
-    request: ScriptApprovalRequest, 
-    background_tasks: BackgroundTasks, 
-    db: AsyncSession = Depends(get_db)
+    job_id: UUID,
+    request: ScriptApprovalRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
 ):
-  """
-  Step 6 Override: If the Red Team agent flags the script (HUMAN_REVIEW_NEEDED),
-  an editor uses this endpoint to force approval, inject feedback, or reject.
-  """
-  # Fetch job with active scripts
-  stmt = (
-      select(RenderJob)
-      .options(joinedload(RenderJob.scripts))
-      .filter(RenderJob.id == job_id)
-  )
-  result = await db.execute(stmt)
-  job = result.unique().scalar_one_or_none()
-
-  if not job:
-    raise HTTPException(status_code=404, detail="RenderJob not found")
-  
-  if job.status not in [JobStatusEnum.HUMAN_REVIEW_NEEDED, JobStatusEnum.FACT_CHECKING_SCRIPT]:
-    raise HTTPException(
-        status_code=400, 
-        detail=f"Job is in '{job.status}', cannot approve script at this stage."
-    )
-
-  # Find the latest script that needs review
-  if not job.scripts:
-    raise HTTPException(status_code=400, detail="No script found to approve")
-
-  latest_script = max(job.scripts, key=lambda s: s.version)
-
-  if request.is_approved:
-    # Move forward
-    latest_script.is_approved = True
-    job.status = JobStatusEnum.ASSET_GENERATION
-    
-    await db.commit()
-    
-    # Reload with relationships
+    """
+    Step 6 Override: If the Red Team agent flags the script (HUMAN_REVIEW_NEEDED),
+    an editor uses this endpoint to force approval, inject feedback, or reject.
+    """
+    # Fetch job with active scripts
     stmt = (
         select(RenderJob)
-        .options(selectinload(RenderJob.scripts))
-        .filter(RenderJob.id == job.id)
+        .options(joinedload(RenderJob.scripts))
+        .filter(RenderJob.id == job_id)
     )
     result = await db.execute(stmt)
-    job = result.scalar_one()
+    job = result.unique().scalar_one_or_none()
 
-    # Resume the pipeline (triggering Veo, Lyria, Python Charts)
-    background_tasks.add_task(resume_pipeline_after_approval, job_id=job.id)
-        
-  else:
-    # Send back to Scripting phase with human feedback
-    job.status = JobStatusEnum.SCRIPTING
-    
-    # Append human feedback to the Agentic Loop history
-    if request.human_feedback:
-      feedback_history = latest_script.feedback_history or []
-      feedback_history.append({"source": "human_editor", "comment": request.human_feedback})
-      latest_script.feedback_history = feedback_history
-      
-    await db.commit()
-    
-    # Reload with relationships
-    stmt = (
-        select(RenderJob)
-        .options(selectinload(RenderJob.scripts))
-        .filter(RenderJob.id == job.id)
-    )
-    result = await db.execute(stmt)
-    job = result.scalar_one()
+    if not job:
+        raise HTTPException(status_code=404, detail="RenderJob not found")
 
-    # Trigger the pipeline to re-run the copywriter agent
-    background_tasks.add_task(run_content_factory_pipeline, job_id=job.id)
+    if job.status not in [
+        JobStatusEnum.HUMAN_REVIEW_NEEDED,
+        JobStatusEnum.FACT_CHECKING_SCRIPT,
+    ]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Job is in '{job.status}', cannot approve script at this stage.",
+        )
 
-  return job
+    # Find the latest script that needs review
+    if not job.scripts:
+        raise HTTPException(status_code=400, detail="No script found to approve")
+
+    latest_script = max(job.scripts, key=lambda s: s.version)
+
+    if request.is_approved:
+        # Move forward
+        latest_script.is_approved = True
+        job.status = JobStatusEnum.ASSET_GENERATION
+
+        await db.commit()
+
+        # Reload with relationships
+        stmt = (
+            select(RenderJob)
+            .options(selectinload(RenderJob.scripts))
+            .filter(RenderJob.id == job.id)
+        )
+        result = await db.execute(stmt)
+        job = result.scalar_one()
+
+        # Resume the pipeline (triggering Veo, Lyria, Python Charts)
+        background_tasks.add_task(resume_pipeline_after_approval, job_id=job.id)
+
+    else:
+        # Send back to Scripting phase with human feedback
+        job.status = JobStatusEnum.SCRIPTING
+
+        # Append human feedback to the Agentic Loop history
+        if request.human_feedback:
+            feedback_history = latest_script.feedback_history or []
+            feedback_history.append(
+                {"source": "human_editor", "comment": request.human_feedback}
+            )
+            latest_script.feedback_history = feedback_history
+
+        await db.commit()
+
+        # Reload with relationships
+        stmt = (
+            select(RenderJob)
+            .options(selectinload(RenderJob.scripts))
+            .filter(RenderJob.id == job.id)
+        )
+        result = await db.execute(stmt)
+        job = result.scalar_one()
+
+        # Trigger the pipeline to re-run the copywriter agent
+        background_tasks.add_task(run_content_factory_pipeline, job_id=job.id)
+
+    return job
