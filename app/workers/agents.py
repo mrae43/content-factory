@@ -131,14 +131,32 @@ class CopywriterAgent(BaseAgent):
             metadata={"model": self.model_name}
         )
 
+class RedTeamSchema(BaseModel):
+    verdict: str = Field(description="Must be exactly 'SUPPORTED' or 'UNSUPPORTED'")
+    claims_verified: int = Field(description="Number of claims fact-checked")
+    reasoning: str = Field(description="Detailed explanation of the verdict, highlighting any hallucinations.")
+
 class RedTeamAgent(BaseAgent):
     async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
-        # Mock simple logic: usually succeeds, but could simulate rejection logic if needed
+        script_content = context.get("script_content", "")
+        research_chunks = context.get("research_chunks", [])
+
+        prompt = ChatPromptTemplate.from_messages([])
+
+        chain = prompt | self.llm.with_structured_output(RedTeamSchema)
+        result: RedTeamSchema = await chain.ainvoke({
+            "script_content": script_content, 
+            "research_chunks": research_chunks
+        })
+        
+        status = AgentActionStatus.SUCCESS if result.verdict == "SUPPORTED" else AgentActionStatus.REVISION_NEEDED
+
         return AgentResult(
-            status=AgentActionStatus.SUCCESS,
-            payload={"verdict": "SUPPORTED", "claims_verified": 3},
-            reasoning="Checked script against ResearchChunks. No hallucinations detected.",
-            confidence_score=1.0
+            status=status,
+            payload={"verdict": result.verdict, "claims_verified": result.claims_verified},
+            reasoning=result.reasoning,
+            confidence_score=1.0,
+            metadata={"model": self.model_name}
         )
 
 class AssetStudioAgent(BaseAgent):
