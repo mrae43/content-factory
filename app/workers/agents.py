@@ -83,13 +83,36 @@ class ResearchAgent(BaseAgent):
             metadata={"model": self.model_name}
         )
 
+class CopywriterSchema(BaseModel):
+    script_content: str = Field(description="The final narrated script text.")
+    storyboard: List[Dict[str, str]] = Field(description="Sequence of scenes [ {visual_prompt: '...', audio_cue: '...'} ]")
+    reasoning: str = Field(description="The retention-first psychology used to draft this.")
+    confidence: float = Field(description="Self-assessment of hook strength and factual adherence.")
+
 class CopywriterAgent(BaseAgent):
     async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
+        topic = context.get("topic", "Unknown")
+        research_chunks = context.get("research_chunks", [])
+        feedback = context.get("feedback", "")
+
+        prompt = ChatPromptTemplate.from_messages([])
+
+        chain = prompt | self.llm.with_structured_output(CopywriterSchema)
+        result: CopywriterSchema = await chain.ainvoke({
+            "topic": topic,
+            "research_chunks": research_chunks,
+            "feedback": feedback
+        })
+
         return AgentResult(
             status=AgentActionStatus.SUCCESS,
-            payload={"script_content": "Simulated Viral Script: The truth about {topic}."},
-            reasoning="Drafted using AEO-optimization and retention-first framing.",
-            confidence_score=0.88
+            payload={
+                "script_content": result.script_content,
+                "storyboard": result.storyboard
+            },
+            reasoning=result.reasoning,
+            confidence_score=result.confidence,
+            metadata={"model": self.model_name}
         )
 
 class RedTeamAgent(BaseAgent):
