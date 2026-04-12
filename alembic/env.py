@@ -9,7 +9,7 @@ from sqlalchemy import text
 from alembic import context
 
 # Add the project root to sys.path so we can import 'app'
-sys.path.insert(0, os.path.realpath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.realpath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.db.models import Base
 
@@ -38,6 +38,7 @@ def get_url():
         # Alembic runs synchronously, so swap asyncpg if present
         return url.replace("asyncpg", "psycopg2")
     return config.get_main_option("sqlalchemy.url")
+
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
@@ -69,10 +70,10 @@ def run_migrations_online() -> None:
         connection.commit()
 
         context.configure(
-            connection=connection, 
+            connection=connection,
             target_metadata=target_metadata,
-            include_schemas=True, 
-            version_table_schema='factory' 
+            include_schemas=True,
+            version_table_schema="factory",
         )
 
         with context.begin_transaction():

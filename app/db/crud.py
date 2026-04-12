@@ -1,11 +1,12 @@
 from uuid import UUID
-from typing import Optional, Any, Dict
+from typing import Optional
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.models import RenderJob, Script, Asset
+from app.db.models import RenderJob, Script
 from app.schemas.shorts import JobStatusEnum
+
 
 async def get_render_job(db: AsyncSession, job_id: UUID) -> Optional[RenderJob]:
     """
@@ -13,26 +14,21 @@ async def get_render_job(db: AsyncSession, job_id: UUID) -> Optional[RenderJob]:
     """
     stmt = (
         select(RenderJob)
-        .options(
-            selectinload(RenderJob.scripts),
-            selectinload(RenderJob.assets)
-        )
+        .options(selectinload(RenderJob.scripts), selectinload(RenderJob.assets))
         .filter(RenderJob.id == job_id)
     )
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
 
+
 async def update_job_status(db: AsyncSession, job_id: UUID, status: JobStatusEnum):
     """
     Updates the status of a RenderJob.
     """
-    stmt = (
-        update(RenderJob)
-        .where(RenderJob.id == job_id)
-        .values(status=status)
-    )
+    stmt = update(RenderJob).where(RenderJob.id == job_id).values(status=status)
     await db.execute(stmt)
     await db.commit()
+
 
 async def log_error(db: AsyncSession, job_id: UUID, error_message: str, phase: str):
     """
@@ -41,25 +37,23 @@ async def log_error(db: AsyncSession, job_id: UUID, error_message: str, phase: s
     stmt = select(RenderJob).filter(RenderJob.id == job_id)
     result = await db.execute(stmt)
     job = result.scalar_one_or_none()
-    
+
     if job:
         error_log = job.error_log or {}
         error_log[phase] = {
             "message": error_message,
-            "timestamp": "now()" # Simplified for now, model handles updated_at
+            "timestamp": "now()",  # Simplified for now, model handles updated_at
         }
         job.error_log = error_log
         await db.commit()
+
 
 async def save_script(db: AsyncSession, job_id: UUID, content: str, version: int):
     """
     Saves a newly generated script.
     """
     new_script = Script(
-        job_id=job_id,
-        content=content,
-        version=version,
-        is_approved=False
+        job_id=job_id, content=content, version=version, is_approved=False
     )
     db.add(new_script)
     await db.commit()
