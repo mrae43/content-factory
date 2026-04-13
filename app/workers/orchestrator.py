@@ -5,6 +5,8 @@ from uuid import UUID
 
 from app.db.session import AsyncSessionLocal
 from app.db.crud import get_render_job, update_job_status, log_error, save_script
+from app.services.vector_store import ContentFactoryVectorStore
+from app.workers.tasks import cleanup_local_research_chunks
 from app.workers.agents import (
     ResearchAgent,
     CopywriterAgent,
@@ -26,6 +28,8 @@ async def run_content_factory_pipeline(job_id: UUID):
     Manages its own DB session to ensure persistence even in long-running background tasks.
     """
     async with AsyncSessionLocal() as db:
+        vector_store = ContentFactoryVectorStore(db)
+        
         while True:
             # 1. Fetch latest state from DB
             job = await get_render_job(db, job_id)
@@ -45,8 +49,14 @@ async def run_content_factory_pipeline(job_id: UUID):
 
                 elif job.status == JobStatusEnum.RESEARCHING:
                     researcher = ResearchAgent(model_name="gemini-3.1-flash")
+                    agent_context = {
+                        "job_id": str(job.id),
+                        "topic": job.topic,
+                        "pre_context": job.pre_context,
+                        "vector_store": vector_store,
+                    }
                     result = await researcher.run(
-                        context={"topic": job.topic, "pre_context": job.pre_context}
+                        context=agent_context
                     )
 
                     if result.status == AgentActionStatus.SUCCESS:
@@ -66,8 +76,13 @@ async def run_content_factory_pipeline(job_id: UUID):
                     copywriter = CopywriterAgent(
                         model_name="gemini-3.1-pro", temperature=0.7
                     )
+                    agent_context = {
+                        "job_id": str(job.id),
+                        "topic": job.topic,
+                        "vector_store": vector_store,
+                    }
                     result = await copywriter.run(
-                        context={"topic": job.topic, "job_id": job.id}
+                        context=agent_context
                     )
 
                     if result.status == AgentActionStatus.SUCCESS:
@@ -87,7 +102,16 @@ async def run_content_factory_pipeline(job_id: UUID):
                     red_team = RedTeamAgent(
                         model_name="gemini-3.1-pro", temperature=0.0
                     )
-                    result = await red_team.run(context={"job_id": job_id})
+                    
+                    # Sort scripts to get the latest one
+                    latest_script = sorted(job.scripts, key=lambda s: s.version)[-1].content if job.scripts else ""
+                    
+                    agent_context = {
+                        "job_id": str(job.id),
+                        "script_content": latest_script,
+                        "vector_store": vector_store,
+                    }
+                    result = await red_team.run(context=agent_context)
 
                     if result.status == AgentActionStatus.SUCCESS:
                         logger.info(
@@ -128,6 +152,7 @@ async def run_content_factory_pipeline(job_id: UUID):
 
                 elif job.status == JobStatusEnum.COMPLETED:
                     logger.info(f"Pipeline finished successfully for Job {job_id}")
+                    await cleanup_local_research_chunks(job_id, db)
                     break
 
                 elif job.status in [

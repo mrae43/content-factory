@@ -80,6 +80,10 @@ class ResearchAgent(BaseAgent):
         topic = context.get("topic", "Unknown Topic")
         pre_context = context.get("pre_context", "")
 
+
+        vector_store = context.get("vector_store")
+        job_id = context.get("job_id")
+
         prompt = ChatPromptTemplate.from_messages(
             [
                 (
@@ -107,6 +111,10 @@ class ResearchAgent(BaseAgent):
             {"topic": topic, "pre_context": pre_context}
         )
 
+        if vector_store and job_id and result.chunks:
+            logger.info(f"ResearchAgent ingesting {len(result.chunks)} chunks to vector store for Job {job_id}")
+            await vector_store.ingest_chunks(job_id=job_id, chunks=result.chunks, scope="LOCAL")
+
         return AgentResult(
             status=AgentActionStatus.SUCCESS,
             payload={"chunks": result.chunks},
@@ -132,8 +140,16 @@ class CopywriterSchema(BaseModel):
 class CopywriterAgent(BaseAgent):
     async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
         topic = context.get("topic", "Unknown")
-        research_chunks = context.get("research_chunks", [])
         feedback = context.get("feedback", "")
+
+        vector_store = context.get("vector_store")
+        job_id = context.get("job_id")
+
+        research_chunks_text = ""
+        if vector_store and job_id:
+            # The copywriter searches the DB based on the topic to find what to write about
+            retrieved = await vector_store.semantic_search(query=topic, job_id=job_id, top_k=10)
+            research_chunks_text = "\n".join([r["content"] for r in retrieved])
 
         prompt = ChatPromptTemplate.from_messages(
             [
@@ -163,7 +179,7 @@ class CopywriterAgent(BaseAgent):
 
         chain = prompt | self.llm.with_structured_output(CopywriterSchema)
         result: CopywriterSchema = await chain.ainvoke(
-            {"topic": topic, "research_chunks": research_chunks, "feedback": feedback}
+            {"topic": topic, "research_chunks": research_chunks_text, "feedback": feedback}
         )
 
         return AgentResult(
@@ -189,7 +205,15 @@ class RedTeamSchema(BaseModel):
 class RedTeamAgent(BaseAgent):
     async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
         script_content = context.get("script_content", "")
-        research_chunks = context.get("research_chunks", [])
+        
+        vector_store = context.get("vector_store")
+        job_id = context.get("job_id")
+
+        research_sources_text = ""
+        if vector_store and job_id:
+            # The copywriter searches the DB based on the topic to find what to write about
+            retrieved = await vector_store.semantic_search(query=script_content, job_id=job_id, top_k=10)
+            research_sources_text = "\n".join([r["content"] for r in retrieved])
 
         prompt = ChatPromptTemplate.from_messages(
             [
@@ -219,7 +243,7 @@ class RedTeamAgent(BaseAgent):
 
         chain = prompt | self.llm.with_structured_output(RedTeamSchema)
         result: RedTeamSchema = await chain.ainvoke(
-            {"script_content": script_content, "research_chunks": research_chunks}
+            {"script_content": script_content, "research_chunks": research_sources_text}
         )
 
         status = (
