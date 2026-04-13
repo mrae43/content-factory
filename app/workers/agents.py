@@ -78,11 +78,28 @@ class ResearchSchema(BaseModel):
 class ResearchAgent(BaseAgent):
     async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
         topic = context.get("topic", "Unknown Topic")
-        pre_context = context.get("pre_context", "")
-
-
         vector_store = context.get("vector_store")
         job_id = context.get("job_id")
+
+        retrieved_context_text = ""
+
+        if vector_store and job_id:
+            retrieved = await vector_store.semantic_search(
+                query=topic,
+                job_id=job_id,
+                scope="RAW-CONTEXT",
+                top_k=10
+            )
+
+            if not retrieved:
+                return AgentResult(
+                    status=AgentActionStatus.ERROR,
+                    payload={},
+                    reasoning="No context retrieved from vector store. Ensure pre_context was provided.",
+                    confidence_score=0.0,
+                )
+
+            retrieved_context_text = "\n\n".join([f"Chunk ID {r['id']}: {r['content']}" for r in retrieved])
 
         prompt = ChatPromptTemplate.from_messages(
             [
@@ -108,11 +125,11 @@ class ResearchAgent(BaseAgent):
 
         chain = prompt | self.llm.with_structured_output(ResearchSchema)
         result: ResearchSchema = await chain.ainvoke(
-            {"topic": topic, "pre_context": pre_context}
+            {"topic": topic, "retrieved_context": retrieved_context_text}
         )
 
         if vector_store and job_id and result.chunks:
-            logger.info(f"ResearchAgent ingesting {len(result.chunks)} chunks to vector store for Job {job_id}")
+            logger.info(f"ResearchAgent ingesting {len(result.chunks)} REFINED chunks to vector store for Job {job_id}")
             await vector_store.ingest_chunks(job_id=job_id, chunks=result.chunks, scope="LOCAL")
 
         return AgentResult(

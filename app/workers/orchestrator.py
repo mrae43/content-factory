@@ -6,6 +6,7 @@ from uuid import UUID
 from app.db.session import AsyncSessionLocal
 from app.db.crud import get_render_job, update_job_status, log_error, save_script
 from app.services.vector_store import ContentFactoryVectorStore
+from app.services.chunking import process_extraction_job
 from app.workers.tasks import cleanup_local_research_chunks
 from app.workers.agents import (
     ResearchAgent,
@@ -43,8 +44,18 @@ async def run_content_factory_pipeline(job_id: UUID):
             try:
                 # State Machine Transitions
                 if job.status == JobStatusEnum.PENDING:
-                    # In a real app, Step 2 (Extraction) would happen here.
-                    # For MVP, we skip directly to Research.
+                    logger.info(f"Job {job_id}: Running Extraction (Text Chunking)")
+                    raw_chunks = await process_extraction_job(str(job_id), job.pre_context)
+
+                    if raw_chunks:
+                        await vector_store.ingest_chunks(
+                            job_id=job_id,
+                            chunks=raw_chunks,
+                            scope="RAW-CONTEXT"
+                        )
+                    else:
+                        logger.warning(f"No raw chunks found for job {job_id}")
+
                     await update_job_status(db, job_id, JobStatusEnum.RESEARCHING)
 
                 elif job.status == JobStatusEnum.RESEARCHING:
@@ -52,7 +63,6 @@ async def run_content_factory_pipeline(job_id: UUID):
                     agent_context = {
                         "job_id": str(job.id),
                         "topic": job.topic,
-                        "pre_context": job.pre_context,
                         "vector_store": vector_store,
                     }
                     result = await researcher.run(
