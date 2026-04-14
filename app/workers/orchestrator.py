@@ -16,11 +16,9 @@ from app.workers.agents import (
     AgentActionStatus,
 )
 from app.schemas.shorts import JobStatusEnum
+from app.core.config import settings
 
 logger = logging.getLogger("factory.orchestrator")
-
-# Maximum times the Red Team can reject a script before human intervention
-MAX_RED_TEAM_REVISIONS = 3
 
 
 async def run_content_factory_pipeline(job_id: UUID):
@@ -30,7 +28,7 @@ async def run_content_factory_pipeline(job_id: UUID):
     """
     async with AsyncSessionLocal() as db:
         vector_store = ContentFactoryVectorStore(db)
-        
+
         while True:
             # 1. Fetch latest state from DB
             job = await get_render_job(db, job_id)
@@ -45,13 +43,16 @@ async def run_content_factory_pipeline(job_id: UUID):
                 # State Machine Transitions
                 if job.status == JobStatusEnum.PENDING:
                     logger.info(f"Job {job_id}: Running Extraction (Text Chunking)")
-                    raw_chunks = await process_extraction_job(str(job_id), job.pre_context)
+                    raw_text = (
+                        job.pre_context.get("raw_text", "")
+                        if isinstance(job.pre_context, dict)
+                        else str(job.pre_context)
+                    )
+                    raw_chunks = await process_extraction_job(str(job_id), raw_text)
 
                     if raw_chunks:
                         await vector_store.ingest_chunks(
-                            job_id=job_id,
-                            chunks=raw_chunks,
-                            scope="RAW-CONTEXT"
+                            job_id=job_id, chunks=raw_chunks, scope="RAW-CONTEXT"
                         )
                     else:
                         logger.warning(f"No raw chunks found for job {job_id}")
@@ -65,9 +66,7 @@ async def run_content_factory_pipeline(job_id: UUID):
                         "topic": job.topic,
                         "vector_store": vector_store,
                     }
-                    result = await researcher.run(
-                        context=agent_context
-                    )
+                    result = await researcher.run(context=agent_context)
 
                     if result.status == AgentActionStatus.SUCCESS:
                         # Success! Move to Fact-Checking the research
@@ -86,14 +85,14 @@ async def run_content_factory_pipeline(job_id: UUID):
                     copywriter = CopywriterAgent(
                         model_name="gemini-3.1-pro", temperature=0.7
                     )
+                    revision_feedback = getattr(job, "_revision_feedback", "")
                     agent_context = {
                         "job_id": str(job.id),
                         "topic": job.topic,
                         "vector_store": vector_store,
+                        "feedback": revision_feedback,
                     }
-                    result = await copywriter.run(
-                        context=agent_context
-                    )
+                    result = await copywriter.run(context=agent_context)
 
                     if result.status == AgentActionStatus.SUCCESS:
                         # Save script version to DB
@@ -112,10 +111,14 @@ async def run_content_factory_pipeline(job_id: UUID):
                     red_team = RedTeamAgent(
                         model_name="gemini-3.1-pro", temperature=0.0
                     )
-                    
+
                     # Sort scripts to get the latest one
-                    latest_script = sorted(job.scripts, key=lambda s: s.version)[-1].content if job.scripts else ""
-                    
+                    latest_script = (
+                        sorted(job.scripts, key=lambda s: s.version)[-1].content
+                        if job.scripts
+                        else ""
+                    )
+
                     agent_context = {
                         "job_id": str(job.id),
                         "script_content": latest_script,
@@ -132,14 +135,12 @@ async def run_content_factory_pipeline(job_id: UUID):
                         )
 
                     elif result.status == AgentActionStatus.REVISION_NEEDED:
-                        # CRASH-RESILIENT REVISION TRACKING:
-                        # We use the actual number of scripts in the DB to determine revisions
                         current_revision = len(job.scripts)
                         logger.warning(
-                            f"Red Team Rejected Job {job_id}. Revision {current_revision}/{MAX_RED_TEAM_REVISIONS}"
+                            f"Red Team Rejected Job {job_id}. Revision {current_revision}/{settings.max_red_team_revisions}"
                         )
 
-                        if current_revision >= MAX_RED_TEAM_REVISIONS:
+                        if current_revision >= settings.max_red_team_revisions:
                             logger.error(
                                 f"Max revisions reached for Job {job_id}. Escalating."
                             )
@@ -148,6 +149,7 @@ async def run_content_factory_pipeline(job_id: UUID):
                             )
                             break
                         else:
+                            job._revision_feedback = result.reasoning
                             await update_job_status(db, job_id, JobStatusEnum.SCRIPTING)
 
                 elif job.status == JobStatusEnum.ASSET_GENERATION:
