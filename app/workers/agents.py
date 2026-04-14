@@ -88,18 +88,25 @@ class ResearchAgent(BaseAgent):
                 query=topic,
                 job_id=job_id,
                 scope="RAW-CONTEXT",
-                top_k=10
+                top_k=10,
             )
 
             if not retrieved:
                 return AgentResult(
                     status=AgentActionStatus.ERROR,
                     payload={},
-                    reasoning="No context retrieved from vector store. Ensure pre_context was provided.",
+                    reasoning="No context retrieved from vector store above similarity threshold. Ensure pre_context was provided.",
                     confidence_score=0.0,
                 )
 
-            retrieved_context_text = "\n\n".join([f"Chunk ID {r['id']}: {r['content']}" for r in retrieved])
+            avg_score = sum(r["similarity_score"] for r in retrieved) / len(retrieved)
+            logger.info(
+                f"ResearchAgent retrieved {len(retrieved)} chunks, avg similarity: {avg_score:.3f}"
+            )
+
+            retrieved_context_text = "\n\n".join(
+                [f"Chunk ID {r['id']}: {r['content']}" for r in retrieved]
+            )
 
         prompt = ChatPromptTemplate.from_messages(
             [
@@ -116,7 +123,7 @@ class ResearchAgent(BaseAgent):
                     (
                         "Identify the most critical facts about the following topic using the provided context.\n"
                         "<topic>\n{topic}\n</topic>\n"
-                        "<pre_context>\n{pre_context}\n</pre_context>\n"
+                        "<retrieved_context>\n{retrieved_context}\n</retrieved_context>\n"
                         "First, analyze the input step-by-step. Then, extract the data chunks."
                     ),
                 ),
@@ -129,8 +136,12 @@ class ResearchAgent(BaseAgent):
         )
 
         if vector_store and job_id and result.chunks:
-            logger.info(f"ResearchAgent ingesting {len(result.chunks)} REFINED chunks to vector store for Job {job_id}")
-            await vector_store.ingest_chunks(job_id=job_id, chunks=result.chunks, scope="LOCAL")
+            logger.info(
+                f"ResearchAgent ingesting {len(result.chunks)} REFINED chunks to vector store for Job {job_id}"
+            )
+            await vector_store.ingest_chunks(
+                job_id=job_id, chunks=result.chunks, scope="LOCAL"
+            )
 
         return AgentResult(
             status=AgentActionStatus.SUCCESS,
@@ -164,8 +175,24 @@ class CopywriterAgent(BaseAgent):
 
         research_chunks_text = ""
         if vector_store and job_id:
-            # The copywriter searches the DB based on the topic to find what to write about
-            retrieved = await vector_store.semantic_search(query=topic, job_id=job_id, top_k=10)
+            retrieved = await vector_store.semantic_search(
+                query=topic,
+                job_id=job_id,
+                scopes=["RAW-CONTEXT", "LOCAL"],
+                top_k=10,
+            )
+
+            if not retrieved:
+                return AgentResult(
+                    status=AgentActionStatus.ERROR,
+                    payload={},
+                    reasoning="No research chunks retrieved above similarity threshold. Cannot write script without verified research.",
+                    confidence_score=0.0,
+                )
+
+            logger.info(
+                f"CopywriterAgent retrieved {len(retrieved)} chunks for topic '{topic}'"
+            )
             research_chunks_text = "\n".join([r["content"] for r in retrieved])
 
         prompt = ChatPromptTemplate.from_messages(
@@ -196,7 +223,11 @@ class CopywriterAgent(BaseAgent):
 
         chain = prompt | self.llm.with_structured_output(CopywriterSchema)
         result: CopywriterSchema = await chain.ainvoke(
-            {"topic": topic, "research_chunks": research_chunks_text, "feedback": feedback}
+            {
+                "topic": topic,
+                "research_chunks": research_chunks_text,
+                "feedback": feedback,
+            }
         )
 
         return AgentResult(
@@ -222,15 +253,27 @@ class RedTeamSchema(BaseModel):
 class RedTeamAgent(BaseAgent):
     async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
         script_content = context.get("script_content", "")
-        
+
         vector_store = context.get("vector_store")
         job_id = context.get("job_id")
 
         research_sources_text = ""
         if vector_store and job_id:
-            # The copywriter searches the DB based on the topic to find what to write about
-            retrieved = await vector_store.semantic_search(query=script_content, job_id=job_id, top_k=10)
+            retrieved = await vector_store.semantic_search(
+                query=script_content,
+                job_id=job_id,
+                scopes=["RAW-CONTEXT", "LOCAL"],
+                top_k=10,
+            )
             research_sources_text = "\n".join([r["content"] for r in retrieved])
+
+        if not research_sources_text:
+            return AgentResult(
+                status=AgentActionStatus.ESCALATE,
+                payload={},
+                reasoning="No research sources available for verification. Cannot audit script without evidence base.",
+                confidence_score=0.0,
+            )
 
         prompt = ChatPromptTemplate.from_messages(
             [

@@ -4,7 +4,14 @@ import traceback
 from uuid import UUID
 
 from app.db.session import AsyncSessionLocal
-from app.db.crud import get_render_job, update_job_status, log_error, save_script
+from app.db.crud import (
+    get_render_job,
+    update_job_status,
+    log_error,
+    save_script,
+    get_latest_script,
+    append_script_feedback,
+)
 from app.services.vector_store import ContentFactoryVectorStore
 from app.services.chunking import process_extraction_job
 from app.workers.tasks import cleanup_local_research_chunks
@@ -16,11 +23,9 @@ from app.workers.agents import (
     AgentActionStatus,
 )
 from app.schemas.shorts import JobStatusEnum
+from app.core.config import settings
 
 logger = logging.getLogger("factory.orchestrator")
-
-# Maximum times the Red Team can reject a script before human intervention
-MAX_RED_TEAM_REVISIONS = 3
 
 
 async def run_content_factory_pipeline(job_id: UUID):
@@ -30,7 +35,7 @@ async def run_content_factory_pipeline(job_id: UUID):
     """
     async with AsyncSessionLocal() as db:
         vector_store = ContentFactoryVectorStore(db)
-        
+
         while True:
             # 1. Fetch latest state from DB
             job = await get_render_job(db, job_id)
@@ -45,13 +50,16 @@ async def run_content_factory_pipeline(job_id: UUID):
                 # State Machine Transitions
                 if job.status == JobStatusEnum.PENDING:
                     logger.info(f"Job {job_id}: Running Extraction (Text Chunking)")
-                    raw_chunks = await process_extraction_job(str(job_id), job.pre_context)
+                    raw_text = (
+                        job.pre_context.get("raw_text", "")
+                        if isinstance(job.pre_context, dict)
+                        else str(job.pre_context)
+                    )
+                    raw_chunks = await process_extraction_job(str(job_id), raw_text)
 
                     if raw_chunks:
                         await vector_store.ingest_chunks(
-                            job_id=job_id,
-                            chunks=raw_chunks,
-                            scope="RAW-CONTEXT"
+                            job_id=job_id, chunks=raw_chunks, scope="RAW-CONTEXT"
                         )
                     else:
                         logger.warning(f"No raw chunks found for job {job_id}")
@@ -61,13 +69,11 @@ async def run_content_factory_pipeline(job_id: UUID):
                 elif job.status == JobStatusEnum.RESEARCHING:
                     researcher = ResearchAgent(model_name="gemini-3.1-flash")
                     agent_context = {
-                        "job_id": str(job.id),
+                        "job_id": job.id,
                         "topic": job.topic,
                         "vector_store": vector_store,
                     }
-                    result = await researcher.run(
-                        context=agent_context
-                    )
+                    result = await researcher.run(context=agent_context)
 
                     if result.status == AgentActionStatus.SUCCESS:
                         # Success! Move to Fact-Checking the research
@@ -86,18 +92,33 @@ async def run_content_factory_pipeline(job_id: UUID):
                     copywriter = CopywriterAgent(
                         model_name="gemini-3.1-pro", temperature=0.7
                     )
+                    latest_script_for_feedback = await get_latest_script(db, job_id)
+                    revision_feedback = ""
+                    if (
+                        latest_script_for_feedback
+                        and latest_script_for_feedback.feedback_history
+                    ):
+                        last_entry = latest_script_for_feedback.feedback_history[-1]
+                        revision_feedback = (
+                            last_entry
+                            if isinstance(last_entry, str)
+                            else last_entry.get("feedback", "")
+                        )
                     agent_context = {
-                        "job_id": str(job.id),
+                        "job_id": job.id,
                         "topic": job.topic,
                         "vector_store": vector_store,
+                        "feedback": revision_feedback,
                     }
-                    result = await copywriter.run(
-                        context=agent_context
-                    )
+                    result = await copywriter.run(context=agent_context)
 
                     if result.status == AgentActionStatus.SUCCESS:
-                        # Save script version to DB
-                        version = len(job.scripts) + 1
+                        latest_script_for_version = await get_latest_script(db, job_id)
+                        version = (
+                            (latest_script_for_version.version + 1)
+                            if latest_script_for_version
+                            else 1
+                        )
                         await save_script(
                             db, job_id, result.payload["script_content"], version
                         )
@@ -108,16 +129,17 @@ async def run_content_factory_pipeline(job_id: UUID):
                         raise Exception(f"Scripting failed: {result.reasoning}")
 
                 elif job.status == JobStatusEnum.FACT_CHECKING_SCRIPT:
-                    # THE RED TEAM EVALUATOR
                     red_team = RedTeamAgent(
                         model_name="gemini-3.1-pro", temperature=0.0
                     )
-                    
-                    # Sort scripts to get the latest one
-                    latest_script = sorted(job.scripts, key=lambda s: s.version)[-1].content if job.scripts else ""
-                    
+
+                    latest_script_obj = await get_latest_script(db, job_id)
+                    latest_script = (
+                        latest_script_obj.content if latest_script_obj else ""
+                    )
+
                     agent_context = {
-                        "job_id": str(job.id),
+                        "job_id": job.id,
                         "script_content": latest_script,
                         "vector_store": vector_store,
                     }
@@ -132,14 +154,14 @@ async def run_content_factory_pipeline(job_id: UUID):
                         )
 
                     elif result.status == AgentActionStatus.REVISION_NEEDED:
-                        # CRASH-RESILIENT REVISION TRACKING:
-                        # We use the actual number of scripts in the DB to determine revisions
-                        current_revision = len(job.scripts)
+                        current_revision = (
+                            latest_script_obj.version if latest_script_obj else 0
+                        )
                         logger.warning(
-                            f"Red Team Rejected Job {job_id}. Revision {current_revision}/{MAX_RED_TEAM_REVISIONS}"
+                            f"Red Team Rejected Job {job_id}. Revision {current_revision}/{settings.max_red_team_revisions}"
                         )
 
-                        if current_revision >= MAX_RED_TEAM_REVISIONS:
+                        if current_revision >= settings.max_red_team_revisions:
                             logger.error(
                                 f"Max revisions reached for Job {job_id}. Escalating."
                             )
@@ -148,7 +170,17 @@ async def run_content_factory_pipeline(job_id: UUID):
                             )
                             break
                         else:
+                            await append_script_feedback(db, job_id, result.reasoning)
                             await update_job_status(db, job_id, JobStatusEnum.SCRIPTING)
+
+                    elif result.status == AgentActionStatus.ESCALATE:
+                        logger.error(
+                            f"Red Team escalated Job {job_id}: {result.reasoning}"
+                        )
+                        await update_job_status(
+                            db, job_id, JobStatusEnum.HUMAN_REVIEW_NEEDED
+                        )
+                        break
 
                 elif job.status == JobStatusEnum.ASSET_GENERATION:
                     studio = AssetStudioAgent(model_name="gemini-3.1-multimodal")

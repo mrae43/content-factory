@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     # 2026 Governance & Compliance Standards
     synthid_watermark_enabled: bool = True
     max_red_team_revisions: int = 3
+    similarity_threshold: float = 0.75
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"

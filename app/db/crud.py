@@ -8,6 +8,17 @@ from app.db.models import RenderJob, Script
 from app.schemas.shorts import JobStatusEnum
 
 
+async def get_latest_script(db: AsyncSession, job_id: UUID) -> Optional[Script]:
+    stmt = (
+        select(Script)
+        .where(Script.job_id == job_id)
+        .order_by(Script.version.desc())
+        .limit(1)
+    )
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
+
+
 async def get_render_job(db: AsyncSession, job_id: UUID) -> Optional[RenderJob]:
     """
     Fetches a RenderJob with its associated scripts and assets eagerly loaded.
@@ -49,11 +60,17 @@ async def log_error(db: AsyncSession, job_id: UUID, error_message: str, phase: s
 
 
 async def save_script(db: AsyncSession, job_id: UUID, content: str, version: int):
-    """
-    Saves a newly generated script.
-    """
     new_script = Script(
         job_id=job_id, content=content, version=version, is_approved=False
     )
     db.add(new_script)
     await db.commit()
+
+
+async def append_script_feedback(db: AsyncSession, job_id: UUID, feedback: str):
+    latest = await get_latest_script(db, job_id)
+    if latest:
+        history = latest.feedback_history or []
+        history.append(feedback)
+        latest.feedback_history = history
+        await db.commit()

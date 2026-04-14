@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from app.db.models import ResearchChunk
 from app.services.llm import get_embeddings
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -25,14 +26,13 @@ class ContentFactoryVectorStore:
         self, job_id: UUID, chunks: List[str], scope: str = "LOCAL"
     ) -> int:
         """
-        Embeds text chunks via Gemini 3.1 and inserts them into the pgvector table.
+        Embeds text chunks via Gemini and inserts them into the pgvector table.
         Scope defaults to LOCAL (ephemeral for this specific render job).
         """
         if not chunks:
             return 0
 
         logger.info(f"Embedding {len(chunks)} chunks for job {job_id} [Scope {scope}]")
-        # Batch generate embeddings via Gemini Native integration
         embeddings = await self.embedder.aembed_documents(chunks)
 
         db_chunks = []
@@ -56,38 +56,71 @@ class ContentFactoryVectorStore:
         query: str,
         job_id: Optional[UUID] = None,
         scope: Optional[str] = None,
+        scopes: Optional[List[str]] = None,
         top_k: int = 5,
+        similarity_threshold: Optional[float] = None,
     ) -> List[Dict[str, Any]]:
         """
         Actionable RAG: Search the HNSW-indexed pgvector table.
-        Filters by job_id (LOCAL) or scope (GLOBAL).
+
+        Args:
+            query: The text to search semantically.
+            job_id: Filter to chunks belonging to a specific job.
+            scope: Single scope filter (e.g. "RAW-CONTEXT").
+            scopes: Multi-scope filter (e.g. ["RAW-CONTEXT", "LOCAL"]).
+                    Takes precedence over `scope` if both provided.
+            top_k: Maximum number of results to return.
+            similarity_threshold: Minimum cosine similarity (0.0-1.0).
+                                  Defaults to settings.similarity_threshold.
+                                  Set to 0.0 to disable filtering.
         """
-        # Embed the search query
+        if similarity_threshold is None:
+            similarity_threshold = settings.similarity_threshold
+
         query_embedding = await self.embedder.aembed_query(query)
 
-        # Base query using vector cosine distance
+        distance_expr = ResearchChunk.embedding.cosine_distance(query_embedding)
+        similarity_expr = 1.0 - distance_expr
+
         stmt = (
-            select(ResearchChunk)
-            .order_by(ResearchChunk.embedding.cosine_distance(query_embedding))
+            select(
+                ResearchChunk,
+                similarity_expr.label("similarity_score"),
+            )
+            .order_by(distance_expr)
             .limit(top_k)
         )
 
-        # Apply Governance-as-Code Metadata Filtering
         if job_id:
             stmt = stmt.where(ResearchChunk.job_id == job_id)
-        if scope:
-            # Filtering inside JSONB column
+
+        if scopes:
+            scope_filter = ResearchChunk.meta["scope"].astext
+            stmt = stmt.where(scope_filter.in_(scopes))
+        elif scope:
             stmt = stmt.where(ResearchChunk.meta["scope"].astext == scope)
 
         result = await self.db.execute(stmt)
-        chunks = result.scalars().all()
+        rows = result.all()
 
-        return [
-            {
-                "id": str(c.id),
-                "content": c.content,
-                "meta": c.meta,
-                "job_id": str(c.job_id),
-            }
-            for c in chunks
-        ]
+        filtered = []
+        for row in rows:
+            chunk = row[0]
+            score = float(row[1])
+            if score >= similarity_threshold:
+                filtered.append(
+                    {
+                        "id": str(chunk.id),
+                        "content": chunk.content,
+                        "meta": chunk.meta,
+                        "job_id": str(chunk.job_id),
+                        "similarity_score": score,
+                    }
+                )
+
+        if len(filtered) < len(rows):
+            logger.warning(
+                f"Threshold {similarity_threshold} filtered {len(rows) - len(filtered)}/{len(rows)} results"
+            )
+
+        return filtered
