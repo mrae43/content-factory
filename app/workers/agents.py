@@ -267,6 +267,14 @@ class RedTeamAgent(BaseAgent):
             )
             research_sources_text = "\n".join([r["content"] for r in retrieved])
 
+        if not research_sources_text:
+            return AgentResult(
+                status=AgentActionStatus.ESCALATE,
+                payload={},
+                reasoning="No research sources available for verification. Cannot audit script without evidence base.",
+                confidence_score=0.0,
+            )
+
         prompt = ChatPromptTemplate.from_messages(
             [
                 (
