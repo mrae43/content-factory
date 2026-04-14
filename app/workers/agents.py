@@ -81,32 +81,37 @@ class ResearchAgent(BaseAgent):
         vector_store = context.get("vector_store")
         job_id = context.get("job_id")
 
-        retrieved_context_text = ""
-
-        if vector_store and job_id:
-            retrieved = await vector_store.semantic_search(
-                query=topic,
-                job_id=job_id,
-                scope="RAW-CONTEXT",
-                top_k=10,
+        if not vector_store or not job_id:
+            return AgentResult(
+                status=AgentActionStatus.ERROR,
+                payload={},
+                reasoning="Vector store or job_id not provided. Cannot research without retrieval infrastructure.",
+                confidence_score=0.0,
             )
 
-            if not retrieved:
-                return AgentResult(
-                    status=AgentActionStatus.ERROR,
-                    payload={},
-                    reasoning="No context retrieved from vector store above similarity threshold. Ensure pre_context was provided.",
-                    confidence_score=0.0,
-                )
+        retrieved = await vector_store.semantic_search(
+            query=topic,
+            job_id=job_id,
+            scope="RAW-CONTEXT",
+            top_k=10,
+        )
 
-            avg_score = sum(r["similarity_score"] for r in retrieved) / len(retrieved)
-            logger.info(
-                f"ResearchAgent retrieved {len(retrieved)} chunks, avg similarity: {avg_score:.3f}"
+        if not retrieved:
+            return AgentResult(
+                status=AgentActionStatus.ERROR,
+                payload={},
+                reasoning="No context retrieved from vector store above similarity threshold. Ensure pre_context was provided.",
+                confidence_score=0.0,
             )
 
-            retrieved_context_text = "\n\n".join(
-                [f"Chunk ID {r['id']}: {r['content']}" for r in retrieved]
-            )
+        avg_score = sum(r["similarity_score"] for r in retrieved) / len(retrieved)
+        logger.info(
+            f"ResearchAgent retrieved {len(retrieved)} chunks, avg similarity: {avg_score:.3f}"
+        )
+
+        retrieved_context_text = "\n\n".join(
+            [f"Chunk ID {r['id']}: {r['content']}" for r in retrieved]
+        )
 
         prompt = ChatPromptTemplate.from_messages(
             [
@@ -135,7 +140,7 @@ class ResearchAgent(BaseAgent):
             {"topic": topic, "retrieved_context": retrieved_context_text}
         )
 
-        if vector_store and job_id and result.chunks:
+        if result.chunks:
             logger.info(
                 f"ResearchAgent ingesting {len(result.chunks)} REFINED chunks to vector store for Job {job_id}"
             )
