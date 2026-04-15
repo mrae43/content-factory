@@ -99,6 +99,9 @@ class RenderJob(Base):
         DateTime(timezone=True), server_default=text("now()"), nullable=False
     )
 
+    locked_at = Column(DateTime(timezone=True), nullable=True)
+    locked_by = Column(String(36), nullable=True)
+
     # Relationships
     research_chunks = relationship(
         "ResearchChunk", back_populates="job", cascade="all, delete-orphan"
