@@ -247,11 +247,23 @@ class CopywriterAgent(BaseAgent):
         )
 
 
-class RedTeamSchema(BaseModel):
-    verdict: str = Field(description="Must be exactly 'SUPPORTED' or 'UNSUPPORTED'")
-    claims_verified: int = Field(description="Number of claims fact-checked")
-    reasoning: str = Field(
-        description="Detailed explanation of the verdict, highlighting any hallucinations."
+class ClaimItem(BaseModel):
+    claim_text: str = Field(description="The exact atomic claim from the script")
+    verdict: str = Field(
+        description="One of: SUPPORTED, CONTESTED, UNSUPPORTED, UNCERTAIN"
+    )
+    confidence: float = Field(description="0.0 to 1.0 confidence in this verdict")
+    evidence_text: str = Field(
+        description="Quote or paraphrase from sources supporting this verdict"
+    )
+
+
+class RedTeamVerdict(BaseModel):
+    claims: List[ClaimItem] = Field(
+        description="Every factual claim in the script, individually evaluated"
+    )
+    overall_reasoning: str = Field(
+        description="Summary of findings and recommendations"
     )
 
 
@@ -290,8 +302,13 @@ class RedTeamAgent(BaseAgent):
                         "METHODOLOGY:\n"
                         "1. Break the script into atomic factual claims.\n"
                         "2. Cross-reference each claim against the <research_sources>.\n"
-                        "3. If a claim is an exaggeration, a misinterpretation, or not mentioned, mark it UNSUPPORTED.\n"
-                        "VERDICT: Only 'SUPPORTED' if 100% of claims are verified."
+                        "3. For each claim, assign one of these verdicts:\n"
+                        "   - SUPPORTED: Claim is fully verified by the research sources.\n"
+                        "   - CONTESTED: Sources contradict or significantly qualify the claim.\n"
+                        "   - UNSUPPORTED: Claim is not found in the sources or is an exaggeration/misinterpretation.\n"
+                        "   - UNCERTAIN: Not enough evidence to confirm or deny the claim.\n"
+                        "4. Provide confidence (0.0-1.0) and the specific evidence text for each claim.\n"
+                        "VERDICT: Overall is SUPPORTED only if every claim is SUPPORTED or UNCERTAIN."
                     ),
                 ),
                 (
@@ -300,31 +317,66 @@ class RedTeamAgent(BaseAgent):
                         "Audit the following script against the research data:\n"
                         "<research_sources>\n{research_chunks}\n</research_sources>\n"
                         "<target_script>\n{script_content}\n</target_script>\n"
-                        "Analyze the claims step-by-step, then output the structured report."
+                        "Analyze every factual claim step-by-step. For each claim, provide the verdict, confidence, and evidence."
                     ),
                 ),
             ]
         )
 
-        chain = prompt | self.llm.with_structured_output(RedTeamSchema)
-        result: RedTeamSchema = await chain.ainvoke(
-            {"script_content": script_content, "research_chunks": research_sources_text}
+        try:
+            chain = prompt | self.llm.with_structured_output(RedTeamVerdict)
+            structured: RedTeamVerdict = await chain.ainvoke(
+                {
+                    "script_content": script_content,
+                    "research_chunks": research_sources_text,
+                }
+            )
+        except Exception as exc:
+            logger.error(f"Red Team structured output failed: {exc}")
+            return AgentResult(
+                status=AgentActionStatus.ESCALATE,
+                payload={},
+                reasoning=f"Red Team LLM output parsing failed after retries: {exc}",
+                confidence_score=0.0,
+                metadata={"model": self.model_name},
+            )
+
+        if not structured.claims:
+            return AgentResult(
+                status=AgentActionStatus.SUCCESS,
+                payload={
+                    "verdict": "SUPPORTED",
+                    "claims": [],
+                    "overall_reasoning": "No factual claims found in script. Nothing to fact-check.",
+                },
+                reasoning="Script contained no verifiable factual claims.",
+                confidence_score=1.0,
+                metadata={"model": self.model_name},
+            )
+
+        all_supported = all(
+            c.verdict in ("SUPPORTED", "UNCERTAIN") for c in structured.claims
+        )
+        overall_verdict = "SUPPORTED" if all_supported else "UNSUPPORTED"
+        avg_confidence = sum(c.confidence for c in structured.claims) / len(
+            structured.claims
         )
 
         status = (
             AgentActionStatus.SUCCESS
-            if result.verdict == "SUPPORTED"
+            if overall_verdict == "SUPPORTED"
             else AgentActionStatus.REVISION_NEEDED
         )
 
         return AgentResult(
             status=status,
             payload={
-                "verdict": result.verdict,
-                "claims_verified": result.claims_verified,
+                "verdict": overall_verdict,
+                "claims": [claim.model_dump() for claim in structured.claims],
+                "overall_reasoning": structured.overall_reasoning,
             },
-            reasoning=result.reasoning,
-            confidence_score=1.0,
+            reasoning=structured.overall_reasoning,
+            confidence_score=avg_confidence,
             metadata={"model": self.model_name},
         )
 

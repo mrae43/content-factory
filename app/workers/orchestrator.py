@@ -11,6 +11,7 @@ from app.db.crud import (
     save_script,
     get_latest_script,
     append_script_feedback,
+    save_fact_check_claims,
 )
 from app.services.vector_store import ContentFactoryVectorStore
 from app.services.chunking import process_extraction_job
@@ -146,14 +147,66 @@ async def run_content_factory_pipeline(job_id: UUID):
                     result = await red_team.run(context=agent_context)
 
                     if result.status == AgentActionStatus.SUCCESS:
+                        claims_data = result.payload.get("claims", [])
+                        for claim in claims_data:
+                            evidence_text = claim.get("evidence_text", "")
+                            claim["evidence_references"] = []
+                            if evidence_text:
+                                matches = await vector_store.semantic_search(
+                                    query=evidence_text,
+                                    job_id=job_id,
+                                    scopes=["RAW-CONTEXT", "LOCAL"],
+                                    top_k=3,
+                                )
+                                claim["evidence_references"] = [
+                                    str(m["id"])
+                                    for m in matches
+                                    if m.get("similarity_score", 0)
+                                    >= settings.similarity_threshold
+                                ]
+
+                        if claims_data and latest_script_obj:
+                            await save_fact_check_claims(
+                                db, latest_script_obj.id, claims_data
+                            )
+
+                        if latest_script_obj:
+                            latest_script_obj.is_approved = True
+                            await db.commit()
+
                         logger.info(
-                            f"Red Team Approved for Job {job_id}. Proceeding to Asset Gen."
+                            f"Red Team Approved for Job {job_id}. "
+                            f"{len(claims_data)} claims persisted. Proceeding to Asset Gen."
                         )
                         await update_job_status(
                             db, job_id, JobStatusEnum.ASSET_GENERATION
                         )
 
                     elif result.status == AgentActionStatus.REVISION_NEEDED:
+                        claims_data = result.payload.get("claims", [])
+                        for claim in claims_data:
+                            evidence_text = claim.get("evidence_text", "")
+                            claim["evidence_references"] = []
+                            if evidence_text:
+                                matches = await vector_store.semantic_search(
+                                    query=evidence_text,
+                                    job_id=job_id,
+                                    scopes=["RAW-CONTEXT", "LOCAL"],
+                                    top_k=3,
+                                )
+                                claim["evidence_references"] = [
+                                    str(m["id"])
+                                    for m in matches
+                                    if m.get("similarity_score", 0)
+                                    >= settings.similarity_threshold
+                                ]
+
+                        if claims_data and latest_script_obj:
+                            await save_fact_check_claims(
+                                db, latest_script_obj.id, claims_data
+                            )
+                            await db.commit()
+
                         current_revision = (
                             latest_script_obj.version if latest_script_obj else 0
                         )
