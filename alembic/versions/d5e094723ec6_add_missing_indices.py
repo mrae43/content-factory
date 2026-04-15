@@ -58,15 +58,12 @@ def upgrade() -> None:
         unique=False,
         schema="factory",
     )
-    op.create_index(
-        "ix_research_embedding_hnsw",
-        "research_chunks",
-        [],
-        unique=False,
-        schema="factory",
-        postgresql_using="hnsw",
-        postgresql_with={"m": 16, "ef_construction": 64},
-        postgresql_ops={"embedding": "vector_cosine_ops"},
+    op.execute(
+        """
+        CREATE INDEX IF NOT EXISTS ix_research_embedding_hnsw
+        ON factory.research_chunks USING hnsw (embedding vector_cosine_ops)
+        WITH (m = 16, ef_construction = 64)
+        """
     )
     op.create_index(
         op.f("ix_factory_scripts_job_id"),
