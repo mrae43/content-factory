@@ -4,7 +4,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.models import RenderJob, Script
+from app.db.models import FactCheckClaim, RenderJob, Script
 from app.schemas.shorts import JobStatusEnum
 
 
@@ -74,3 +74,20 @@ async def append_script_feedback(db: AsyncSession, job_id: UUID, feedback: str):
         history.append(feedback)
         latest.feedback_history = history
         await db.commit()
+
+
+async def save_fact_check_claims(
+    db: AsyncSession, script_id: UUID, claims: list[dict]
+) -> None:
+    rows = [
+        FactCheckClaim(
+            script_id=script_id,
+            claim_text=c["claim_text"],
+            verdict=c["verdict"],
+            confidence=c["confidence"],
+            evidence_references=c.get("evidence_references", []),
+        )
+        for c in claims
+    ]
+    db.add_all(rows)
+    await db.flush()
