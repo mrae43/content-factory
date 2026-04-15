@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     max_red_team_revisions: int = 3
     similarity_threshold: float = 0.75
 
+    # Queue Worker
+    worker_poll_interval_seconds: int = 5
+    worker_lock_timeout_minutes: int = 15
+
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )

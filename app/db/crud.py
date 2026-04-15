@@ -1,4 +1,5 @@
 from uuid import UUID
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -53,7 +54,7 @@ async def log_error(db: AsyncSession, job_id: UUID, error_message: str, phase: s
         error_log = job.error_log or {}
         error_log[phase] = {
             "message": error_message,
-            "timestamp": "now()",  # Simplified for now, model handles updated_at
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         job.error_log = error_log
         await db.commit()
@@ -91,3 +92,54 @@ async def save_fact_check_claims(
     ]
     db.add_all(rows)
     await db.flush()
+
+
+async def claim_next_job(db: AsyncSession, worker_id: str) -> Optional[RenderJob]:
+    stmt = (
+        select(RenderJob)
+        .where(
+            RenderJob.status.notin_(
+                [
+                    JobStatusEnum.COMPLETED,
+                    JobStatusEnum.FAILED,
+                    JobStatusEnum.HUMAN_REVIEW_NEEDED,
+                ]
+            ),
+            RenderJob.locked_at.is_(None),
+        )
+        .order_by(RenderJob.created_at.asc())
+        .limit(1)
+        .with_for_update(skip_locked=True)
+    )
+    result = await db.execute(stmt)
+    job = result.scalar_one_or_none()
+
+    if job:
+        job.locked_at = datetime.now(timezone.utc)
+        job.locked_by = worker_id
+        await db.commit()
+
+    return job
+
+
+async def release_job_lock(db: AsyncSession, job_id: UUID) -> None:
+    stmt = (
+        update(RenderJob)
+        .where(RenderJob.id == job_id)
+        .values(locked_at=None, locked_by=None)
+    )
+    await db.execute(stmt)
+    await db.commit()
+
+
+async def recover_stuck_jobs(db: AsyncSession, timeout_minutes: int) -> None:
+    cutoff = datetime.now(timezone.utc) - __import__("datetime").timedelta(
+        minutes=timeout_minutes
+    )
+    stmt = (
+        update(RenderJob)
+        .where(RenderJob.locked_at.isnot(None), RenderJob.locked_at < cutoff)
+        .values(locked_at=None, locked_by=None)
+    )
+    await db.execute(stmt)
+    await db.commit()
