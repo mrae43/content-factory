@@ -13,6 +13,7 @@ from app.db.crud import (
     save_fact_check_claims,
 )
 from app.services.vector_store import ContentFactoryVectorStore
+from app.services.web_search import TavilySearchService
 from app.services.chunking import process_extraction_job
 from app.workers.tasks import cleanup_local_research_chunks
 from app.workers.agents import (
@@ -99,8 +100,31 @@ async def _transition_pending(db: AsyncSession, job) -> None:
 
 
 async def _transition_researching(db: AsyncSession, job) -> None:
-    researcher = ResearchAgent(model_name="gemini-3.1-flash")
     vector_store = ContentFactoryVectorStore(db)
+
+    web_service = TavilySearchService()
+    web_results = await web_service.search(job.topic)
+
+    if web_results:
+        web_texts = [r["content"] for r in web_results if r.get("content")]
+        web_urls = [r.get("url", "") for r in web_results]
+        if web_texts:
+            logger.info(
+                f"Ingesting {len(web_texts)} web search results for Job {job.id}"
+            )
+            await vector_store.ingest_chunks(
+                job_id=job.id,
+                chunks=web_texts,
+                scope="LOCAL",
+                meta={
+                    "source": "web_search",
+                    "query": job.topic,
+                    "urls": web_urls,
+                    "search_depth": "basic",
+                },
+            )
+
+    researcher = ResearchAgent(model_name="gemini-2.0-flash")
     agent_context = {
         "job_id": job.id,
         "topic": job.topic,
@@ -115,7 +139,7 @@ async def _transition_researching(db: AsyncSession, job) -> None:
 
 
 async def _transition_scripting(db: AsyncSession, job) -> None:
-    copywriter = CopywriterAgent(model_name="gemini-3.1-pro", temperature=0.7)
+    copywriter = CopywriterAgent(model_name="gemini-1.5-pro", temperature=0.7)
     vector_store = ContentFactoryVectorStore(db)
     latest_script_for_feedback = await get_latest_script(db, job.id)
     revision_feedback = ""
@@ -146,7 +170,7 @@ async def _transition_scripting(db: AsyncSession, job) -> None:
 
 
 async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
-    red_team = RedTeamAgent(model_name="gemini-3.1-pro", temperature=0.0)
+    red_team = RedTeamAgent(model_name="gemini-1.5-pro", temperature=0.0)
     vector_store = ContentFactoryVectorStore(db)
 
     latest_script_obj = await get_latest_script(db, job.id)
@@ -202,7 +226,7 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
 
 
 async def _transition_asset_generation(db: AsyncSession, job) -> None:
-    studio = AssetStudioAgent(model_name="gemini-3.1-multimodal")
+    studio = AssetStudioAgent(model_name="gemini-2.0-flash")
     result = await studio.run(context={"job_id": job.id})
 
     if result.status == AgentActionStatus.SUCCESS:
