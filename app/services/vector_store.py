@@ -23,11 +23,16 @@ class ContentFactoryVectorStore:
         self.embedder = get_embeddings()
 
     async def ingest_chunks(
-        self, job_id: UUID, chunks: List[str], scope: str = "LOCAL"
+        self,
+        job_id: UUID,
+        chunks: List[str],
+        scope: str = "LOCAL",
+        meta: Optional[Dict[str, Any]] = None,
     ) -> int:
         """
         Embeds text chunks via Gemini and inserts them into the pgvector table.
         Scope defaults to LOCAL (ephemeral for this specific render job).
+        Optional meta dict is merged into the default metadata.
         """
         if not chunks:
             return 0
@@ -37,12 +42,15 @@ class ContentFactoryVectorStore:
 
         db_chunks = []
         for content, embedding in zip(chunks, embeddings):
+            chunk_meta = {"scope": scope, "version": "1.0"}
+            if meta:
+                chunk_meta.update(meta)
             db_chunks.append(
                 ResearchChunk(
                     job_id=job_id,
                     content=content,
                     embedding=embedding,
-                    meta={"scope": scope, "version": "1.0"},
+                    meta=chunk_meta,
                 )
             )
 
