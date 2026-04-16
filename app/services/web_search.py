@@ -16,9 +16,14 @@ class TavilySearchService:
     async def search(self, query: str) -> list[dict]:
         try:
             response = await self.client.ainvoke({"query": query})
-            results = response.get("results", [])
-            logger.info(f"Tavily returned {len(results)} results for query: {query}")
-            return results
+            if isinstance(response, dict):
+                results = response.get("results", [])
+                logger.info(
+                    f"Tavily returned {len(results)} results for query: {query}"
+                )
+                return results
+            logger.warning(f"Unexpected Tavily response type for query: {query}")
+            return []
         except Exception:
             logger.warning(f"Tavily search failed for query: {query}", exc_info=True)
             return []
