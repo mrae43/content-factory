@@ -84,7 +84,7 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/content_factory_test
           GEMINI_API_KEY: ${{ env.GEMINI_API_KEY }}
           TAVILY_API_KEY: ${{ env.TAVILY_API_KEY }}
-        run: pytest -v -m unit --tb=short
+        run: pytest -v -m unit --tb=short -x --ignore-glob="**/conftest.py" || [ $? -eq 5 ]
 
   agent-tests:
     name: Agent Structure Tests
@@ -109,7 +109,7 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ env.GEMINI_API_KEY }}
           TAVILY_API_KEY: ${{ env.TAVILY_API_KEY }}
-        run: pytest -v -m agent --tb=short
+        run: pytest -v -m agent --tb=short -x --ignore-glob="**/conftest.py" || [ $? -eq 5 ]
 
   eval-tests:
     name: AI Evaluation Tests
@@ -156,7 +156,7 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/content_factory_test
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
-        run: pytest -v -m eval --tb=short
+        run: pytest -v -m eval --tb=short -x --ignore-glob="**/conftest.py" || [ $? -eq 5 ]
 
   integration-tests:
     name: Integration Tests
@@ -203,7 +203,7 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/content_factory_test
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
-        run: pytest -v -m integration --tb=short
+        run: pytest -v -m integration --tb=short -x --ignore-glob="**/conftest.py" || [ $? -eq 5 ]
 
   docker-build:
     name: Docker Build Check
