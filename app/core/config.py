@@ -9,7 +9,8 @@ class Settings(BaseSettings):
     """
 
     gemini_api_key: str
-    postgres_uri: Optional[str] = None  # For pgvector integration later
+    tavily_api_key: str
+    postgres_uri: Optional[str] = None
 
     # 2026 Governance & Compliance Standards
     synthid_watermark_enabled: bool = True
