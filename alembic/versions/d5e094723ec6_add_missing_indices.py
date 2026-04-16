@@ -86,11 +86,13 @@ def upgrade() -> None:
     """)
 
     op.execute("""
+    DROP TRIGGER IF EXISTS update_render_jobs_modtime ON factory.render_jobs;
     CREATE TRIGGER update_render_jobs_modtime
         BEFORE UPDATE ON factory.render_jobs
         FOR EACH ROW EXECUTE PROCEDURE factory.update_modified_column();
     """)
     op.execute("""
+    DROP TRIGGER IF EXISTS update_scripts_modtime ON factory.scripts;
     CREATE TRIGGER update_scripts_modtime
         BEFORE UPDATE ON factory.scripts
         FOR EACH ROW EXECUTE PROCEDURE factory.update_modified_column();
