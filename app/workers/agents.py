@@ -44,7 +44,7 @@ class BaseAgent(ABC):
     Abstract Base Agent leveraging LangChain and Gemini 3.1.
     """
 
-    def __init__(self, model_name: str = "gemini-3.1-flash", temperature: float = 0.2):
+    def __init__(self, model_name: str = "gemini-2.0-flash", temperature: float = 0.2):
         self.model_name = model_name
         self.temperature = temperature
         self.llm = get_llm(model_name=self.model_name, temperature=self.temperature)
@@ -92,7 +92,7 @@ class ResearchAgent(BaseAgent):
         retrieved = await vector_store.semantic_search(
             query=topic,
             job_id=job_id,
-            scope="RAW-CONTEXT",
+            scopes=["RAW-CONTEXT", "LOCAL"],
             top_k=10,
         )
 
