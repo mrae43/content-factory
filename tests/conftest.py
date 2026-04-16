@@ -4,7 +4,6 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from uuid import uuid4
 
 
-
 TEST_DATABASE_URL = (
     "postgresql+asyncpg://postgres:postgres@localhost:5432/content_factory_test"
 )
