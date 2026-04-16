@@ -1,56 +1,141 @@
-# 🏭 AI Content Factory (2026 Edition)
+# Content Factory
 
-## 📌 Purpose
-The **Content Factory** is an enterprise-grade, automated multi-agent system designed to generate highly engaging, short-form video content (Shorts/Reels/TikToks). 
+Multi-agent system that generates short-form video content (Shorts/Reels/TikToks) for high-stakes domains — politics, macro-economics, historical analysis. Treats **Truth and Guardrails as first-class citizens** via a rigorous Red Team agentic loop that verifies claims against a vector database before any rendering occurs.
 
-Unlike standard AI video generators that hallucinate or rely on generic stock footage, this factory is purpose-built for **high-stakes domains**—such as global politics, macro-economics, and historical analysis. It treats **Truth and Guardrails as first-class citizens**, employing a rigorous "Red Team" agentic loop to verify claims against a vector database before any video or audio rendering occurs.
+## Core Differentiators
 
-## 🚀 Core Differentiators
-*   **Agentic Over Atomic:** Uses Plan-and-Execute workflows and Reflection Loops instead of linear pipelines. Agents debate and correct each other.
-*   **Zero-Hallucination Guardrails:** Strict confidence constraints and multi-agent fact-checking ensure no false claims make it to the final render.
-*   **Multi-Modal Native:** Bypasses generic stock footage by utilizing next-gen visual (Veo) and audio (Lyria) models, alongside precise Python-generated data visualization charts.
-*   **Governance-as-Code:** Enforces SynthID watermarking compliance and platform safety guidelines natively within the PostgreSQL database structure.
+- **Agentic Over Atomic** — Research, Copywriter, and Red Team agents debate and correct each other through structured revision loops.
+- **Zero-Hallucination Guardrails** — Red Team breaks scripts into atomic claims, cross-references each against research sources, and persists verdicts to Postgres. Claims that fail are sent back for revision (max 3 attempts before human escalation).
+- **Governance-as-Code** — Full audit trail via `fact_check_claims` table with evidence references linked to source chunks. API returns the complete fact-check report alongside scripts and assets.
+- **Web-Enriched RAG** — Tavily search enriches user-provided context with live web results, ingested as vector chunks for semantic retrieval by downstream agents.
 
 ---
 
-## 🔄 The 8-Step Agentic Flow
+## The 8-Step Pipeline
 
-The system operates asynchronously, moving a `RenderJob` through strict state transitions:
+A `RenderJob` flows through these state transitions asynchronously:
 
 ### 1. Ingestion (`PENDING`)
-The user submits a high-level topic (e.g., *"BRICS De-dollarization 2025"*) along with "pre-context" (source URLs, PDF text, audience target) via the FastAPI endpoint.
+User submits a topic (e.g., *"BRICS De-dollarization 2025"*) along with pre-context (source URLs, raw text, audience target) via `POST /api/v1/jobs/`.
 
-### 2. Extraction & Structuring
-A lightweight agent parses the pre-context, extracting key entities, timelines, and primary claims to guide the research phase.
+### 2. Extraction & Chunking
+`MarkdownTextSplitter` chunks the raw text into `RAW-CONTEXT` scope vectors in the pgvector `research_chunks` table.
 
 ### 3. Deep Research (`RESEARCHING`)
-The **Research Agent** (powered by high-context models) queries the internal `pgvector` database for historical precedents and cross-references the user's pre-context. It generates highly structured `ResearchChunks`.
+Tavily web search enriches the topic with live results (ingested as `LOCAL`-scope vectors). The **Research Agent** (`gemini-2.5-flash`) retrieves all chunks via semantic search, produces refined `LOCAL` chunks vetted for factual accuracy.
 
 ### 4. Source Fact-Check (`FACT_CHECKING_RESEARCH`)
-An automated baseline check evaluates the `ResearchChunks` for credibility, dropping any unverified or low-confidence data points before they reach the writers' room.
+**MVP: Passthrough** — auto-advances to `SCRIPTING`. The Red Team at Step 6 catches issues downstream.
 
-### 5. Script & Storyboard Drafting (`SCRIPTING`)
-The **Copywriter Agent** takes the verified research and drafts an engaging script optimized for short-form retention (AEO/SEO optimized). It also drafts a visual storyboard (prompts for the generation phase).
+### 5. Script & Storyboard (`SCRIPTING`)
+The **Copywriter Agent** (`gemini-1.5-pro`, temp=0.7) drafts a retention-optimized script + visual storyboard from the research context. On revision, the agent sees accumulated Red Team feedback.
 
-### 6. The Red Team Evaluator (`FACT_CHECKING_SCRIPT`)
-*The most critical step.* The **Red Team Agent** breaks the script into atomic claims and verifies them against the original `ResearchChunks`. 
-*   **If `SUPPORTED`:** The script passes.
-*   **If `UNSUPPORTED`:** The script is rejected and sent back to Step 5 with feedback (*"Tone down Claim 3, it exaggerates the inflation rate"*). If it fails 3 times, it triggers `HUMAN_REVIEW_NEEDED`.
+### 6. Red Team Evaluation (`FACT_CHECKING_SCRIPT`)
+The critical step. The **Red Team Agent** (`gemini-1.5-pro`, temp=0.0) uses `.with_structured_output()` to break the script into atomic claims and verifies each against the research sources:
 
-### 7. Multi-Modal Studio (`ASSET_GENERATION`)
-Once the script is locked and verified, parallel agents generate the assets:
-*   **Visuals:** Cinematic B-roll via video generation models (Veo) and data-accurate animated charts via Python.
-*   **Audio:** High-fidelity Voiceover generation and dynamic background scoring (Lyria).
-*   **Subtitles:** Word-level JSON timestamp generation.
+- **SUPPORTED** → Script passes, claims persisted to `fact_check_claims` table with evidence references
+- **UNSUPPORTED/CONTESTED** → Script sent back to Step 5 with detailed feedback. After 3 failures → `HUMAN_REVIEW_NEEDED`
+- Human override available via `POST /api/v1/jobs/{id}/approve-script`
 
-### 8. Final Render & Delivery (`COMPLETED`)
-Assets are stitched together, watermarked with SynthID for compliance, and uploaded to cloud storage. The FastAPI application returns the `final_video_url` and complete metadata payload.
+### 7. Asset Generation (`ASSET_GENERATION`)
+**MVP: Mocked** — The **Asset Studio Agent** (`gemini-2.5-flash`) generates Veo/Lyria production prompts but returns a fake `s3://` URL. No real TTS, video rendering, or FFmpeg yet.
+
+### 8. Completion (`COMPLETED`)
+LOCAL-scope vector chunks are cleaned up. The final job state, scripts, audit trail, and asset metadata are available via the API.
 
 ---
 
-## 🛠️ Tech Stack Overview
-*   **API Framework:** FastAPI (Async, Pydantic V2 validation)
-*   **Database:** PostgreSQL with `pgvector` (Strict typing, JSONB, GIN indexing)
-*   **Migrations:** Alembic
-*   **AI Orchestration:** Multi-Agent Python Workers (Celery/RQ) 
-*   **Models:** Gemini 3.1 (Pro for Strategy/Copywriting, Flash for High-Volume RAG/Fact-checking)
+## API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/v1/jobs/` | Create a new RenderJob (returns `202 Accepted`) |
+| `GET` | `/api/v1/jobs/{id}` | Poll job status with full scripts, claims audit, and assets |
+| `POST` | `/api/v1/jobs/{id}/approve-script` | Approve or reject script (human-in-the-loop) |
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| API | FastAPI (async, Pydantic V2) |
+| Database | PostgreSQL 16 + pgvector (HNSW index, `factory` schema) |
+| ORM | SQLAlchemy 2 async (`asyncpg`) |
+| Migrations | Alembic (sync via `psycopg2`) |
+| AI Orchestration | LangChain + Google GenAI |
+| Models | `gemini-2.5-flash` (research, assets), `gemini-1.5-pro` (copywriting, red team) |
+| Embeddings | `models/gemini-embedding-001` (768-dim, pgvector HNSW with cosine) |
+| Web Search | Tavily (`langchain-tavily`) |
+| Background Queue | `asyncio.create_task` + `FOR UPDATE SKIP LOCKED` (no Celery/Redis) |
+| Language | Python 3.11 |
+| Linter | Ruff |
+
+---
+
+## Quick Start
+
+```bash
+# 1. Set up .env (see Environment section below)
+cp .env.example .env
+
+# 2. Start Postgres + pgAdmin + API
+docker compose up -d
+
+# 3. Run migrations (DB must be running)
+alembic upgrade head
+
+# 4. Or run API locally (outside Docker)
+uvicorn app.main:app --reload
+```
+
+### Lint & Format
+
+```bash
+ruff format . && ruff check . --fix
+# Or on PowerShell:
+./clean_code.ps1
+```
+
+---
+
+## Environment
+
+Required `.env` variables:
+
+| Variable | Description |
+|----------|-------------|
+| `GEMINI_API_KEY` | Mandatory — Google AI API key |
+| `TAVILY_API_KEY` | Mandatory — Tavily web search API key |
+| `DATABASE_URL` | Async connection string, e.g. `postgresql+asyncpg://postgres:postgres@localhost:5432/content_factory` |
+| `POSTGRES_USER` | Docker Compose DB user |
+| `POSTGRES_DB` | Docker Compose DB name |
+| `POSTGRES_PORT` | Docker Compose host port (default `5433`) |
+| `PGADMIN_EMAIL` | pgAdmin login email |
+| `PGADMIN_PASSWORD` | pgAdmin login password |
+
+---
+
+## Project Structure
+
+```
+app/
+  main.py                  # FastAPI app + lifespan (starts/stops QueueWorker)
+  core/config.py           # pydantic-settings, reads .env
+  api/routes.py            # /api/v1/jobs/ endpoints
+  db/
+    models.py              # SQLAlchemy models (factory schema)
+    session.py             # async engine + session factory
+    crud.py                # query helpers + queue operations
+  schemas/shorts.py        # Pydantic request/response models
+  services/
+    llm.py                 # LangChain + Gemini model/embedding wrappers
+    vector_store.py        # pgvector ingestion & semantic search
+    chunking.py            # Markdown text splitter
+    web_search.py          # TavilySearchService
+  workers/
+    orchestrator.py        # Agentic state machine (one transition per call)
+    queue_worker.py        # asyncio poll loop with SKIP LOCKED
+    agents.py              # BaseAgent → Research, Copywriter, RedTeam, AssetStudio
+    tasks.py               # Post-completion LOCAL chunk cleanup
+```
