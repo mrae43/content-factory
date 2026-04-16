@@ -3,12 +3,12 @@ from app.core.config import settings
 
 
 def get_llm(
-    model_name: str = "gemini-3.1-flash", temperature: float = 0.2
+    model_name: str = "gemini-2.0-flash", temperature: float = 0.2
 ) -> ChatGoogleGenerativeAI:
     """
-    Instantiates the Gemini 3.1 model.
-    Defaults to Flash for AEO-optimized high-volume tasks.
-    Switch to 'gemini-3.1-pro' for Red Team and Complex Strategy.
+    Instantiates a Gemini model.
+    Defaults to 2.0 Flash for high-volume tasks.
+    Switch to 'gemini-1.5-pro' for Red Team and Complex Strategy.
     """
     return ChatGoogleGenerativeAI(
         model=model_name,
@@ -19,10 +19,9 @@ def get_llm(
 
 
 def get_embeddings() -> GoogleGenerativeAIEmbeddings:
-    """
-    2026 standard high-dimensional embeddings for pgvector RAG extraction.
-    """
     return GoogleGenerativeAIEmbeddings(
-        model="models/embedding-004",  # Advanced embedding model
+        model="models/gemini-embedding-001",
         google_api_key=settings.gemini_api_key,
+        task_type="retrieval_document",
+        output_dimensionality=768,
     )
