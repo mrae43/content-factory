@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.db.models import ResearchChunk
-from app.services.llm import get_embeddings
+from app.services.llm import get_embeddings, get_query_embeddings
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -21,6 +21,7 @@ class ContentFactoryVectorStore:
     def __init__(self, db_session: AsyncSession):
         self.db = db_session
         self.embedder = get_embeddings()
+        self.query_embedder = get_query_embeddings()
 
     async def ingest_chunks(
         self,
@@ -85,7 +86,7 @@ class ContentFactoryVectorStore:
         if similarity_threshold is None:
             similarity_threshold = settings.similarity_threshold
 
-        query_embedding = await self.embedder.aembed_query(query)
+        query_embedding = await self.query_embedder.aembed_query(query)
 
         distance_expr = ResearchChunk.embedding.cosine_distance(query_embedding)
         similarity_expr = 1.0 - distance_expr

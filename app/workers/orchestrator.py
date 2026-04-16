@@ -28,6 +28,8 @@ from app.core.config import settings
 
 logger = logging.getLogger("factory.orchestrator")
 
+_web_search_service = TavilySearchService()
+
 
 async def execute_state_transition(db: AsyncSession, job) -> None:
     """
@@ -102,12 +104,13 @@ async def _transition_pending(db: AsyncSession, job) -> None:
 async def _transition_researching(db: AsyncSession, job) -> None:
     vector_store = ContentFactoryVectorStore(db)
 
-    web_service = TavilySearchService()
+    web_service = _web_search_service
     web_results = await web_service.search(job.topic)
 
     if web_results:
-        web_texts = [r["content"] for r in web_results if r.get("content")]
-        web_urls = [r.get("url", "") for r in web_results]
+        valid_results = [r for r in web_results if r.get("content")]
+        web_texts = [r["content"] for r in valid_results]
+        web_urls = [r.get("url", "") for r in valid_results]
         if web_texts:
             logger.info(
                 f"Ingesting {len(web_texts)} web search results for Job {job.id}"
@@ -124,7 +127,7 @@ async def _transition_researching(db: AsyncSession, job) -> None:
                 },
             )
 
-    researcher = ResearchAgent(model_name="gemini-2.0-flash")
+    researcher = ResearchAgent(model_name="gemini-2.5-flash")
     agent_context = {
         "job_id": job.id,
         "topic": job.topic,
@@ -226,7 +229,7 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
 
 
 async def _transition_asset_generation(db: AsyncSession, job) -> None:
-    studio = AssetStudioAgent(model_name="gemini-2.0-flash")
+    studio = AssetStudioAgent(model_name="gemini-2.5-flash")
     result = await studio.run(context={"job_id": job.id})
 
     if result.status == AgentActionStatus.SUCCESS:

@@ -136,7 +136,7 @@ class ResearchChunk(Base):
     )
 
     content = Column(String, nullable=False)
-    # Gemini 3.1 Embeddings (typically 768 or 1536 dims)
+    # Gemini Embeddings (768 dims)
     embedding = Column(Vector(768), nullable=True)
 
     # Stores sources, URLs, credibility scores
