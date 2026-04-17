@@ -27,7 +27,7 @@ async def test_returns_success_with_script_and_storyboard(
         "job_id": job_id,
     }
 
-    with chain_mock(copywriter_schema_output) as mock_ainvoke:
+    with chain_mock(copywriter_schema_output):
         result = await agent._execute(context)
 
     assert result.status == AgentActionStatus.SUCCESS
