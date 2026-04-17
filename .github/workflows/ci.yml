@@ -154,8 +154,8 @@ jobs:
       - name: Run AI eval tests (real LLM)
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/content_factory_test
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || 'ci-dummy-key' }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY || 'ci-dummy-key' }}
         run: pytest -v -m eval --tb=short -x --ignore-glob="**/conftest.py" || [ $? -eq 5 ]
 
   integration-tests:
@@ -200,8 +200,8 @@ jobs:
       - name: Run integration tests
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/content_factory_test
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || 'ci-dummy-key' }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY || 'ci-dummy-key' }}
         run: pytest -v -m integration --tb=short -x --ignore-glob="**/conftest.py" || [ $? -eq 5 ]
 
   docker-build:
