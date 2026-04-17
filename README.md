@@ -49,6 +49,7 @@ LOCAL-scope vector chunks are cleaned up. The final job state, scripts, audit tr
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| `GET`  | `/` | Health check |
 | `POST` | `/api/v1/jobs/` | Create a new RenderJob (returns `202 Accepted`) |
 | `GET` | `/api/v1/jobs/{id}` | Poll job status with full scripts, claims audit, and assets |
 | `POST` | `/api/v1/jobs/{id}/approve-script` | Approve or reject script (human-in-the-loop) |
@@ -68,16 +69,19 @@ LOCAL-scope vector chunks are cleaned up. The final job state, scripts, audit tr
 | Embeddings | `models/gemini-embedding-001` (768-dim, pgvector HNSW with cosine) |
 | Web Search | Tavily (`langchain-tavily`) |
 | Background Queue | `asyncio.create_task` + `FOR UPDATE SKIP LOCKED` (no Celery/Redis) |
+| Testing | pytest + pytest-asyncio + httpx + deepeval |
+| CI/CD | GitHub Actions (lint → unit/agent tests → eval/integration/docker) |
+| Containerization | Docker Compose (pgvector:pg16, pgAdmin4, API) |
 | Language | Python 3.11 |
-| Linter | Ruff |
+| Linter/Formatter | Ruff (line-length=88) |
 
 ---
 
 ## Quick Start
 
 ```bash
-# 1. Set up .env (see Environment section below)
-cp .env.example .env
+# 1. Create .env with required variables (see Environment section)
+cp .env.example .env   # or create manually
 
 # 2. Start Postgres + pgAdmin + API
 docker compose up -d
@@ -95,6 +99,22 @@ uvicorn app.main:app --reload
 ruff format . && ruff check . --fix
 # Or on PowerShell:
 ./clean_code.ps1
+```
+
+### Run Tests
+
+```bash
+# Install test dependencies
+pip install -r requirements-test.txt
+
+# Run all tests
+pytest
+
+# Run by marker
+pytest -m unit          # Unit tests only
+pytest -m agent         # Agent tests only
+pytest -m eval          # Eval tests only (placeholder)
+pytest -m integration   # Integration tests only (CI-only)
 ```
 
 ---
@@ -116,13 +136,34 @@ Required `.env` variables:
 
 ---
 
+## Test Suite
+
+The project uses pytest with `asyncio_mode = "auto"` and four custom markers:
+
+| Marker | Scope | Files |
+|--------|-------|-------|
+| `unit` | Core logic — chunking, config, CRUD, routes, queue worker, vector store | `tests/unit/` (6 files, ~55 tests) |
+| `agent` | Agent behavior — research, copywriter, red team, asset studio | `tests/agents/` (4 files, ~14 tests) |
+| `eval` | Evaluation benchmarks (placeholder) | `tests/evals/` |
+| `integration` | End-to-end flows (CI-only) | — |
+
+### CI Pipeline (GitHub Actions)
+
+The `.github/workflows/ci.yml` pipeline runs on push/PR:
+
+```
+lint → unit-tests + agent-tests (parallel) → eval-tests + integration-tests (PR only) + docker-build
+```
+
+---
+
 ## Project Structure
 
 ```
 app/
   main.py                  # FastAPI app + lifespan (starts/stops QueueWorker)
   core/config.py           # pydantic-settings, reads .env
-  api/routes.py            # /api/v1/jobs/ endpoints
+  api/routes.py            # /api/v1/jobs/ endpoints + health check
   db/
     models.py              # SQLAlchemy models (factory schema)
     session.py             # async engine + session factory
@@ -138,4 +179,52 @@ app/
     queue_worker.py        # asyncio poll loop with SKIP LOCKED
     agents.py              # BaseAgent → Research, Copywriter, RedTeam, AssetStudio
     tasks.py               # Post-completion LOCAL chunk cleanup
+tests/
+  conftest.py              # Shared fixtures (mock DB, LLM, vector store)
+  unit/                    # Unit tests (chunking, config, crud, routes, queue, vector_store)
+  agents/
+    conftest.py            # Agent-specific fixtures
+    test_research_agent.py
+    test_copywriter_agent.py
+    test_red_team_agent.py
+    test_asset_studio_agent.py
+  evals/                   # Eval test placeholder
+  golden/                  # Golden datasets for evaluation
+alembic/
+  env.py                   # Async→sync URL swap, factory schema + vector extension
+  versions/                # 6 migrations (initial schema → triggers → indices → locked columns)
+docker-compose.yml         # pgvector:pg16 + pgAdmin4 + API
+Dockerfile                 # 2-stage build (python:3.11-slim, non-root user)
+pyproject.toml             # pytest config, ruff config, project metadata
+requirements.txt           # Runtime dependencies
+requirements-test.txt      # Test dependencies (pytest, pytest-asyncio, httpx, deepeval)
 ```
+
+---
+
+## MVP Status
+
+### Fully Implemented (Pipeline Steps 1–8)
+
+- **Step 1 (Ingestion)** — `POST /api/v1/jobs/` creates a PENDING RenderJob
+- **Step 2 (Extraction)** — `MarkdownTextSplitter` chunks raw_text into RAW-CONTEXT scope vectors
+- **Step 3 (Deep Research)** — Tavily web search + ResearchAgent produces refined LOCAL chunks
+- **Step 4 (Source Fact-Check)** — Passthrough; Red Team catches issues downstream
+- **Step 5 (Scripting)** — CopywriterAgent drafts script + storyboard from research context
+- **Step 6 (Red Team)** — RedTeamAgent audits script claims, persists verdicts, max 3 revision loops
+- **Step 7 (Asset Generation)** — AssetStudioAgent generates prompts (mocked `s3://` URL)
+- **Step 8 (Completion)** — LOCAL-scope chunk cleanup, final state
+
+### Infrastructure
+
+- **Postgres-backed Queue** — `QueueWorker` with `asyncio.create_task` + `FOR UPDATE SKIP LOCKED` + crash recovery
+- **Web Search Enrichment** — Tavily results ingested as LOCAL-scope vectors before research
+- **Test Suite** — Unit + agent tests with CI pipeline via GitHub Actions
+- **Docker** — 3-service Compose stack (pgvector, pgAdmin, API) with resource limits
+
+### Intentionally Deferred (Wizard of Oz MVP)
+
+- **SynthID Watermarking** — Config flag exists (`synthid_watermark_enabled`) but no implementation
+- **GLOBAL Knowledge Base** — Skipped; platform constraints are hardcoded in agent system prompts
+- **Real Asset Generation** — No TTS, video rendering, or FFmpeg; agent returns mocked URLs
+- **Eval/Integration Tests** — Markers and CI stages exist but no test implementations yet
