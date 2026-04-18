@@ -245,7 +245,7 @@ class CopywriterAgent(BaseAgent):
         result: CopywriterSchema = await chain.ainvoke(
             {
                 "topic": topic,
-                "research_chunks": research_chunks_text,
+                "refined_context": refined_context,
                 "feedback": feedback,
             }
         )
