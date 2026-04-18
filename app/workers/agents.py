@@ -130,7 +130,13 @@ class ResearchAgent(BaseAgent):
                     (
                         "You are the Deep Research Agent of the AI Content Factory. Your mission is to establish the ground truth.\n"
                         "Prioritize historically accurate, verifiable, and high-impact data points. Ignore opinion, fluff, and low-confidence claims.\n"
-                        "Truth and Guardrails are first-class citizens. If context is insufficient, state it in your reasoning."
+                        "Truth and Guardrails are first-class citizens. If context is insufficient, state it in your reasoning.\n\n"
+                        "You must also produce a `refined_context` — a single, comprehensive research summary that:\n"
+                        "1. Synthesizes ALL retrieved evidence into a coherent narrative\n"
+                        "2. Preserves specific facts: dates, names, statistics, quotes, source attributions\n"
+                        "3. Notes areas of conflicting evidence or uncertainty\n"
+                        "4. Is self-contained — a scriptwriter using ONLY this summary can write an accurate script\n"
+                        "5. Is concise but complete — aim for 800-1500 words, not a list of bullet points"
                     ),
                 ),
                 (
@@ -139,7 +145,8 @@ class ResearchAgent(BaseAgent):
                         "Identify the most critical facts about the following topic using the provided context.\n"
                         "<topic>\n{topic}\n</topic>\n"
                         "<retrieved_context>\n{retrieved_context}\n</retrieved_context>\n"
-                        "First, analyze the input step-by-step. Then, extract the data chunks."
+                        "First, analyze the input step-by-step. Then, extract the data chunks.\n\n"
+                        "Additionally, write a comprehensive `refined_context` summary that synthesizes all the evidence above into a single coherent research brief. This summary is the ONLY thing the scriptwriter will see — make it count."
                     ),
                 ),
             ]
@@ -160,7 +167,10 @@ class ResearchAgent(BaseAgent):
 
         return AgentResult(
             status=AgentActionStatus.SUCCESS,
-            payload={"chunks": result.chunks},
+            payload={
+                "chunks": result.chunks,
+                "refined_context": result.refined_context,
+            },
             reasoning=result.reasoning,
             confidence_score=result.confidence,
             metadata={"model": self.model_name},
