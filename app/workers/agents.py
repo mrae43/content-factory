@@ -195,30 +195,14 @@ class CopywriterAgent(BaseAgent):
         topic = context.get("topic", "Unknown")
         feedback = context.get("feedback", "")
 
-        vector_store = context.get("vector_store")
-        job_id = context.get("job_id")
-
-        research_chunks_text = ""
-        if vector_store and job_id:
-            retrieved = await vector_store.semantic_search(
-                query=topic,
-                job_id=job_id,
-                scopes=["RAW-CONTEXT", "LOCAL"],
-                top_k=10,
+        refined_context = context.get("refined_context", "")
+        if not refined_context:
+            return AgentResult(
+                status=AgentActionStatus.ERROR,
+                payload={},
+                reasoning="No refined research context available for scriptwriting.",
+                confidence_score=0.0,
             )
-
-            if not retrieved:
-                return AgentResult(
-                    status=AgentActionStatus.ERROR,
-                    payload={},
-                    reasoning="No research chunks retrieved above similarity threshold. Cannot write script without verified research.",
-                    confidence_score=0.0,
-                )
-
-            logger.info(
-                f"CopywriterAgent retrieved {len(retrieved)} chunks for topic '{topic}'"
-            )
-            research_chunks_text = "\n".join([r["content"] for r in retrieved])
 
         prompt = ChatPromptTemplate.from_messages(
             [
