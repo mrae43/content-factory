@@ -147,7 +147,6 @@ async def _transition_researching(db: AsyncSession, job) -> None:
 
 async def _transition_scripting(db: AsyncSession, job) -> None:
     copywriter = CopywriterAgent(model_name="gemini-1.5-pro", temperature=0.7)
-    vector_store = ContentFactoryVectorStore(db)
     latest_script_for_feedback = await get_latest_script(db, job.id)
     revision_feedback = ""
     if latest_script_for_feedback and latest_script_for_feedback.feedback_history:
@@ -160,7 +159,7 @@ async def _transition_scripting(db: AsyncSession, job) -> None:
     agent_context = {
         "job_id": job.id,
         "topic": job.topic,
-        "vector_store": vector_store,
+        "refined_context": job.refined_context or "",
         "feedback": revision_feedback,
     }
     result = await copywriter.run(context=agent_context)
