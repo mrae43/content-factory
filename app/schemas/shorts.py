@@ -144,6 +144,7 @@ class RenderJobResponse(BaseModel):
     status: JobStatusEnum
     strict_compliance_mode: bool
     final_video_url: Optional[str]
+    refined_context: Optional[str] = None
     error_log: Optional[Dict[str, Any]]
 
     # We only expose the most recently active script to keep payloads light
