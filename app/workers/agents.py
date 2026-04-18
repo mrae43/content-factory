@@ -69,6 +69,16 @@ class BaseAgent(ABC):
 
 class ResearchSchema(BaseModel):
     chunks: List[str] = Field(description="Extracted highly-credible data chunks.")
+    refined_context: str = Field(
+        description=(
+            "A comprehensive, self-contained research summary synthesizing all "
+            "retrieved evidence into a single coherent narrative. Must include: "
+            "key facts, dates, statistics, quotes, causal relationships, and "
+            "competing viewpoints. This summary will be the SOLE input for "
+            "script writing — it must be complete enough that a scriptwriter "
+            "never needs to consult raw sources."
+        )
+    )
     reasoning: str = Field(description="Why these facts were prioritized.")
     confidence: float = Field(
         description="Confidence in factual accuracy (0.0 to 1.0)."
