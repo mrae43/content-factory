@@ -69,6 +69,16 @@ class BaseAgent(ABC):
 
 class ResearchSchema(BaseModel):
     chunks: List[str] = Field(description="Extracted highly-credible data chunks.")
+    refined_context: str = Field(
+        description=(
+            "A comprehensive, self-contained research summary synthesizing all "
+            "retrieved evidence into a single coherent narrative. Must include: "
+            "key facts, dates, statistics, quotes, causal relationships, and "
+            "competing viewpoints. This summary will be the SOLE input for "
+            "script writing — it must be complete enough that a scriptwriter "
+            "never needs to consult raw sources."
+        )
+    )
     reasoning: str = Field(description="Why these facts were prioritized.")
     confidence: float = Field(
         description="Confidence in factual accuracy (0.0 to 1.0)."
@@ -120,7 +130,13 @@ class ResearchAgent(BaseAgent):
                     (
                         "You are the Deep Research Agent of the AI Content Factory. Your mission is to establish the ground truth.\n"
                         "Prioritize historically accurate, verifiable, and high-impact data points. Ignore opinion, fluff, and low-confidence claims.\n"
-                        "Truth and Guardrails are first-class citizens. If context is insufficient, state it in your reasoning."
+                        "Truth and Guardrails are first-class citizens. If context is insufficient, state it in your reasoning.\n\n"
+                        "You must also produce a `refined_context` — a single, comprehensive research summary that:\n"
+                        "1. Synthesizes ALL retrieved evidence into a coherent narrative\n"
+                        "2. Preserves specific facts: dates, names, statistics, quotes, source attributions\n"
+                        "3. Notes areas of conflicting evidence or uncertainty\n"
+                        "4. Is self-contained — a scriptwriter using ONLY this summary can write an accurate script\n"
+                        "5. Is concise but complete — aim for 800-1500 words, not a list of bullet points"
                     ),
                 ),
                 (
@@ -129,7 +145,8 @@ class ResearchAgent(BaseAgent):
                         "Identify the most critical facts about the following topic using the provided context.\n"
                         "<topic>\n{topic}\n</topic>\n"
                         "<retrieved_context>\n{retrieved_context}\n</retrieved_context>\n"
-                        "First, analyze the input step-by-step. Then, extract the data chunks."
+                        "First, analyze the input step-by-step. Then, extract the data chunks.\n\n"
+                        "Additionally, write a comprehensive `refined_context` summary that synthesizes all the evidence above into a single coherent research brief. This summary is the ONLY thing the scriptwriter will see — make it count."
                     ),
                 ),
             ]
@@ -150,7 +167,10 @@ class ResearchAgent(BaseAgent):
 
         return AgentResult(
             status=AgentActionStatus.SUCCESS,
-            payload={"chunks": result.chunks},
+            payload={
+                "chunks": result.chunks,
+                "refined_context": result.refined_context,
+            },
             reasoning=result.reasoning,
             confidence_score=result.confidence,
             metadata={"model": self.model_name},
@@ -175,42 +195,37 @@ class CopywriterAgent(BaseAgent):
         topic = context.get("topic", "Unknown")
         feedback = context.get("feedback", "")
 
-        vector_store = context.get("vector_store")
-        job_id = context.get("job_id")
-
-        research_chunks_text = ""
-        if vector_store and job_id:
-            retrieved = await vector_store.semantic_search(
-                query=topic,
-                job_id=job_id,
-                scopes=["RAW-CONTEXT", "LOCAL"],
-                top_k=10,
+        refined_context = context.get("refined_context", "")
+        if not refined_context:
+            return AgentResult(
+                status=AgentActionStatus.ERROR,
+                payload={},
+                reasoning="No refined research context available for scriptwriting.",
+                confidence_score=0.0,
             )
-
-            if not retrieved:
-                return AgentResult(
-                    status=AgentActionStatus.ERROR,
-                    payload={},
-                    reasoning="No research chunks retrieved above similarity threshold. Cannot write script without verified research.",
-                    confidence_score=0.0,
-                )
-
-            logger.info(
-                f"CopywriterAgent retrieved {len(retrieved)} chunks for topic '{topic}'"
-            )
-            research_chunks_text = "\n".join([r["content"] for r in retrieved])
 
         prompt = ChatPromptTemplate.from_messages(
             [
                 (
                     "system",
                     (
-                        "You are the Lead Scriptwriter for the AI Content Factory. Your mission is to write high-retention scripts.\n"
-                        "STRATEGY: Use the Hook-Value-Loop framework. Ensure every 3 seconds has a visual 'pattern interrupt'.\n"
-                        "CONSTRAINTS:\n"
-                        "1. ZERO HALLUCINATION: Use only facts from <research_chunks>. If a claim isn't there, don't use it.\n"
-                        "2. MULTI-MODAL: Provide clear prompts for visual generation (Veo) and audio/SFX (Lyria).\n"
-                        "3. DATA VIZ: Specify when to show a Python-generated chart to support key numbers."
+                        "You are the Lead Scriptwriter for the AI Content Factory. Your mission is to write high-retention scripts.\n\n"
+                        "## YOUR INPUT\n"
+                        "You receive a `refined_context` — a comprehensive research summary that has been vetted and synthesized by the research team.\n"
+                        "This is your SOLE source of truth. Do NOT introduce facts not present in the refined_context.\n\n"
+                        "## FRAMEWORK\n"
+                        "Use the Hook-Value-Loop framework:\n"
+                        "- HOOK (0-3s): An opening that stops the scroll\n"
+                        "- VALUE (3-50s): Dense, factual content delivered at pace\n"
+                        "- LOOP: End with a cliffhanger or question that drives engagement\n\n"
+                        "## RULES\n"
+                        "1. ZERO HALLUCINATION: Every claim must trace to the refined_context\n"
+                        "2. MULTI-MODAL: Provide clear prompts for visual generation (Veo) and audio/SFX (Lyria)\n"
+                        "3. DATA VIZ: Specify when to show a Python-generated chart to support key numbers\n"
+                        "4. Target length: 120-180 seconds of narration\n"
+                        "5. Include visual and audio cues for each scene in the storyboard\n"
+                        "6. Write in a conversational, authoritative tone\n"
+                        "7. If the refined_context has conflicting evidence, present the strongest case and note uncertainty"
                     ),
                 ),
                 (
@@ -218,7 +233,7 @@ class CopywriterAgent(BaseAgent):
                     (
                         "Create a viral script and storyboard for this topic:\n"
                         "<topic>\n{topic}\n</topic>\n"
-                        "<research_chunks>\n{research_chunks}\n</research_chunks>\n"
+                        "<refined_context>\n{refined_context}\n</refined_context>\n"
                         "<feedback>\n{feedback}\n</feedback>\n"
                         "Analyze the narrative arc step-by-step, then generate the script and storyboard JSON structure."
                     ),
@@ -230,7 +245,7 @@ class CopywriterAgent(BaseAgent):
         result: CopywriterSchema = await chain.ainvoke(
             {
                 "topic": topic,
-                "research_chunks": research_chunks_text,
+                "refined_context": refined_context,
                 "feedback": feedback,
             }
         )
