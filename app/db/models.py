@@ -5,6 +5,7 @@ from sqlalchemy import (
     Boolean,
     Float,
     Integer,
+    Text,
     ForeignKey,
     DateTime,
     text,
@@ -90,6 +91,7 @@ class RenderJob(Base):
 
     # Step 8: Final outputs
     final_video_url = Column(String, nullable=True)
+    refined_context = Column(Text, nullable=True)
     error_log = Column(JSONB, nullable=True)
 
     created_at = Column(
