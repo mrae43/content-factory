@@ -17,6 +17,12 @@ class Settings(BaseSettings):
     max_red_team_revisions: int = 3
     similarity_threshold: float = 0.75
 
+    # Evaluator-Optimizer Model Configuration
+    evaluator_model: str = "gemini-1.5-pro"
+    evaluator_temperature: float = 0.0
+    optimizer_model: str = "gemini-2.5-flash"
+    optimizer_temperature: float = 0.3
+
     # Queue Worker
     worker_poll_interval_seconds: int = 5
     worker_lock_timeout_minutes: int = 15
