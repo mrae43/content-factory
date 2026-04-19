@@ -72,14 +72,20 @@ class FailedClaim(BaseModel):
     claim_text: str = Field(description="The exact claim that failed fact-checking")
     verdict: str = Field(description="UNSUPPORTED or CONTESTED")
     evidence_text: str = Field(description="Evidence found during evaluation")
-    confidence: float = Field(description="Evaluator confidence 0.0-1.0", ge=0.0, le=1.0)
+    confidence: float = Field(
+        description="Evaluator confidence 0.0-1.0", ge=0.0, le=1.0
+    )
 
 
 class OptimizerFeedbackEntry(BaseModel):
-    feedback_type: str = Field(default="structured_claims", description="Discriminator for feedback format")
+    feedback_type: str = Field(
+        default="structured_claims", description="Discriminator for feedback format"
+    )
     failed_claims: List[FailedClaim] = Field(description="Claims that need patching")
     overall_reasoning: str = Field(description="Evaluator's overall reasoning")
-    revision_number: int = Field(description="Which revision cycle produced this feedback")
+    revision_number: int = Field(
+        description="Which revision cycle produced this feedback"
+    )
 
 
 # ==========================================

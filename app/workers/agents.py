@@ -306,12 +306,12 @@ class ClaimEvidence(BaseModel):
 def _format_enriched_claims(enriched_claims: List[ClaimEvidence]) -> str:
     sections = []
     for i, ec in enumerate(enriched_claims, 1):
-        evidence_block = "\n".join(
-            f"  - {chunk}" for chunk in ec.evidence_chunks
-        ) if ec.evidence_chunks else "  - No evidence found"
-        sections.append(
-            f"Claim {i}: {ec.claim_text}\nEvidence:\n{evidence_block}"
+        evidence_block = (
+            "\n".join(f"  - {chunk}" for chunk in ec.evidence_chunks)
+            if ec.evidence_chunks
+            else "  - No evidence found"
         )
+        sections.append(f"Claim {i}: {ec.claim_text}\nEvidence:\n{evidence_block}")
     return "\n\n".join(sections)
 
 
@@ -431,9 +431,7 @@ class RedTeamAgent(BaseAgent):
                 for c in extracted.claims
             ]
 
-        has_any_evidence = any(
-            ec.evidence_chunks for ec in enriched_claims
-        )
+        has_any_evidence = any(ec.evidence_chunks for ec in enriched_claims)
         if not has_any_evidence:
             return AgentResult(
                 status=AgentActionStatus.ESCALATE,
