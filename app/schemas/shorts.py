@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, ConfigDict, HttpUrl
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Union
 from uuid import UUID
 from datetime import datetime
 from enum import Enum
@@ -68,6 +68,20 @@ class AssetRenderMeta(BaseModel):
     )
 
 
+class FailedClaim(BaseModel):
+    claim_text: str = Field(description="The exact claim that failed fact-checking")
+    verdict: str = Field(description="UNSUPPORTED or CONTESTED")
+    evidence_text: str = Field(description="Evidence found during evaluation")
+    confidence: float = Field(description="Evaluator confidence 0.0-1.0", ge=0.0, le=1.0)
+
+
+class OptimizerFeedbackEntry(BaseModel):
+    feedback_type: str = Field(default="structured_claims", description="Discriminator for feedback format")
+    failed_claims: List[FailedClaim] = Field(description="Claims that need patching")
+    overall_reasoning: str = Field(description="Evaluator's overall reasoning")
+    revision_number: int = Field(description="Which revision cycle produced this feedback")
+
+
 # ==========================================
 # 3. REQUEST SCHEMAS (Input via API)
 # ==========================================
@@ -116,7 +130,7 @@ class ScriptResponse(BaseModel):
     version: int
     content: str
     is_approved: bool
-    feedback_history: List[Dict[str, Any]]
+    feedback_history: List[Union[str, Dict[str, Any]]]
     claims: List[FactCheckClaimResponse] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
