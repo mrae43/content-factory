@@ -23,6 +23,7 @@ from app.workers.agents import (
     AssetStudioAgent,
     AgentActionStatus,
 )
+from app.workers.optimizer import ScriptOptimizerAgent
 from app.schemas.shorts import JobStatusEnum
 from app.core.config import settings
 
@@ -146,33 +147,70 @@ async def _transition_researching(db: AsyncSession, job) -> None:
 
 
 async def _transition_scripting(db: AsyncSession, job) -> None:
+    latest_script = await get_latest_script(db, job.id)
+
+    if latest_script and latest_script.feedback_history:
+        last_feedback = latest_script.feedback_history[-1]
+
+        if (
+            isinstance(last_feedback, dict)
+            and last_feedback.get("feedback_type") == "structured_claims"
+        ):
+            failed_claims = last_feedback.get("failed_claims", [])
+            await _run_optimizer(db, job, latest_script, failed_claims)
+            return
+        else:
+            revision_feedback = (
+                last_feedback
+                if isinstance(last_feedback, str)
+                else last_feedback.get("feedback", "")
+            )
+            await _run_copywriter(db, job, feedback=revision_feedback)
+            return
+
+    await _run_copywriter(db, job)
+
+
+async def _run_copywriter(db: AsyncSession, job, feedback: str = "") -> None:
     copywriter = CopywriterAgent(model_name="gemini-1.5-pro", temperature=0.7)
-    latest_script_for_feedback = await get_latest_script(db, job.id)
-    revision_feedback = ""
-    if latest_script_for_feedback and latest_script_for_feedback.feedback_history:
-        last_entry = latest_script_for_feedback.feedback_history[-1]
-        revision_feedback = (
-            last_entry
-            if isinstance(last_entry, str)
-            else last_entry.get("feedback", "")
-        )
     agent_context = {
         "job_id": job.id,
         "topic": job.topic,
         "refined_context": job.refined_context or "",
-        "feedback": revision_feedback,
+        "feedback": feedback,
     }
     result = await copywriter.run(context=agent_context)
 
     if result.status == AgentActionStatus.SUCCESS:
-        latest_script_for_version = await get_latest_script(db, job.id)
-        version = (
-            (latest_script_for_version.version + 1) if latest_script_for_version else 1
-        )
+        latest = await get_latest_script(db, job.id)
+        version = (latest.version + 1) if latest else 1
         await save_script(db, job.id, result.payload["script_content"], version)
         await update_job_status(db, job.id, JobStatusEnum.FACT_CHECKING_SCRIPT)
     else:
-        raise Exception(f"Scripting failed: {result.reasoning}")
+        raise Exception(f"Copywriter failed: {result.reasoning}")
+
+
+async def _run_optimizer(
+    db: AsyncSession, job, latest_script, failed_claims: list
+) -> None:
+    optimizer = ScriptOptimizerAgent(
+        model_name=settings.optimizer_model,
+        temperature=settings.optimizer_temperature,
+    )
+    agent_context = {
+        "job_id": job.id,
+        "script_content": latest_script.content,
+        "failed_claims": failed_claims,
+        "refined_context": job.refined_context or "",
+    }
+    result = await optimizer.run(context=agent_context)
+
+    if result.status == AgentActionStatus.SUCCESS:
+        version = latest_script.version + 1
+        await save_script(db, job.id, result.payload["script_content"], version)
+        await update_job_status(db, job.id, JobStatusEnum.FACT_CHECKING_SCRIPT)
+    else:
+        raise Exception(f"Optimizer failed: {result.reasoning}")
 
 
 async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
@@ -214,6 +252,10 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
             await save_fact_check_claims(db, latest_script_obj.id, claims_data)
             await db.commit()
 
+        failed_claims = [
+            c for c in claims_data if c.get("verdict") in ("UNSUPPORTED", "CONTESTED")
+        ]
+
         current_revision = latest_script_obj.version if latest_script_obj else 0
         logger.warning(
             f"Red Team Rejected Job {job.id}. Revision {current_revision}/{settings.max_red_team_revisions}"
@@ -223,7 +265,14 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
             logger.error(f"Max revisions reached for Job {job.id}. Escalating.")
             await update_job_status(db, job.id, JobStatusEnum.HUMAN_REVIEW_NEEDED)
         else:
-            await append_script_feedback(db, job.id, result.reasoning)
+            await append_script_feedback(
+                db,
+                job.id,
+                feedback=result.reasoning,
+                structured_claims=failed_claims,
+                overall_reasoning=result.reasoning,
+                revision_number=current_revision,
+            )
             await update_job_status(db, job.id, JobStatusEnum.SCRIPTING)
 
     elif result.status == AgentActionStatus.ESCALATE:
