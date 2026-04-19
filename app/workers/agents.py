@@ -282,24 +282,157 @@ class RedTeamVerdict(BaseModel):
     )
 
 
+class ExtractedClaim(BaseModel):
+    claim_text: str = Field(description="Exact atomic factual claim from the script")
+    claim_category: str = Field(
+        description="Type: statistic, attribution, chronological, causal, comparative"
+    )
+    search_query: str = Field(
+        description="Optimized search query to find evidence for this specific claim"
+    )
+
+
+class ClaimExtractionResult(BaseModel):
+    claims: List[ExtractedClaim] = Field(
+        description="All atomic factual claims extracted from the script"
+    )
+
+
+class ClaimEvidence(BaseModel):
+    claim_text: str
+    evidence_chunks: List[str]
+
+
+def _format_enriched_claims(enriched_claims: List[ClaimEvidence]) -> str:
+    sections = []
+    for i, ec in enumerate(enriched_claims, 1):
+        evidence_block = (
+            "\n".join(f"  - {chunk}" for chunk in ec.evidence_chunks)
+            if ec.evidence_chunks
+            else "  - No evidence found"
+        )
+        sections.append(f"Claim {i}: {ec.claim_text}\nEvidence:\n{evidence_block}")
+    return "\n\n".join(sections)
+
+
+CLAIM_EXTRACTION_SYSTEM = (
+    "You are a claim extraction specialist. Your job is to break a script into atomic factual claims.\n"
+    "For each claim, generate an optimized search query that would find supporting or contradicting evidence.\n"
+    "Categories: statistic, attribution, chronological, causal, comparative.\n"
+    "Do NOT evaluate claims — only extract them.\n"
+    "Extract EVERY factual claim, including implicit claims (numbers, dates, causal statements, attributions)."
+)
+
+CLAIM_EXTRACTION_HUMAN = (
+    "Extract all atomic factual claims from the following script:\n"
+    "<target_script>\n{script_content}\n</target_script>\n"
+    "For each claim, provide the exact claim text, its category, and a targeted search query."
+)
+
+EVALUATION_SYSTEM = (
+    "You are the Lead Red Team Auditor at the AI Content Factory. Your mission: Destroy Hallucinations.\n"
+    "Your reputation depends on catching every single unsupported claim.\n\n"
+    "You receive claims with their individually-retrieved evidence. Each claim has been searched independently.\n\n"
+    "METHODOLOGY:\n"
+    "1. Evaluate each claim independently against its SPECIFIC evidence.\n"
+    "2. For each claim, assign one of these verdicts:\n"
+    "   - SUPPORTED: Claim is fully verified by the evidence.\n"
+    "   - CONTESTED: Evidence contradicts or significantly qualifies the claim.\n"
+    "   - UNSUPPORTED: Claim is not found in the evidence or is an exaggeration/misinterpretation.\n"
+    "   - UNCERTAIN: Not enough evidence to confirm or deny the claim.\n"
+    "3. Provide confidence (0.0-1.0) and the specific evidence text for each claim.\n"
+    "4. VERDICT: Overall is SUPPORTED only if every claim is SUPPORTED or UNCERTAIN."
+)
+
+EVALUATION_HUMAN = (
+    "Audit the following claims against their individually-retrieved evidence:\n"
+    "<enriched_claims>\n{enriched_claims}\n</enriched_claims>\n"
+    "<target_script>\n{script_content}\n</target_script>\n"
+    "Analyze every claim step-by-step against its specific evidence. "
+    "For each claim, provide the verdict, confidence, and supporting evidence text."
+)
+
+
 class RedTeamAgent(BaseAgent):
     async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
         script_content = context.get("script_content", "")
-
         vector_store = context.get("vector_store")
         job_id = context.get("job_id")
 
-        research_sources_text = ""
-        if vector_store and job_id:
-            retrieved = await vector_store.semantic_search(
-                query=script_content,
-                job_id=job_id,
-                scopes=["RAW-CONTEXT", "LOCAL"],
-                top_k=10,
+        if not script_content:
+            return AgentResult(
+                status=AgentActionStatus.ERROR,
+                payload={},
+                reasoning="No script content provided for fact-checking.",
+                confidence_score=0.0,
             )
-            research_sources_text = "\n".join([r["content"] for r in retrieved])
 
-        if not research_sources_text:
+        # Pass 1: Extract atomic claims
+        extraction_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", CLAIM_EXTRACTION_SYSTEM),
+                ("human", CLAIM_EXTRACTION_HUMAN),
+            ]
+        )
+        try:
+            extraction_chain = extraction_prompt | self.llm.with_structured_output(
+                ClaimExtractionResult
+            )
+            extracted: ClaimExtractionResult = await extraction_chain.ainvoke(
+                {"script_content": script_content}
+            )
+        except Exception as exc:
+            logger.error(f"Red Team claim extraction failed: {exc}")
+            return AgentResult(
+                status=AgentActionStatus.ESCALATE,
+                payload={},
+                reasoning=f"Claim extraction LLM call failed: {exc}",
+                confidence_score=0.0,
+                metadata={"model": self.model_name},
+            )
+
+        if not extracted.claims:
+            return AgentResult(
+                status=AgentActionStatus.SUCCESS,
+                payload={
+                    "verdict": "SUPPORTED",
+                    "claims": [],
+                    "overall_reasoning": "No factual claims found in script. Nothing to fact-check.",
+                },
+                reasoning="Script contained no verifiable factual claims.",
+                confidence_score=1.0,
+                metadata={"model": self.model_name},
+            )
+
+        logger.info(
+            f"RedTeamAgent extracted {len(extracted.claims)} claims for Job {job_id}"
+        )
+
+        # Pass 2: Per-claim evidence retrieval
+        enriched_claims: List[ClaimEvidence] = []
+        if vector_store and job_id:
+            for claim in extracted.claims:
+                evidence_results = await vector_store.semantic_search(
+                    query=claim.search_query,
+                    job_id=job_id,
+                    scopes=["RAW-CONTEXT", "LOCAL"],
+                    top_k=5,
+                )
+                evidence_chunks = [r["content"] for r in evidence_results]
+                enriched_claims.append(
+                    ClaimEvidence(
+                        claim_text=claim.claim_text,
+                        evidence_chunks=evidence_chunks,
+                    )
+                )
+        else:
+            enriched_claims = [
+                ClaimEvidence(claim_text=c.claim_text, evidence_chunks=[])
+                for c in extracted.claims
+            ]
+
+        has_any_evidence = any(ec.evidence_chunks for ec in enriched_claims)
+        if not has_any_evidence:
             return AgentResult(
                 status=AgentActionStatus.ESCALATE,
                 payload={},
@@ -307,43 +440,23 @@ class RedTeamAgent(BaseAgent):
                 confidence_score=0.0,
             )
 
-        prompt = ChatPromptTemplate.from_messages(
+        enriched_claims_text = _format_enriched_claims(enriched_claims)
+
+        # Pass 3: Evaluate with per-claim evidence
+        evaluation_prompt = ChatPromptTemplate.from_messages(
             [
-                (
-                    "system",
-                    (
-                        "You are the Lead Red Team Auditor at the AI Content Factory. Your mission: Destroy Hallucinations.\n"
-                        "Your reputation depends on catching every single unsupported claim.\n"
-                        "METHODOLOGY:\n"
-                        "1. Break the script into atomic factual claims.\n"
-                        "2. Cross-reference each claim against the <research_sources>.\n"
-                        "3. For each claim, assign one of these verdicts:\n"
-                        "   - SUPPORTED: Claim is fully verified by the research sources.\n"
-                        "   - CONTESTED: Sources contradict or significantly qualify the claim.\n"
-                        "   - UNSUPPORTED: Claim is not found in the sources or is an exaggeration/misinterpretation.\n"
-                        "   - UNCERTAIN: Not enough evidence to confirm or deny the claim.\n"
-                        "4. Provide confidence (0.0-1.0) and the specific evidence text for each claim.\n"
-                        "VERDICT: Overall is SUPPORTED only if every claim is SUPPORTED or UNCERTAIN."
-                    ),
-                ),
-                (
-                    "human",
-                    (
-                        "Audit the following script against the research data:\n"
-                        "<research_sources>\n{research_chunks}\n</research_sources>\n"
-                        "<target_script>\n{script_content}\n</target_script>\n"
-                        "Analyze every factual claim step-by-step. For each claim, provide the verdict, confidence, and evidence."
-                    ),
-                ),
+                ("system", EVALUATION_SYSTEM),
+                ("human", EVALUATION_HUMAN),
             ]
         )
-
         try:
-            chain = prompt | self.llm.with_structured_output(RedTeamVerdict)
-            structured: RedTeamVerdict = await chain.ainvoke(
+            eval_chain = evaluation_prompt | self.llm.with_structured_output(
+                RedTeamVerdict
+            )
+            structured: RedTeamVerdict = await eval_chain.ainvoke(
                 {
                     "script_content": script_content,
-                    "research_chunks": research_sources_text,
+                    "enriched_claims": enriched_claims_text,
                 }
             )
         except Exception as exc:

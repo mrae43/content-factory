@@ -1,6 +1,6 @@
 from uuid import UUID
 from datetime import datetime, timezone
-from typing import Optional
+from typing import List, Optional
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -68,11 +68,29 @@ async def save_script(db: AsyncSession, job_id: UUID, content: str, version: int
     await db.commit()
 
 
-async def append_script_feedback(db: AsyncSession, job_id: UUID, feedback: str):
+async def append_script_feedback(
+    db: AsyncSession,
+    job_id: UUID,
+    feedback: str = "",
+    structured_claims: Optional[List[dict]] = None,
+    overall_reasoning: str = "",
+    revision_number: int = 0,
+):
     latest = await get_latest_script(db, job_id)
     if latest:
         history = latest.feedback_history or []
-        history.append(feedback)
+
+        if structured_claims:
+            entry = {
+                "feedback_type": "structured_claims",
+                "failed_claims": structured_claims,
+                "overall_reasoning": overall_reasoning,
+                "revision_number": revision_number,
+            }
+        else:
+            entry = feedback
+
+        history.append(entry)
         latest.feedback_history = history
         await db.commit()
 

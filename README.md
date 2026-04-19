@@ -5,7 +5,8 @@ Multi-agent system that generates short-form video content (Shorts/Reels/TikToks
 ## Core Differentiators
 
 - **Agentic Over Atomic** — Research, Copywriter, and Red Team agents debate and correct each other through structured revision loops.
-- **Zero-Hallucination Guardrails** — Red Team breaks scripts into atomic claims, cross-references each against research sources, and persists verdicts to Postgres. Claims that fail are sent back for revision (max 3 attempts before human escalation).
+- **Prompt Chaining with Semantic Memory** — ResearchAgent produces a condensed `refined_context` summary that the orchestrator persists and passes downstream. The CopywriterAgent works from this curated context instead of calling the vector store directly — eliminating context-window bloat, enabling auditable research summaries, and ensuring consistent behavior across revision loops.
+- **Zero-Hallucination Guardrails** — Red Team breaks scripts into atomic claims, cross-references each against the vector store directly, and persists verdicts to Postgres. Claims that fail are sent back for revision (max 3 attempts before human escalation).
 - **Governance-as-Code** — Full audit trail via `fact_check_claims` table with evidence references linked to source chunks. API returns the complete fact-check report alongside scripts and assets.
 - **Web-Enriched RAG** — Tavily search enriches user-provided context with live web results, ingested as vector chunks for semantic retrieval by downstream agents.
 
@@ -22,13 +23,13 @@ User submits a topic (e.g., *"BRICS De-dollarization 2025"*) along with pre-cont
 `MarkdownTextSplitter` chunks the raw text into `RAW-CONTEXT` scope vectors in the pgvector `research_chunks` table.
 
 ### 3. Deep Research (`RESEARCHING`)
-Tavily web search enriches the topic with live results (ingested as `LOCAL`-scope vectors). The **Research Agent** (`gemini-2.5-flash`) retrieves all chunks via semantic search, produces refined `LOCAL` chunks vetted for factual accuracy.
+Tavily web search enriches the topic with live results (ingested as `LOCAL`-scope vectors). The **Research Agent** (`gemini-2.5-flash`) retrieves all chunks via semantic search, produces refined `LOCAL` chunks vetted for factual accuracy, **and synthesizes a `refined_context` summary** — a condensed, self-contained research brief persisted to the `render_jobs` table by the orchestrator.
 
 ### 4. Source Fact-Check (`FACT_CHECKING_RESEARCH`)
 **MVP: Passthrough** — auto-advances to `SCRIPTING`. The Red Team at Step 6 catches issues downstream.
 
 ### 5. Script & Storyboard (`SCRIPTING`)
-The **Copywriter Agent** (`gemini-1.5-pro`, temp=0.7) drafts a retention-optimized script + visual storyboard from the research context. On revision, the agent sees accumulated Red Team feedback.
+The **Copywriter Agent** (`gemini-1.5-pro`, temp=0.7) receives the **`refined_context`** from the orchestrator (not the raw vector store). This curated context ensures a bounded, consistent input regardless of chunk count or embedding noise. The agent drafts a retention-optimized script + visual storyboard. On revision, the agent sees accumulated Red Team feedback.
 
 ### 6. Red Team Evaluation (`FACT_CHECKING_SCRIPT`)
 The critical step. The **Red Team Agent** (`gemini-1.5-pro`, temp=0.0) uses `.with_structured_output()` to break the script into atomic claims and verifies each against the research sources:
@@ -87,7 +88,8 @@ cp .env.example .env   # or create manually
 docker compose up -d
 
 # 3. Run migrations (DB must be running)
-alembic upgrade head
+docker compose exec api alembic revision --autogenerate -m "description"
+docker compose exec api alembic upgrade head
 
 # 4. Or run API locally (outside Docker)
 uvicorn app.main:app --reload
@@ -208,10 +210,10 @@ requirements-test.txt      # Test dependencies (pytest, pytest-asyncio, httpx, d
 
 - **Step 1 (Ingestion)** — `POST /api/v1/jobs/` creates a PENDING RenderJob
 - **Step 2 (Extraction)** — `MarkdownTextSplitter` chunks raw_text into RAW-CONTEXT scope vectors
-- **Step 3 (Deep Research)** — Tavily web search + ResearchAgent produces refined LOCAL chunks
+- **Step 3 (Deep Research)** — Tavily web search + ResearchAgent produces refined LOCAL chunks **and a `refined_context` summary** (prompt chaining pattern)
 - **Step 4 (Source Fact-Check)** — Passthrough; Red Team catches issues downstream
-- **Step 5 (Scripting)** — CopywriterAgent drafts script + storyboard from research context
-- **Step 6 (Red Team)** — RedTeamAgent audits script claims, persists verdicts, max 3 revision loops
+- **Step 5 (Scripting)** — CopywriterAgent receives `refined_context` from orchestrator (no direct vector store access); uses Hook-Value-Loop framework
+- **Step 6 (Red Team)** — RedTeamAgent audits script claims against vector store directly, persists verdicts, max 3 revision loops
 - **Step 7 (Asset Generation)** — AssetStudioAgent generates prompts (mocked `s3://` URL)
 - **Step 8 (Completion)** — LOCAL-scope chunk cleanup, final state
 
@@ -219,6 +221,7 @@ requirements-test.txt      # Test dependencies (pytest, pytest-asyncio, httpx, d
 
 - **Postgres-backed Queue** — `QueueWorker` with `asyncio.create_task` + `FOR UPDATE SKIP LOCKED` + crash recovery
 - **Web Search Enrichment** — Tavily results ingested as LOCAL-scope vectors before research
+- **Prompt Chaining (Semantic Memory)** — `refined_context` column on `render_jobs`; orchestrator mediates context between Research → Copywriter agents
 - **Test Suite** — Unit + agent tests with CI pipeline via GitHub Actions
 - **Docker** — 3-service Compose stack (pgvector, pgAdmin, API) with resource limits
 

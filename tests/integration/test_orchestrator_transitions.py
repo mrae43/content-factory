@@ -769,7 +769,20 @@ class TestTransitionFactCheckingScript:
             await execute_state_transition(mock_db_session, mock_job)
 
             mock_append_feedback.assert_awaited_once_with(
-                mock_db_session, mock_job.id, "Claims unsupported"
+                mock_db_session,
+                mock_job.id,
+                feedback="Claims unsupported",
+                structured_claims=[
+                    {
+                        "claim_text": "GDP grew 15%",
+                        "verdict": "UNSUPPORTED",
+                        "confidence": 0.3,
+                        "evidence_text": "No evidence",
+                        "evidence_references": [],
+                    }
+                ],
+                overall_reasoning="Claims unsupported",
+                revision_number=1,
             )
             mock_update.assert_awaited_once_with(
                 mock_db_session, mock_job.id, JobStatusEnum.SCRIPTING
@@ -1353,7 +1366,12 @@ class TestOrchestratorMultiStep:
             await execute_state_transition(mock_db_session, mock_job)
 
             mock_append_feedback.assert_awaited_once_with(
-                mock_db_session, mock_job.id, "Needs work"
+                mock_db_session,
+                mock_job.id,
+                feedback="Needs work",
+                structured_claims=[],
+                overall_reasoning="Needs work",
+                revision_number=1,
             )
             assert mock_update.call_args_list[0].args == (
                 mock_db_session,
