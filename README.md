@@ -145,7 +145,7 @@ The project uses pytest with `asyncio_mode = "auto"` and four custom markers:
 | Marker | Scope | Files |
 |--------|-------|-------|
 | `unit` | Core logic — chunking, config, CRUD, routes, queue worker, vector store | `tests/unit/` (6 files, ~55 tests) |
-| `agent` | Agent behavior — research, copywriter, red team, asset studio | `tests/agents/` (4 files, ~14 tests) |
+| `agent` | Agent behavior — research, copywriter, red team, asset studio, optimizer | `tests/agents/` (5 files, ~20 tests) |
 | `eval` | Evaluation benchmarks (placeholder) | `tests/evals/` |
 | `integration` | End-to-end flows (CI-only) | — |
 
@@ -180,16 +180,18 @@ app/
     orchestrator.py        # Agentic state machine (one transition per call)
     queue_worker.py        # asyncio poll loop with SKIP LOCKED
     agents.py              # BaseAgent → Research, Copywriter, RedTeam, AssetStudio
+    optimizer.py           # ScriptOptimizerAgent — surgical claim patching
     tasks.py               # Post-completion LOCAL chunk cleanup
 tests/
   conftest.py              # Shared fixtures (mock DB, LLM, vector store)
   unit/                    # Unit tests (chunking, config, crud, routes, queue, vector_store)
   agents/
-    conftest.py            # Agent-specific fixtures
+    conftest.py            # Agent-specific fixtures + multi_chain_mock
     test_research_agent.py
     test_copywriter_agent.py
     test_red_team_agent.py
     test_asset_studio_agent.py
+    test_optimizer_agent.py
   evals/                   # Eval test placeholder
   golden/                  # Golden datasets for evaluation
 alembic/
@@ -212,7 +214,7 @@ requirements-test.txt      # Test dependencies (pytest, pytest-asyncio, httpx, d
 - **Step 2 (Extraction)** — `MarkdownTextSplitter` chunks raw_text into RAW-CONTEXT scope vectors
 - **Step 3 (Deep Research)** — Tavily web search + ResearchAgent produces refined LOCAL chunks **and a `refined_context` summary** (prompt chaining pattern)
 - **Step 4 (Source Fact-Check)** — Passthrough; Red Team catches issues downstream
-- **Step 5 (Scripting)** — CopywriterAgent receives `refined_context` from orchestrator (no direct vector store access); uses Hook-Value-Loop framework
+- **Step 5 (Scripting)** — CopywriterAgent receives `refined_context` from orchestrator (no direct vector store access); uses Hook-Value-Loop framework. On revision, `ScriptOptimizerAgent` surgically patches failed claims instead of full re-draft
 - **Step 6 (Red Team)** — RedTeamAgent audits script claims against vector store directly, persists verdicts, max 3 revision loops
 - **Step 7 (Asset Generation)** — AssetStudioAgent generates prompts (mocked `s3://` URL)
 - **Step 8 (Completion)** — LOCAL-scope chunk cleanup, final state

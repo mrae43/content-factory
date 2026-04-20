@@ -6,8 +6,11 @@ from app.workers.agents import (
     CopywriterSchema,
     RedTeamVerdict,
     ClaimItem,
+    ClaimExtractionResult,
+    ExtractedClaim,
     StudioPromptSchema,
 )
+from app.workers.optimizer import OptimizerOutput
 
 
 @pytest.fixture
@@ -17,6 +20,7 @@ def research_schema_output():
             "BRICS GDP grew 3.2% in 2024.",
             "New payment system announced Q2.",
         ],
+        refined_context="BRICS collective GDP grew 3.2% in 2024 according to IMF data. A new payment system was announced in Q2 2025 by the New Development Bank.",
         reasoning="Selected chunks with verified economic data.",
         confidence=0.85,
     )
@@ -93,6 +97,50 @@ def red_team_verdict_contested():
 
 
 @pytest.fixture
+def claim_extraction_single():
+    return ClaimExtractionResult(
+        claims=[
+            ExtractedClaim(
+                claim_text="BRICS GDP grew 3.2% in 2024.",
+                claim_category="statistic",
+                search_query="BRICS GDP growth rate 2024",
+            ),
+        ]
+    )
+
+
+@pytest.fixture
+def claim_extraction_double():
+    return ClaimExtractionResult(
+        claims=[
+            ExtractedClaim(
+                claim_text="BRICS GDP grew 15% last year.",
+                claim_category="statistic",
+                search_query="BRICS GDP growth 15 percent",
+            ),
+            ExtractedClaim(
+                claim_text="New payment system launched.",
+                claim_category="attribution",
+                search_query="BRICS new payment system launch",
+            ),
+        ]
+    )
+
+
+@pytest.fixture
+def claim_extraction_single_contested():
+    return ClaimExtractionResult(
+        claims=[
+            ExtractedClaim(
+                claim_text="BRICS controls 40% of global trade.",
+                claim_category="statistic",
+                search_query="BRICS share of global trade percentage",
+            ),
+        ]
+    )
+
+
+@pytest.fixture
 def studio_prompt_schema_output():
     return StudioPromptSchema(
         visual_prompts=[
@@ -100,6 +148,22 @@ def studio_prompt_schema_output():
             "Currency overlay",
         ],
         audio_prompts="Tension-building orchestral with electronic undertones",
+    )
+
+
+@pytest.fixture
+def optimizer_schema_output():
+    return OptimizerOutput(
+        patched_script_content="BRICS GDP grew 3.2% in 2024. This is a significant shift.",
+        patched_storyboard=[
+            {
+                "visual_prompt": "GDP growth chart with corrected 3.2% figure",
+                "audio_cue": "Data correction reveal",
+            }
+        ],
+        patch_summary="Replaced fabricated 15% GDP claim with verified 3.2% from IMF data.",
+        reasoning="Claim 'BRICS GDP grew 15%' was UNSUPPORTED. Replaced with 3.2% from refined_context.",
+        confidence=0.85,
     )
 
 
@@ -113,12 +177,11 @@ def research_context(mock_vector_store, job_id):
 
 
 @pytest.fixture
-def copywriter_context(mock_vector_store, job_id):
+def copywriter_context():
     return {
         "topic": "BRICS De-dollarization 2025",
         "feedback": "",
-        "vector_store": mock_vector_store,
-        "job_id": job_id,
+        "refined_context": "BRICS collective GDP grew 3.2% in 2024. A new payment system was announced in Q2.",
     }
 
 
@@ -165,6 +228,24 @@ def chain_mock():
             "langchain_core.runnables.base.RunnableSequence.ainvoke",
             new_callable=AsyncMock,
             return_value=schema_instance,
+        )
+
+    return _make
+
+
+@pytest.fixture
+def multi_chain_mock():
+    """
+    Returns a context manager that patches RunnableSequence.ainvoke to return
+    different values for sequential calls. Use for multi-pass LLM agents
+    (e.g. Red Team: extraction then evaluation).
+    """
+
+    def _make(schema_instances):
+        return patch(
+            "langchain_core.runnables.base.RunnableSequence.ainvoke",
+            new_callable=AsyncMock,
+            side_effect=schema_instances,
         )
 
     return _make

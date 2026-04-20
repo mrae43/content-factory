@@ -138,9 +138,13 @@ async def _transition_researching(db: AsyncSession, job) -> None:
 
     if result.status == AgentActionStatus.SUCCESS:
         refined_context = result.payload.get("refined_context", "")
-        if refined_context:
-            job.refined_context = refined_context
-            await db.commit()
+        if not refined_context:
+            raise Exception(
+                "Research agent succeeded but produced no refined_context. "
+                "Cannot proceed to scripting without a research summary."
+            )
+        job.refined_context = refined_context
+        await db.commit()
         await update_job_status(db, job.id, JobStatusEnum.FACT_CHECKING_RESEARCH)
     else:
         raise Exception(f"Research failed: {result.reasoning}")
