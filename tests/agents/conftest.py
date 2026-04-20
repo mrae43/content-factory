@@ -10,6 +10,7 @@ from app.workers.agents import (
     ExtractedClaim,
     StudioPromptSchema,
 )
+from app.workers.optimizer import OptimizerOutput
 
 
 @pytest.fixture
@@ -146,6 +147,22 @@ def studio_prompt_schema_output():
             "Currency overlay",
         ],
         audio_prompts="Tension-building orchestral with electronic undertones",
+    )
+
+
+@pytest.fixture
+def optimizer_schema_output():
+    return OptimizerOutput(
+        patched_script_content="BRICS GDP grew 3.2% in 2024. This is a significant shift.",
+        patched_storyboard=[
+            {
+                "visual_prompt": "GDP growth chart with corrected 3.2% figure",
+                "audio_cue": "Data correction reveal",
+            }
+        ],
+        patch_summary="Replaced fabricated 15% GDP claim with verified 3.2% from IMF data.",
+        reasoning="Claim 'BRICS GDP grew 15%' was UNSUPPORTED. Replaced with 3.2% from refined_context.",
+        confidence=0.85,
     )
 
 
