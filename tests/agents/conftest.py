@@ -20,6 +20,7 @@ def research_schema_output():
             "BRICS GDP grew 3.2% in 2024.",
             "New payment system announced Q2.",
         ],
+        refined_context="BRICS collective GDP grew 3.2% in 2024 according to IMF data. A new payment system was announced in Q2 2025 by the New Development Bank.",
         reasoning="Selected chunks with verified economic data.",
         confidence=0.85,
     )
