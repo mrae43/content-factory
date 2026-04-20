@@ -14,8 +14,6 @@ def _make_agent():
 
 @pytest.mark.agent
 async def test_returns_success_with_script_and_storyboard(
-    mock_vector_store,
-    job_id,
     copywriter_schema_output,
     chain_mock,
 ):
@@ -23,8 +21,7 @@ async def test_returns_success_with_script_and_storyboard(
     context = {
         "topic": "BRICS De-dollarization 2025",
         "feedback": "",
-        "vector_store": mock_vector_store,
-        "job_id": job_id,
+        "refined_context": "BRICS collective GDP grew 3.2% in 2024. A new payment system was announced in Q2.",
     }
 
     with chain_mock(copywriter_schema_output):
@@ -41,8 +38,6 @@ async def test_returns_success_with_script_and_storyboard(
 
 @pytest.mark.agent
 async def test_returns_success_with_feedback_from_revision(
-    mock_vector_store,
-    job_id,
     copywriter_schema_output,
     chain_mock,
 ):
@@ -50,8 +45,7 @@ async def test_returns_success_with_feedback_from_revision(
     context = {
         "topic": "BRICS De-dollarization 2025",
         "feedback": "Previous script too vague",
-        "vector_store": mock_vector_store,
-        "job_id": job_id,
+        "refined_context": "BRICS collective GDP grew 3.2% in 2024. A new payment system was announced in Q2.",
     }
 
     with chain_mock(copywriter_schema_output) as mock_ainvoke:
@@ -64,21 +58,16 @@ async def test_returns_success_with_feedback_from_revision(
 
 
 @pytest.mark.agent
-async def test_returns_error_when_no_research_chunks(
-    mock_vector_store,
-    job_id,
-):
-    mock_vector_store.semantic_search.return_value = []
+async def test_returns_error_when_no_refined_context():
     agent = _make_agent()
     context = {
         "topic": "BRICS De-dollarization 2025",
         "feedback": "",
-        "vector_store": mock_vector_store,
-        "job_id": job_id,
+        "refined_context": "",
     }
 
     result = await agent._execute(context)
 
     assert result.status == AgentActionStatus.ERROR
-    assert "No research chunks" in result.reasoning
+    assert "No refined research context" in result.reasoning
     assert result.confidence_score == 0.0
