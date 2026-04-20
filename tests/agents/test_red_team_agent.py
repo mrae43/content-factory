@@ -27,9 +27,7 @@ async def test_returns_success_when_all_supported(
         "job_id": job_id,
     }
 
-    with multi_chain_mock(
-        [claim_extraction_single, red_team_verdict_supported]
-    ):
+    with multi_chain_mock([claim_extraction_single, red_team_verdict_supported]):
         result = await agent._execute(context)
 
     assert result.status == AgentActionStatus.SUCCESS
@@ -53,9 +51,7 @@ async def test_returns_revision_needed_when_unsupported(
         "job_id": job_id,
     }
 
-    with multi_chain_mock(
-        [claim_extraction_double, red_team_verdict_unsupported]
-    ):
+    with multi_chain_mock([claim_extraction_double, red_team_verdict_unsupported]):
         result = await agent._execute(context)
 
     assert result.status == AgentActionStatus.REVISION_NEEDED
