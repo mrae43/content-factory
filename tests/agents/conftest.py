@@ -159,12 +159,11 @@ def research_context(mock_vector_store, job_id):
 
 
 @pytest.fixture
-def copywriter_context(mock_vector_store, job_id):
+def copywriter_context():
     return {
         "topic": "BRICS De-dollarization 2025",
         "feedback": "",
-        "vector_store": mock_vector_store,
-        "job_id": job_id,
+        "refined_context": "BRICS collective GDP grew 3.2% in 2024. A new payment system was announced in Q2.",
     }
 
 
