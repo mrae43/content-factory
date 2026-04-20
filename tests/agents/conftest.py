@@ -6,6 +6,8 @@ from app.workers.agents import (
     CopywriterSchema,
     RedTeamVerdict,
     ClaimItem,
+    ClaimExtractionResult,
+    ExtractedClaim,
     StudioPromptSchema,
 )
 
@@ -93,6 +95,50 @@ def red_team_verdict_contested():
 
 
 @pytest.fixture
+def claim_extraction_single():
+    return ClaimExtractionResult(
+        claims=[
+            ExtractedClaim(
+                claim_text="BRICS GDP grew 3.2% in 2024.",
+                claim_category="statistic",
+                search_query="BRICS GDP growth rate 2024",
+            ),
+        ]
+    )
+
+
+@pytest.fixture
+def claim_extraction_double():
+    return ClaimExtractionResult(
+        claims=[
+            ExtractedClaim(
+                claim_text="BRICS GDP grew 15% last year.",
+                claim_category="statistic",
+                search_query="BRICS GDP growth 15 percent",
+            ),
+            ExtractedClaim(
+                claim_text="New payment system launched.",
+                claim_category="attribution",
+                search_query="BRICS new payment system launch",
+            ),
+        ]
+    )
+
+
+@pytest.fixture
+def claim_extraction_single_contested():
+    return ClaimExtractionResult(
+        claims=[
+            ExtractedClaim(
+                claim_text="BRICS controls 40% of global trade.",
+                claim_category="statistic",
+                search_query="BRICS share of global trade percentage",
+            ),
+        ]
+    )
+
+
+@pytest.fixture
 def studio_prompt_schema_output():
     return StudioPromptSchema(
         visual_prompts=[
@@ -165,6 +211,24 @@ def chain_mock():
             "langchain_core.runnables.base.RunnableSequence.ainvoke",
             new_callable=AsyncMock,
             return_value=schema_instance,
+        )
+
+    return _make
+
+
+@pytest.fixture
+def multi_chain_mock():
+    """
+    Returns a context manager that patches RunnableSequence.ainvoke to return
+    different values for sequential calls. Use for multi-pass LLM agents
+    (e.g. Red Team: extraction then evaluation).
+    """
+
+    def _make(schema_instances):
+        return patch(
+            "langchain_core.runnables.base.RunnableSequence.ainvoke",
+            new_callable=AsyncMock,
+            side_effect=schema_instances,
         )
 
     return _make
