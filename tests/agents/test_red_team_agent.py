@@ -16,8 +16,9 @@ def _make_agent():
 async def test_returns_success_when_all_supported(
     mock_vector_store,
     job_id,
+    claim_extraction_single,
     red_team_verdict_supported,
-    chain_mock,
+    multi_chain_mock,
 ):
     agent = _make_agent()
     context = {
@@ -26,7 +27,9 @@ async def test_returns_success_when_all_supported(
         "job_id": job_id,
     }
 
-    with chain_mock(red_team_verdict_supported):
+    with multi_chain_mock(
+        [claim_extraction_single, red_team_verdict_supported]
+    ):
         result = await agent._execute(context)
 
     assert result.status == AgentActionStatus.SUCCESS
@@ -39,8 +42,9 @@ async def test_returns_success_when_all_supported(
 async def test_returns_revision_needed_when_unsupported(
     mock_vector_store,
     job_id,
+    claim_extraction_double,
     red_team_verdict_unsupported,
-    chain_mock,
+    multi_chain_mock,
 ):
     agent = _make_agent()
     context = {
@@ -49,7 +53,9 @@ async def test_returns_revision_needed_when_unsupported(
         "job_id": job_id,
     }
 
-    with chain_mock(red_team_verdict_unsupported):
+    with multi_chain_mock(
+        [claim_extraction_double, red_team_verdict_unsupported]
+    ):
         result = await agent._execute(context)
 
     assert result.status == AgentActionStatus.REVISION_NEEDED
@@ -65,8 +71,9 @@ async def test_returns_revision_needed_when_unsupported(
 async def test_returns_revision_needed_when_contested(
     mock_vector_store,
     job_id,
+    claim_extraction_single_contested,
     red_team_verdict_contested,
-    chain_mock,
+    multi_chain_mock,
 ):
     agent = _make_agent()
     context = {
@@ -75,7 +82,9 @@ async def test_returns_revision_needed_when_contested(
         "job_id": job_id,
     }
 
-    with chain_mock(red_team_verdict_contested):
+    with multi_chain_mock(
+        [claim_extraction_single_contested, red_team_verdict_contested]
+    ):
         result = await agent._execute(context)
 
     assert result.status == AgentActionStatus.REVISION_NEEDED
@@ -83,7 +92,12 @@ async def test_returns_revision_needed_when_contested(
 
 
 @pytest.mark.agent
-async def test_returns_escalate_when_no_sources(mock_vector_store, job_id):
+async def test_returns_escalate_when_no_sources(
+    mock_vector_store,
+    job_id,
+    claim_extraction_single,
+    multi_chain_mock,
+):
     mock_vector_store.semantic_search.return_value = []
     agent = _make_agent()
     context = {
@@ -92,7 +106,8 @@ async def test_returns_escalate_when_no_sources(mock_vector_store, job_id):
         "job_id": job_id,
     }
 
-    result = await agent._execute(context)
+    with multi_chain_mock([claim_extraction_single]):
+        result = await agent._execute(context)
 
     assert result.status == AgentActionStatus.ESCALATE
     assert "No research sources" in result.reasoning
@@ -119,4 +134,4 @@ async def test_returns_escalate_on_llm_parse_error(
         result = await agent._execute(context)
 
     assert result.status == AgentActionStatus.ESCALATE
-    assert "LLM output parsing failed" in result.reasoning
+    assert "Claim extraction LLM call failed" in result.reasoning
