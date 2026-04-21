@@ -18,6 +18,7 @@ def make_mock_job(**overrides):
         "status": JobStatusEnum.PENDING,
         "strict_compliance_mode": True,
         "final_video_url": None,
+        "refined_context": None,
         "error_log": None,
         "scripts": [],
         "assets": [],
