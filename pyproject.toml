@@ -38,6 +38,7 @@ markers = [
     "unit: deterministic code tests (no LLM calls)",
     "agent: agent output structure tests (mocked LLM)",
     "eval: DeepEval AI quality metrics (real LLM calls)",
+    "golden: trajectory validation against golden dataset traces",
     "integration: full pipeline or multi-component tests",
 ]
 filterwarnings = [

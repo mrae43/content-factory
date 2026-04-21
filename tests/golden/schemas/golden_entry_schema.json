@@ -1,0 +1,515 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://content-factory.dev/schemas/golden-entry.json",
+  "title": "GoldenCase",
+  "description": "Schema for a single golden dataset entry used by the Content Factory eval framework. Mirrors tests/evals/schemas.py::GoldenCase.",
+  "type": "object",
+  "required": ["id", "trace_type", "category", "domain", "difficulty", "input", "trace_spec", "expected_outcomes"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[HRFENM]-\\d{3}$",
+      "description": "Case ID: H=happy_path, R=revision_loop, E=escalation, F=fallback_chain, N=negative_golden, M=minimal_edge"
+    },
+    "trace_type": {
+      "type": "string",
+      "enum": ["happy_path", "revision_loop", "fallback_chain", "negative_golden"],
+      "description": "Which trace schema this case follows"
+    },
+    "category": {
+      "type": "string",
+      "enum": ["factual_accuracy", "hallucination_trap", "conflicting_evidence", "edge_case_minimal", "edge_case_long", "safety_refusal", "pii_protection"],
+      "description": "What aspect of quality this case tests"
+    },
+    "domain": {
+      "type": "string",
+      "description": "Knowledge domain, e.g. 'economics', 'health', 'technology'"
+    },
+    "difficulty": {
+      "type": "string",
+      "enum": ["easy", "medium", "hard", "adversarial"],
+      "description": "Expected difficulty tier — determines pass threshold"
+    },
+    "input": {
+      "$ref": "#/$defs/CaseInput"
+    },
+    "trace_spec": {
+      "$ref": "#/$defs/TraceSpec"
+    },
+    "expected_outcomes": {
+      "$ref": "#/$defs/ExpectedOutcomes"
+    },
+    "scoring": {
+      "oneOf": [
+        {"$ref": "#/$defs/ScoringSpec"},
+        {"type": "null"}
+      ],
+      "default": null,
+      "description": "Scoring configuration. Null for negative_goldens (binary pass/fail)."
+    },
+    "safety_constraint": {
+      "oneOf": [
+        {"$ref": "#/$defs/SafetyConstraint"},
+        {"type": "null"}
+      ],
+      "default": null,
+      "description": "Only set for negative_golden trace_type"
+    },
+    "metadata": {
+      "$ref": "#/$defs/CaseMetadata",
+      "default": {
+        "created_by": "system",
+        "tags": []
+      }
+    }
+  },
+  "$defs": {
+    "CaseInput": {
+      "type": "object",
+      "required": ["topic", "pre_context"],
+      "properties": {
+        "topic": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "pre_context": {
+          "$ref": "#/$defs/PreContextInput"
+        },
+        "strict_compliance_mode": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "PreContextInput": {
+      "type": "object",
+      "properties": {
+        "raw_text": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Raw copied text or book excerpts"
+        },
+        "source_urls": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [],
+          "description": "URLs to scrape"
+        },
+        "target_audience": {
+          "type": "string",
+          "default": "General",
+          "description": "e.g. Academics, TikTok, Investors"
+        },
+        "guardrail_strictness": {
+          "type": "string",
+          "default": "High",
+          "description": "How aggressively the Red Team operates"
+        }
+      }
+    },
+    "TraceSpec": {
+      "type": "object",
+      "required": ["expected_state_sequence"],
+      "properties": {
+        "expected_state_sequence": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/JobStatus"},
+          "description": "Ordered list of pipeline states the job must traverse"
+        },
+        "expected_agent_calls": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/AgentCallSpec"},
+          "default": []
+        },
+        "expected_tool_calls": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/ToolCallSpec"},
+          "default": []
+        },
+        "expected_feedback_history": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/FeedbackHistorySpec"},
+          "default": [],
+          "description": "Only used for revision_loop trace_type"
+        },
+        "fallback_expectations": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/TraceStep"},
+          "default": [],
+          "description": "Only used for fallback_chain trace_type"
+        },
+        "rejection_expectations": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/TraceStep"},
+          "default": [],
+          "description": "Only used for negative_golden trace_type"
+        },
+        "note": {
+          "type": ["string", "null"],
+          "default": null
+        }
+      }
+    },
+    "AgentCallSpec": {
+      "type": "object",
+      "required": ["state", "agent"],
+      "properties": {
+        "state": {
+          "type": "string",
+          "description": "Pipeline state, e.g. 'SCRIPTING:2' for revision cycle"
+        },
+        "agent": {
+          "type": "string",
+          "description": "Agent class name, e.g. 'ResearchAgent'"
+        },
+        "model": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Expected LLM model, e.g. 'gemini-1.5-pro'"
+        },
+        "reason": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Why this agent is called, e.g. 'first draft'"
+        },
+        "expected_verdict": {
+          "oneOf": [
+            {"$ref": "#/$defs/AgentActionStatus"},
+            {"type": "null"}
+          ],
+          "default": null
+        }
+      }
+    },
+    "ToolCallSpec": {
+      "type": "object",
+      "required": ["agent", "tool"],
+      "properties": {
+        "agent": {
+          "type": "string",
+          "description": "Agent that invokes the tool"
+        },
+        "tool": {
+          "type": "string",
+          "description": "Tool/function name, e.g. 'semantic_search'"
+        },
+        "args": {
+          "type": "object",
+          "default": {},
+          "description": "Expected arguments"
+        },
+        "per_claim": {
+          "type": "boolean",
+          "default": false,
+          "description": "True if called once per extracted claim (Red Team)"
+        }
+      }
+    },
+    "FeedbackHistorySpec": {
+      "type": "object",
+      "required": ["expected_failed_count"],
+      "properties": {
+        "feedback_type": {
+          "type": "string",
+          "default": "structured_claims"
+        },
+        "expected_failed_count": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How many claims should fail in this revision cycle"
+        },
+        "expected_verdicts": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/EvalVerdict"},
+          "default": [],
+          "description": "Expected verdicts for failed claims"
+        }
+      }
+    },
+    "TraceStep": {
+      "type": "object",
+      "required": ["step"],
+      "properties": {
+        "step": {"type": "integer"},
+        "agent": {"type": ["string", "null"], "default": null},
+        "stage": {"type": ["string", "null"], "default": null},
+        "tool_call": {"type": ["string", "null"], "default": null},
+        "expected_result": {"type": ["string", "null"], "default": null},
+        "fallback": {"type": ["string", "null"], "default": null},
+        "assertion": {"type": ["string", "null"], "default": null}
+      }
+    },
+    "ExpectedOutcomes": {
+      "type": "object",
+      "required": ["final_status"],
+      "properties": {
+        "research": {
+          "oneOf": [{"$ref": "#/$defs/ResearchOutcome"}, {"type": "null"}],
+          "default": null
+        },
+        "script": {
+          "oneOf": [{"$ref": "#/$defs/ScriptOutcome"}, {"type": "null"}],
+          "default": null
+        },
+        "fact_check": {
+          "oneOf": [{"$ref": "#/$defs/FactCheckOutcome"}, {"type": "null"}],
+          "default": null
+        },
+        "optimization": {
+          "oneOf": [{"$ref": "#/$defs/OptimizationOutcome"}, {"type": "null"}],
+          "default": null
+        },
+        "final_status": {
+          "type": "string",
+          "description": "Expected terminal status, e.g. 'FACT_CHECKING_SCRIPT (approved)' or 'HUMAN_REVIEW_NEEDED'"
+        },
+        "assertions": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/NegativeAssertion"},
+          "default": [],
+          "description": "Stage-level negative assertions (for negative goldens)"
+        }
+      }
+    },
+    "ResearchOutcome": {
+      "type": "object",
+      "properties": {
+        "must_include_facts": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [],
+          "description": "Key facts the research must surface"
+        },
+        "must_avoid": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [],
+          "description": "Patterns the research must not produce"
+        },
+        "min_chunks": {
+          "type": "integer",
+          "default": 2,
+          "minimum": 0,
+          "description": "Minimum number of research chunks expected"
+        },
+        "min_confidence": {
+          "type": "number",
+          "default": 0.7,
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "refined_context_word_range": {
+          "type": "array",
+          "items": {"type": "integer"},
+          "minItems": 2,
+          "maxItems": 2,
+          "default": [800, 1500],
+          "description": "Min/max word count for refined_context"
+        }
+      }
+    },
+    "ScriptOutcome": {
+      "type": "object",
+      "properties": {
+        "must_include_topics": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": []
+        },
+        "must_avoid": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": []
+        },
+        "scene_count_range": {
+          "type": "array",
+          "items": {"type": "integer"},
+          "minItems": 2,
+          "maxItems": 2,
+          "default": [3, 8],
+          "description": "Min/max storyboard scenes"
+        },
+        "word_count_range": {
+          "type": "array",
+          "items": {"type": "integer"},
+          "minItems": 2,
+          "maxItems": 2,
+          "default": [150, 500],
+          "description": "Min/max script word count"
+        },
+        "must_have_hook": {"type": "boolean", "default": true},
+        "must_have_loop": {"type": "boolean", "default": true},
+        "storyboard_fields": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": ["visual_prompt", "audio_cue"],
+          "description": "Required fields in each storyboard item"
+        }
+      }
+    },
+    "FactCheckOutcome": {
+      "type": "object",
+      "properties": {
+        "expected_overall_verdict": {
+          "type": "string",
+          "default": "SUPPORTED",
+          "description": "Expected overall verdict: SUPPORTED or REVISION_NEEDED"
+        },
+        "max_unsupported_claims": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0
+        },
+        "claims_with_known_verdicts": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/ClaimVerdict"},
+          "default": []
+        },
+        "min_claim_count": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 1,
+          "description": "Minimum extracted claims"
+        },
+        "evidence_must_have_references": {
+          "type": "boolean",
+          "default": true,
+          "description": "Every claim must reference ResearchChunk IDs"
+        }
+      }
+    },
+    "ClaimVerdict": {
+      "type": "object",
+      "required": ["claim_text", "expected_verdict"],
+      "properties": {
+        "claim_text": {"type": "string"},
+        "expected_verdict": {"$ref": "#/$defs/EvalVerdict"}
+      }
+    },
+    "OptimizationOutcome": {
+      "type": "object",
+      "properties": {
+        "must_preserve_claims": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [],
+          "description": "Claim texts that must survive patching unchanged"
+        },
+        "must_patch_claims": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [],
+          "description": "Claim texts that must be modified or removed"
+        },
+        "patch_must_be_surgical": {
+          "type": "boolean",
+          "default": true,
+          "description": "Only failed claims changed, rest preserved verbatim"
+        },
+        "narrative_must_flow": {
+          "type": "boolean",
+          "default": true,
+          "description": "Script must read coherently after patching"
+        }
+      }
+    },
+    "NegativeAssertion": {
+      "type": "object",
+      "required": ["stage", "field"],
+      "properties": {
+        "stage": {"$ref": "#/$defs/CheckStage"},
+        "field": {
+          "type": "string",
+          "description": "Output field to check, e.g. 'refined_context'"
+        },
+        "must_not_contain": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [],
+          "description": "Strings that must not appear in the output"
+        }
+      }
+    },
+    "SafetyConstraint": {
+      "type": "object",
+      "required": ["type", "pass_criteria"],
+      "properties": {
+        "type": {"$ref": "#/$defs/SafetyConstraintType"},
+        "pii_entities": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": [],
+          "description": "PII strings to check for propagation"
+        },
+        "check_stages": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/CheckStage"},
+          "default": [],
+          "description": "Pipeline stages to check"
+        },
+        "pass_criteria": {
+          "type": "string",
+          "description": "Human-readable pass condition"
+        }
+      }
+    },
+    "ScoringSpec": {
+      "type": "object",
+      "required": ["rubric_set"],
+      "properties": {
+        "rubric_set": {"$ref": "#/$defs/RubricSet"},
+        "pass_threshold": {
+          "type": "number",
+          "default": 0.75,
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "dimension_thresholds": {
+          "type": "object",
+          "additionalProperties": {"type": "number"},
+          "default": {},
+          "description": "Per-dimension minimums, e.g. {\"accuracy\": 0.8}"
+        }
+      }
+    },
+    "CaseMetadata": {
+      "type": "object",
+      "properties": {
+        "created_by": {"type": "string", "default": "system"},
+        "created_at": {"type": "string", "format": "date-time"},
+        "last_updated": {"type": "string", "format": "date-time"},
+        "notes": {"type": ["string", "null"], "default": null},
+        "tags": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": []
+        }
+      }
+    },
+    "JobStatus": {
+      "type": "string",
+      "enum": ["PENDING", "RESEARCHING", "FACT_CHECKING_RESEARCH", "SCRIPTING", "FACT_CHECKING_SCRIPT", "ASSET_GENERATION", "COMPLETED", "FAILED", "HUMAN_REVIEW_NEEDED"]
+    },
+    "AgentActionStatus": {
+      "type": "string",
+      "enum": ["SUCCESS", "REVISION_NEEDED", "ESCALATE", "ERROR"]
+    },
+    "EvalVerdict": {
+      "type": "string",
+      "enum": ["SUPPORTED", "CONTESTED", "UNSUPPORTED", "UNCERTAIN"]
+    },
+    "RubricSet": {
+      "type": "string",
+      "enum": ["research", "script", "fact_check", "optimizer"]
+    },
+    "SafetyConstraintType": {
+      "type": "string",
+      "enum": ["PII_MUST_NOT_PROPAGATE", "MEDICAL_DISCLAIMER_REQUIRED", "REFUSE_HARMFUL_CONTENT", "DEFAMATION_PREVENTION"]
+    },
+    "CheckStage": {
+      "type": "string",
+      "enum": ["chunking", "research", "script", "fact_check"]
+    }
+  }
+}
