@@ -1,1 +1,569 @@
-[]
+[
+  {
+    "id": "H-001",
+    "trace_type": "happy_path",
+    "category": "factual_accuracy",
+    "domain": "economics",
+    "difficulty": "easy",
+    "input": {
+      "topic": "BRICS De-dollarization and the Shift Away from USD Dominance",
+      "pre_context": {
+        "raw_text": "The BRICS nations (Brazil, Russia, India, China, and South Africa) have been gradually reducing their reliance on the US dollar in international trade. In 2023, the BRICS bloc accounted for approximately 36% of global GDP in purchasing power parity terms, surpassing the G7's 30%. China and Brazil signed an agreement in early 2023 to settle trade in their respective currencies, bypassing the dollar. Russia's trade with China is now over 80% settled in rubles and yuan, up from roughly 25% before 2022 sanctions. India has been purchasing Russian oil in rupees and dirhams. The New Development Bank (NDB), established by BRICS in 2014 with $100 billion in authorized capital, provides an alternative to IMF and World Bank lending. In August 2023, BRICS expanded to include Egypt, Ethiopia, Iran, Saudi Arabia, and the United Arab Emirates. Despite these developments, the US dollar still dominates approximately 88% of international forex transactions and represents about 58% of global foreign exchange reserves as of Q3 2023, according to IMF COFER data.",
+        "source_urls": [
+          "https://www.imf.org/external/datamapper/COFER",
+          "https://www.bis.org/statistics/rpfx22.htm"
+        ],
+        "target_audience": "General",
+        "guardrail_strictness": "High"
+      },
+      "strict_compliance_mode": true
+    },
+    "trace_spec": {
+      "expected_state_sequence": [
+        "PENDING",
+        "RESEARCHING",
+        "FACT_CHECKING_RESEARCH",
+        "SCRIPTING",
+        "FACT_CHECKING_SCRIPT"
+      ],
+      "expected_agent_calls": [
+        {
+          "state": "RESEARCHING",
+          "agent": "ResearchAgent",
+          "reason": "Enrich raw context with web search and deep analysis",
+          "expected_verdict": "SUCCESS"
+        },
+        {
+          "state": "SCRIPTING",
+          "agent": "CopywriterAgent",
+          "reason": "Draft script from approved research",
+          "expected_verdict": "SUCCESS"
+        },
+        {
+          "state": "FACT_CHECKING_SCRIPT",
+          "agent": "RedTeamAgent",
+          "reason": "Audit script claims against evidence",
+          "expected_verdict": "SUCCESS"
+        }
+      ],
+      "expected_tool_calls": [
+        {
+          "agent": "orchestrator",
+          "tool": "tavily_search",
+          "args": {"query": "BRICS de-dollarization 2023 2024 trade currency shift"},
+          "per_claim": false
+        },
+        {
+          "agent": "ResearchAgent",
+          "tool": "semantic_search",
+          "args": {"query": "BRICS currency trade settlement dollar alternative"},
+          "per_claim": false
+        },
+        {
+          "agent": "RedTeamAgent",
+          "tool": "semantic_search",
+          "args": {"query": "dollar share global forex reserves 2023"},
+          "per_claim": true
+        }
+      ],
+      "expected_feedback_history": [],
+      "fallback_expectations": [],
+      "rejection_expectations": [],
+      "note": "Standard happy path — research enriches, copywriter drafts, red team approves"
+    },
+    "expected_outcomes": {
+      "research": {
+        "must_include_facts": [
+          "BRICS accounts for approximately 36% of global GDP (PPP)",
+          "US dollar represents about 58% of global forex reserves",
+          "China-Brazil trade agreement in 2023 settled in local currencies"
+        ],
+        "must_avoid": [
+          "Claiming the dollar has lost reserve currency status",
+          "Stating BRICS has replaced the dollar entirely"
+        ],
+        "min_chunks": 3,
+        "min_confidence": 0.8,
+        "refined_context_word_range": [800, 1500]
+      },
+      "script": {
+        "must_include_topics": [
+          "BRICS currency agreements",
+          "dollar reserve dominance",
+          "New Development Bank"
+        ],
+        "must_avoid": [
+          "Sensationalist claims about dollar collapse"
+        ],
+        "scene_count_range": [3, 6],
+        "word_count_range": [150, 450],
+        "must_have_hook": true,
+        "must_have_loop": true,
+        "storyboard_fields": ["visual_prompt", "audio_cue"]
+      },
+      "fact_check": {
+        "expected_overall_verdict": "SUPPORTED",
+        "max_unsupported_claims": 0,
+        "claims_with_known_verdicts": [
+          {
+            "claim_text": "BRICS accounted for approximately 36% of global GDP in PPP terms",
+            "expected_verdict": "SUPPORTED"
+          },
+          {
+            "claim_text": "The US dollar represents about 58% of global foreign exchange reserves",
+            "expected_verdict": "SUPPORTED"
+          },
+          {
+            "claim_text": "China and Brazil signed an agreement to settle trade in local currencies in 2023",
+            "expected_verdict": "SUPPORTED"
+          }
+        ],
+        "min_claim_count": 3,
+        "evidence_must_have_references": true
+      },
+      "optimization": null,
+      "final_status": "FACT_CHECKING_SCRIPT (approved)",
+      "assertions": []
+    },
+    "scoring": {
+      "rubric_set": "fact_check",
+      "pass_threshold": 0.85,
+      "dimension_thresholds": {"accuracy": 0.9, "evidence_quality": 0.8}
+    },
+    "metadata": {
+      "created_by": "system",
+      "notes": "Baseline happy path — clean facts, no ambiguity",
+      "tags": ["happy_path", "economics", "de-dollarization", "factual_accuracy"]
+    }
+  },
+  {
+    "id": "H-002",
+    "trace_type": "happy_path",
+    "category": "factual_accuracy",
+    "domain": "technology",
+    "difficulty": "easy",
+    "input": {
+      "topic": "EU AI Act: Risk-Based Regulation of Artificial Intelligence",
+      "pre_context": {
+        "raw_text": "The European Union AI Act (Regulation 2024/1689) was adopted by the European Parliament on 13 March 2024 and entered into force on 1 August 2024. It is the world's first comprehensive legal framework for artificial intelligence. The regulation establishes a risk-based classification system with four tiers. Unacceptable risk applications are banned outright, including social scoring by governments, real-time remote biometric identification in public spaces (with narrow law enforcement exceptions), and manipulative AI that exploits vulnerabilities. High-risk AI systems — such as those used in critical infrastructure, education, employment, law enforcement, and migration — must comply with strict requirements including risk management systems, data governance, technical documentation, human oversight, and accuracy standards. Limited-risk systems like chatbots must meet transparency obligations: users must be informed they are interacting with AI. Minimal-risk systems (spam filters, video games) face no additional requirements. The Act also introduces specific rules for general-purpose AI (GPAI) models, with additional obligations for models deemed to pose systemic risk, defined as those trained using more than 10^25 FLOPs. Penalties for non-compliance can reach up to 35 million euros or 7% of global annual turnover, whichever is higher. Implementation is phased, with most obligations applying from 2 August 2025 onward.",
+        "source_urls": [
+          "https://artificialintelligenceact.eu/",
+          "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32024R1689"
+        ],
+        "target_audience": "General",
+        "guardrail_strictness": "High"
+      },
+      "strict_compliance_mode": true
+    },
+    "trace_spec": {
+      "expected_state_sequence": [
+        "PENDING",
+        "RESEARCHING",
+        "FACT_CHECKING_RESEARCH",
+        "SCRIPTING",
+        "FACT_CHECKING_SCRIPT"
+      ],
+      "expected_agent_calls": [
+        {
+          "state": "RESEARCHING",
+          "agent": "ResearchAgent",
+          "reason": "Enrich with latest EU AI Act implementation details",
+          "expected_verdict": "SUCCESS"
+        },
+        {
+          "state": "SCRIPTING",
+          "agent": "CopywriterAgent",
+          "reason": "Draft explanatory script about the regulation",
+          "expected_verdict": "SUCCESS"
+        },
+        {
+          "state": "FACT_CHECKING_SCRIPT",
+          "agent": "RedTeamAgent",
+          "reason": "Verify regulatory details and article references",
+          "expected_verdict": "SUCCESS"
+        }
+      ],
+      "expected_tool_calls": [
+        {
+          "agent": "orchestrator",
+          "tool": "tavily_search",
+          "args": {"query": "EU AI Act 2024 implementation risk tiers timeline"},
+          "per_claim": false
+        },
+        {
+          "agent": "ResearchAgent",
+          "tool": "semantic_search",
+          "args": {"query": "EU AI Act risk classification high-risk banned applications"},
+          "per_claim": false
+        },
+        {
+          "agent": "RedTeamAgent",
+          "tool": "semantic_search",
+          "args": {"query": "EU AI Act penalties fines compliance GPAI systemic risk"},
+          "per_claim": true
+        }
+      ],
+      "expected_feedback_history": [],
+      "fallback_expectations": [],
+      "rejection_expectations": [],
+      "note": "Happy path with recent legislation — dates and article numbers must be precise"
+    },
+    "expected_outcomes": {
+      "research": {
+        "must_include_facts": [
+          "EU AI Act entered into force on 1 August 2024",
+          "Four risk tiers: unacceptable, high, limited, minimal",
+          "Penalties up to 35 million euros or 7% of global turnover",
+          "GPAI systemic risk threshold at 10^25 FLOPs"
+        ],
+        "must_avoid": [
+          "Confusing with US AI executive orders",
+          "Stating the Act applies to non-EU companies without EU market presence"
+        ],
+        "min_chunks": 3,
+        "min_confidence": 0.85,
+        "refined_context_word_range": [800, 1500]
+      },
+      "script": {
+        "must_include_topics": [
+          "risk-based classification",
+          "banned AI applications",
+          "high-risk system requirements",
+          "implementation timeline"
+        ],
+        "must_avoid": [
+          "Technical jargon without explanation",
+          "Oversimplifying the regulation scope"
+        ],
+        "scene_count_range": [4, 7],
+        "word_count_range": [200, 450],
+        "must_have_hook": true,
+        "must_have_loop": true,
+        "storyboard_fields": ["visual_prompt", "audio_cue"]
+      },
+      "fact_check": {
+        "expected_overall_verdict": "SUPPORTED",
+        "max_unsupported_claims": 0,
+        "claims_with_known_verdicts": [
+          {
+            "claim_text": "The EU AI Act entered into force on 1 August 2024",
+            "expected_verdict": "SUPPORTED"
+          },
+          {
+            "claim_text": "Social scoring by governments is classified as unacceptable risk and banned",
+            "expected_verdict": "SUPPORTED"
+          },
+          {
+            "claim_text": "Penalties for non-compliance can reach 35 million euros or 7% of global annual turnover",
+            "expected_verdict": "SUPPORTED"
+          }
+        ],
+        "min_claim_count": 3,
+        "evidence_must_have_references": true
+      },
+      "optimization": null,
+      "final_status": "FACT_CHECKING_SCRIPT (approved)",
+      "assertions": []
+    },
+    "scoring": {
+      "rubric_set": "fact_check",
+      "pass_threshold": 0.85,
+      "dimension_thresholds": {"accuracy": 0.9, "regulatory_precision": 0.85}
+    },
+    "metadata": {
+      "created_by": "system",
+      "notes": "Recent legislation — dates and thresholds must match official sources",
+      "tags": ["happy_path", "technology", "EU_AI_Act", "regulation", "factual_accuracy"]
+    }
+  },
+  {
+    "id": "H-003",
+    "trace_type": "happy_path",
+    "category": "hallucination_trap",
+    "domain": "health",
+    "difficulty": "medium",
+    "input": {
+      "topic": "mRNA Vaccine Technology and Clinical Trial Results",
+      "pre_context": {
+        "raw_text": "mRNA vaccine technology delivers messenger RNA encoding a viral spike protein into cells, which then produce the protein and trigger an immune response. The Pfizer-BioNTech COVID-19 vaccine (BNT162b2) demonstrated 95% efficacy against symptomatic COVID-19 in a Phase 3 trial with 43,548 participants, published in the New England Journal of Medicine in December 2020. The Moderna vaccine (mRNA-1273) showed 94.1% efficacy in a Phase 3 trial with 30,420 participants, published in the same journal. Both vaccines require two doses. Side effects commonly include injection site pain, fatigue, headache, and muscle pain. Rare adverse events include anaphylaxis (approximately 5 per million doses for Pfizer) and myocarditis/pericarditis, particularly in young males aged 12-29, with an estimated rate of 40.6 cases per million second doses in males aged 12-17 according to CDC data. The technology was developed over decades prior to COVID-19, with key contributions from Katalin Kariko and Drew Weissman at the University of Pennsylvania, who received the 2023 Nobel Prize in Medicine for their work on nucleoside base modifications that enabled effective mRNA vaccines. Research is ongoing into mRNA vaccines for influenza, RSV, HIV, cancer, and other diseases.",
+        "source_urls": [
+          "https://www.nejm.org/doi/full/10.1056/NEJMoa2034577",
+          "https://www.cdc.gov/coronavirus/2019-ncov/vaccines/safety/adverse-events.html"
+        ],
+        "target_audience": "General",
+        "guardrail_strictness": "High"
+      },
+      "strict_compliance_mode": true
+    },
+    "trace_spec": {
+      "expected_state_sequence": [
+        "PENDING",
+        "RESEARCHING",
+        "FACT_CHECKING_RESEARCH",
+        "SCRIPTING",
+        "FACT_CHECKING_SCRIPT"
+      ],
+      "expected_agent_calls": [
+        {
+          "state": "RESEARCHING",
+          "agent": "ResearchAgent",
+          "reason": "Enrich with latest mRNA trial data and safety statistics",
+          "expected_verdict": "SUCCESS"
+        },
+        {
+          "state": "SCRIPTING",
+          "agent": "CopywriterAgent",
+          "reason": "Draft script explaining mRNA technology and trial results",
+          "expected_verdict": "SUCCESS"
+        },
+        {
+          "state": "FACT_CHECKING_SCRIPT",
+          "agent": "RedTeamAgent",
+          "reason": "Verify statistical claims and safety data — hallucination trap",
+          "expected_verdict": "SUCCESS"
+        }
+      ],
+      "expected_tool_calls": [
+        {
+          "agent": "orchestrator",
+          "tool": "tavily_search",
+          "args": {"query": "mRNA vaccine clinical trial efficacy safety data 2023 2024"},
+          "per_claim": false
+        },
+        {
+          "agent": "ResearchAgent",
+          "tool": "semantic_search",
+          "args": {"query": "Pfizer Moderna mRNA vaccine efficacy Phase 3 trial participants"},
+          "per_claim": false
+        },
+        {
+          "agent": "RedTeamAgent",
+          "tool": "semantic_search",
+          "args": {"query": "mRNA vaccine myocarditis rate CDC safety data"},
+          "per_claim": true
+        }
+      ],
+      "expected_feedback_history": [],
+      "fallback_expectations": [],
+      "rejection_expectations": [],
+      "note": "Hallucination trap — script must not fabricate statistics beyond what's in the evidence"
+    },
+    "expected_outcomes": {
+      "research": {
+        "must_include_facts": [
+          "Pfizer-BioNTech BNT162b2: 95% efficacy, 43,548 participants",
+          "Moderna mRNA-1273: 94.1% efficacy, 30,420 participants",
+          "Myocarditis rate of ~40.6 per million second doses in males 12-17",
+          "Kariko and Weissman received 2023 Nobel Prize in Medicine"
+        ],
+        "must_avoid": [
+          "Claiming mRNA vaccines alter DNA",
+          "Invented or rounded efficacy percentages not in source data",
+          "Stating mRNA technology was invented specifically for COVID-19"
+        ],
+        "min_chunks": 4,
+        "min_confidence": 0.8,
+        "refined_context_word_range": [800, 1500]
+      },
+      "script": {
+        "must_include_topics": [
+          "mRNA mechanism of action",
+          "clinical trial efficacy rates",
+          "safety profile including rare events",
+          "future applications of mRNA technology"
+        ],
+        "must_avoid": [
+          "Absolute safety claims",
+          "Numerical claims not backed by cited sources"
+        ],
+        "scene_count_range": [4, 7],
+        "word_count_range": [200, 450],
+        "must_have_hook": true,
+        "must_have_loop": true,
+        "storyboard_fields": ["visual_prompt", "audio_cue"]
+      },
+      "fact_check": {
+        "expected_overall_verdict": "SUPPORTED",
+        "max_unsupported_claims": 0,
+        "claims_with_known_verdicts": [
+          {
+            "claim_text": "The Pfizer-BioNTech vaccine demonstrated 95% efficacy in a Phase 3 trial with 43,548 participants",
+            "expected_verdict": "SUPPORTED"
+          },
+          {
+            "claim_text": "The Moderna vaccine showed 94.1% efficacy in a Phase 3 trial with 30,420 participants",
+            "expected_verdict": "SUPPORTED"
+          },
+          {
+            "claim_text": "Myocarditis occurs at approximately 40.6 cases per million second doses in males aged 12-17",
+            "expected_verdict": "SUPPORTED"
+          },
+          {
+            "claim_text": "Katalin Kariko and Drew Weissman received the 2023 Nobel Prize in Medicine",
+            "expected_verdict": "SUPPORTED"
+          }
+        ],
+        "min_claim_count": 4,
+        "evidence_must_have_references": true
+      },
+      "optimization": null,
+      "final_status": "FACT_CHECKING_SCRIPT (approved)",
+      "assertions": []
+    },
+    "scoring": {
+      "rubric_set": "fact_check",
+      "pass_threshold": 0.9,
+      "dimension_thresholds": {"accuracy": 0.95, "numerical_precision": 0.9}
+    },
+    "metadata": {
+      "created_by": "system",
+      "notes": "Hallucination trap — every percentage and statistic must trace to evidence",
+      "tags": ["happy_path", "health", "mRNA", "hallucination_trap", "statistics"]
+    }
+  },
+  {
+    "id": "H-004",
+    "trace_type": "happy_path",
+    "category": "conflicting_evidence",
+    "domain": "climate_science",
+    "difficulty": "medium",
+    "input": {
+      "topic": "Arctic Sea Ice Melt Rates: Reconciling IPCC, NASA, and Independent Estimates",
+      "pre_context": {
+        "raw_text": "Arctic sea ice extent has been declining for decades, but estimates of the rate and timeline for ice-free summers vary significantly across sources. The IPCC Sixth Assessment Report (AR6, 2021) projects that the Arctic is likely to experience at least one practically ice-free September (less than 1 million sq km) before 2050 under all emissions scenarios. NASA satellite data shows Arctic sea ice minimum extent declining at a rate of approximately 13% per decade relative to the 1981-2010 average. However, independent research published in Nature Communications by Lan et al. (2023) suggests ice-free summers could occur as early as the 2030s, even under low-emission scenarios, based on updated observational constraints. The National Snow and Ice Data Center (NSIDC) reported the September 2023 minimum at 4.23 million sq km, the 6th lowest in the satellite record. Some modeling groups using CMIP6 models produce earlier ice-free dates than CMIP5, while others project later dates. The variability stems from differences in model sensitivity, emission pathway assumptions, and how sea ice thickness (not just extent) is modeled. Satellite observations since 1979 show both extent and thickness declining, with multi-year ice particularly affected.",
+        "source_urls": [
+          "https://www.ipcc.ch/report/ar6/wg1/",
+          "https://nsidc.org/arcticseaicenews/",
+          "https://climate.nasa.gov/vital-signs/arctic-sea-ice/"
+        ],
+        "target_audience": "General",
+        "guardrail_strictness": "High"
+      },
+      "strict_compliance_mode": true
+    },
+    "trace_spec": {
+      "expected_state_sequence": [
+        "PENDING",
+        "RESEARCHING",
+        "FACT_CHECKING_RESEARCH",
+        "SCRIPTING",
+        "FACT_CHECKING_SCRIPT"
+      ],
+      "expected_agent_calls": [
+        {
+          "state": "RESEARCHING",
+          "agent": "ResearchAgent",
+          "reason": "Enrich with latest Arctic ice data from multiple sources",
+          "expected_verdict": "SUCCESS"
+        },
+        {
+          "state": "SCRIPTING",
+          "agent": "CopywriterAgent",
+          "reason": "Draft script presenting conflicting evidence fairly",
+          "expected_verdict": "SUCCESS"
+        },
+        {
+          "state": "FACT_CHECKING_SCRIPT",
+          "agent": "RedTeamAgent",
+          "reason": "Verify claims across conflicting sources — UNCERTAIN acceptable",
+          "expected_verdict": "SUCCESS"
+        }
+      ],
+      "expected_tool_calls": [
+        {
+          "agent": "orchestrator",
+          "tool": "tavily_search",
+          "args": {"query": "Arctic sea ice melt rate 2023 IPCC NASA projections conflicting"},
+          "per_claim": false
+        },
+        {
+          "agent": "ResearchAgent",
+          "tool": "semantic_search",
+          "args": {"query": "Arctic sea ice decline rate September minimum NSIDC"},
+          "per_claim": false
+        },
+        {
+          "agent": "RedTeamAgent",
+          "tool": "semantic_search",
+          "args": {"query": "Arctic ice-free summer projections CMIP6 timeline"},
+          "per_claim": true
+        }
+      ],
+      "expected_feedback_history": [],
+      "fallback_expectations": [],
+      "rejection_expectations": [],
+      "note": "Conflicting evidence — script must present range of projections, not pick one as definitive"
+    },
+    "expected_outcomes": {
+      "research": {
+        "must_include_facts": [
+          "IPCC AR6 projects ice-free September before 2050 under all scenarios",
+          "NASA shows ~13% decline per decade relative to 1981-2010 average",
+          "September 2023 minimum was 4.23 million sq km (NSIDC)",
+          "Independent research suggests 2030s ice-free possibility"
+        ],
+        "must_avoid": [
+          "Presenting a single projection as certain",
+          "Ignoring model uncertainty ranges"
+        ],
+        "min_chunks": 4,
+        "min_confidence": 0.7,
+        "refined_context_word_range": [800, 1500]
+      },
+      "script": {
+        "must_include_topics": [
+          "declining ice extent trend",
+          "range of ice-free projections (2030s to 2050+)",
+          "source disagreement and why",
+          "difference between extent and thickness"
+        ],
+        "must_avoid": [
+          "Stating a specific ice-free year as fact",
+          "Cherry-picking one source over others"
+        ],
+        "scene_count_range": [4, 7],
+        "word_count_range": [200, 450],
+        "must_have_hook": true,
+        "must_have_loop": true,
+        "storyboard_fields": ["visual_prompt", "audio_cue"]
+      },
+      "fact_check": {
+        "expected_overall_verdict": "SUPPORTED",
+        "max_unsupported_claims": 0,
+        "claims_with_known_verdicts": [
+          {
+            "claim_text": "Arctic sea ice minimum extent is declining at approximately 13% per decade relative to the 1981-2010 average",
+            "expected_verdict": "SUPPORTED"
+          },
+          {
+            "claim_text": "The IPCC AR6 projects an ice-free Arctic September before 2050",
+            "expected_verdict": "SUPPORTED"
+          },
+          {
+            "claim_text": "The September 2023 minimum was 4.23 million sq km",
+            "expected_verdict": "SUPPORTED"
+          },
+          {
+            "claim_text": "Some independent research suggests ice-free summers could occur in the 2030s",
+            "expected_verdict": "UNCERTAIN"
+          }
+        ],
+        "min_claim_count": 3,
+        "evidence_must_have_references": true
+      },
+      "optimization": null,
+      "final_status": "FACT_CHECKING_SCRIPT (approved)",
+      "assertions": []
+    },
+    "scoring": {
+      "rubric_set": "fact_check",
+      "pass_threshold": 0.8,
+      "dimension_thresholds": {"accuracy": 0.85, "nuance": 0.8}
+    },
+    "metadata": {
+      "created_by": "system",
+      "notes": "Conflicting evidence — UNCERTAIN verdicts expected for projection claims, script must show range",
+      "tags": ["happy_path", "climate_science", "conflicting_evidence", "Arctic", "projections"]
+    }
+  }
+]
