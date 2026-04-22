@@ -234,7 +234,12 @@ class TestTransitionResearching:
                 "url": "https://example.com/brics",
             }
         ]
-        result = agent_result_success(payload={"chunks": ["research chunk"]})
+        result = agent_result_success(
+            payload={
+                "chunks": ["research chunk"],
+                "refined_context": "BRICS nations are developing a new payment system...",
+            }
+        )
 
         with (
             patch("app.workers.orchestrator._web_search_service") as mock_web,
@@ -275,7 +280,12 @@ class TestTransitionResearching:
         agent_result_success,
     ):
         mock_job.status = JobStatusEnum.RESEARCHING
-        result = agent_result_success(payload={"chunks": ["chunk"]})
+        result = agent_result_success(
+            payload={
+                "chunks": ["chunk"],
+                "refined_context": "Summary of research findings",
+            }
+        )
 
         with (
             patch("app.workers.orchestrator._web_search_service") as mock_web,
@@ -318,7 +328,12 @@ class TestTransitionResearching:
             {"content": "", "url": "https://b.com"},
             {"content": "Also valid", "url": "https://c.com"},
         ]
-        result = agent_result_success(payload={"chunks": ["chunk"]})
+        result = agent_result_success(
+            payload={
+                "chunks": ["chunk"],
+                "refined_context": "Filtered web content summary",
+            }
+        )
 
         with (
             patch("app.workers.orchestrator._web_search_service") as mock_web,
@@ -731,7 +746,7 @@ class TestTransitionFactCheckingScript:
                 "claim_text": "GDP grew 15%",
                 "verdict": "UNSUPPORTED",
                 "confidence": 0.3,
-                "evidence_text": "No evidence",
+                "evidence_text": "",
                 "evidence_references": [],
             }
         ]
@@ -777,7 +792,7 @@ class TestTransitionFactCheckingScript:
                         "claim_text": "GDP grew 15%",
                         "verdict": "UNSUPPORTED",
                         "confidence": 0.3,
-                        "evidence_text": "No evidence",
+                        "evidence_text": "",
                         "evidence_references": [],
                     }
                 ],
@@ -1170,7 +1185,10 @@ class TestOrchestratorMultiStep:
     ):
         research_result = AgentResult(
             status=AgentActionStatus.SUCCESS,
-            payload={"chunks": ["research chunk"]},
+            payload={
+                "chunks": ["research chunk"],
+                "refined_context": "Comprehensive BRICS research summary",
+            },
             reasoning="Done",
             confidence_score=0.9,
         )
