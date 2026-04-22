@@ -9,6 +9,7 @@ Multi-agent system that generates short-form video content (Shorts/Reels/TikToks
 - **Zero-Hallucination Guardrails** — Red Team breaks scripts into atomic claims, cross-references each against the vector store directly, and persists verdicts to Postgres. Claims that fail are sent back for revision (max 3 attempts before human escalation).
 - **Governance-as-Code** — Full audit trail via `fact_check_claims` table with evidence references linked to source chunks. API returns the complete fact-check report alongside scripts and assets.
 - **Web-Enriched RAG** — Tavily search enriches user-provided context with live web results, ingested as vector chunks for semantic retrieval by downstream agents.
+- **Evaluator-Optimizer Pattern** — On revision, a dedicated `ScriptOptimizerAgent` surgically patches failed claims instead of re-drafting the entire script, preserving quality sections and reducing hallucination drift.
 
 ---
 
@@ -29,13 +30,20 @@ Tavily web search enriches the topic with live results (ingested as `LOCAL`-scop
 **MVP: Passthrough** — auto-advances to `SCRIPTING`. The Red Team at Step 6 catches issues downstream.
 
 ### 5. Script & Storyboard (`SCRIPTING`)
-The **Copywriter Agent** (`gemini-1.5-pro`, temp=0.7) receives the **`refined_context`** from the orchestrator (not the raw vector store). This curated context ensures a bounded, consistent input regardless of chunk count or embedding noise. The agent drafts a retention-optimized script + visual storyboard. On revision, the agent sees accumulated Red Team feedback.
+The **Copywriter Agent** (`gemini-1.5-pro`, temp=0.7) receives the **`refined_context`** from the orchestrator (not the raw vector store). This curated context ensures a bounded, consistent input regardless of chunk count or embedding noise. The agent drafts a retention-optimized script + visual storyboard.
+
+On revision (when Red Team rejects claims), the **Script Optimizer Agent** (`gemini-2.5-flash`, temp=0.3, both configurable) receives only the failed claims and patches them surgically — preserving the rest of the script.
 
 ### 6. Red Team Evaluation (`FACT_CHECKING_SCRIPT`)
-The critical step. The **Red Team Agent** (`gemini-1.5-pro`, temp=0.0) uses `.with_structured_output()` to break the script into atomic claims and verifies each against the research sources:
+The critical step. The **Red Team Agent** (`gemini-1.5-pro`, temp=0.0, both configurable) uses a three-pass evaluation with `.with_structured_output()`:
 
+1. **Claim Extraction** — Breaks the script into atomic claims
+2. **Evidence Retrieval** — Per-claim `semantic_search(query=claim.search_query, top_k=5)` against the vector store
+3. **Verdict** — Evaluates each claim against enriched evidence
+
+Results:
 - **SUPPORTED** → Script passes, claims persisted to `fact_check_claims` table with evidence references
-- **UNSUPPORTED/CONTESTED** → Script sent back to Step 5 with detailed feedback. After 3 failures → `HUMAN_REVIEW_NEEDED`
+- **UNSUPPORTED/CONTESTED** → Script sent back to Step 5 with structured feedback. After 3 failures → `HUMAN_REVIEW_NEEDED`
 - Human override available via `POST /api/v1/jobs/{id}/approve-script`
 
 ### 7. Asset Generation (`ASSET_GENERATION`)
@@ -66,7 +74,7 @@ LOCAL-scope vector chunks are cleaned up. The final job state, scripts, audit tr
 | ORM | SQLAlchemy 2 async (`asyncpg`) |
 | Migrations | Alembic (sync via `psycopg2`) |
 | AI Orchestration | LangChain + Google GenAI |
-| Models | `gemini-2.5-flash` (research, assets), `gemini-1.5-pro` (copywriting, red team) |
+| Models | `gemini-2.5-flash` (research, assets, optimizer), `gemini-1.5-pro` (copywriting, red team) — both configurable via env vars |
 | Embeddings | `models/gemini-embedding-001` (768-dim, pgvector HNSW with cosine) |
 | Web Search | Tavily (`langchain-tavily`) |
 | Background Queue | `asyncio.create_task` + `FOR UPDATE SKIP LOCKED` (no Celery/Redis) |
@@ -113,9 +121,10 @@ pip install -r requirements-test.txt
 pytest
 
 # Run by marker
-pytest -m unit          # Unit tests only
-pytest -m agent         # Agent tests only
-pytest -m eval          # Eval tests only (placeholder)
+pytest -m unit          # Unit tests only (6 files, ~55 tests)
+pytest -m agent         # Agent tests only (5 files, ~21 tests)
+pytest -m eval          # Eval benchmarks (infrastructure ready, no test files yet)
+pytest -m golden        # Golden dataset validation (data ready, no test files yet)
 pytest -m integration   # Integration tests only (CI-only)
 ```
 
@@ -135,19 +144,46 @@ Required `.env` variables:
 | `POSTGRES_PORT` | Docker Compose host port (default `5433`) |
 | `PGADMIN_EMAIL` | pgAdmin login email |
 | `PGADMIN_PASSWORD` | pgAdmin login password |
+| `API_PORT` | Docker Compose API host port (default `8000`) |
+
+Optional `.env` overrides:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `EVALUATOR_MODEL` | `gemini-1.5-pro` | Red Team agent model |
+| `EVALUATOR_TEMPERATURE` | `0.0` | Red Team agent temperature |
+| `OPTIMIZER_MODEL` | `gemini-2.5-flash` | Script Optimizer agent model |
+| `OPTIMIZER_TEMPERATURE` | `0.3` | Script Optimizer agent temperature |
+| `MAX_RED_TEAM_REVISIONS` | `3` | Max revision loops before human escalation |
+| `SIMILARITY_THRESHOLD` | `0.75` | Vector search cosine similarity cutoff |
+| `SYNTHID_WATERMARK_ENABLED` | `True` | SynthID flag (no implementation yet) |
+| `WORKER_POLL_INTERVAL_SECONDS` | `5` | QueueWorker poll interval |
+| `WORKER_LOCK_TIMEOUT_MINUTES` | `15` | Stuck job recovery timeout |
 
 ---
 
 ## Test Suite
 
-The project uses pytest with `asyncio_mode = "auto"` and four custom markers:
+The project uses pytest with `asyncio_mode = "auto"` and five custom markers:
 
 | Marker | Scope | Files |
 |--------|-------|-------|
 | `unit` | Core logic — chunking, config, CRUD, routes, queue worker, vector store | `tests/unit/` (6 files, ~55 tests) |
-| `agent` | Agent behavior — research, copywriter, red team, asset studio, optimizer | `tests/agents/` (5 files, ~20 tests) |
-| `eval` | Evaluation benchmarks (placeholder) | `tests/evals/` |
-| `integration` | End-to-end flows (CI-only) | — |
+| `agent` | Agent behavior — research, copywriter, red team, asset studio, optimizer | `tests/agents/` (5 files, ~21 tests) |
+| `eval` | AI quality metrics with DeepEval rubrics | `tests/evals/` (infrastructure: schemas, rubrics, fixtures) |
+| `golden` | Trajectory validation against golden dataset | `tests/golden/` (23+ cases across 6 categories) |
+| `integration` | End-to-end orchestrator flows | `tests/integration/` (CI-only) |
+
+### Eval Infrastructure
+
+`tests/evals/` contains a fully implemented evaluation framework (no test files yet):
+- `schemas.py` — 20+ Pydantic models for the golden dataset eval framework
+- `rubrics.py` — 4 weighted scoring rubrics (research, script, fact_check, optimizer)
+- `conftest.py` — EvalRunner, ScoreAggregator, TraceCapture, BaselineRecorder fixtures
+
+### Golden Dataset
+
+`tests/golden/` contains 23+ golden test cases across 6 categories with a 515-line JSON Schema for validation.
 
 ### CI Pipeline (GitHub Actions)
 
@@ -170,10 +206,10 @@ app/
     models.py              # SQLAlchemy models (factory schema)
     session.py             # async engine + session factory
     crud.py                # query helpers + queue operations
-  schemas/shorts.py        # Pydantic request/response models
+  schemas/shorts.py        # Pydantic request/response models + FailedClaim, OptimizerFeedbackEntry
   services/
     llm.py                 # LangChain + Gemini model/embedding wrappers
-    vector_store.py        # pgvector ingestion & semantic search
+    vector_store.py        # pgvector ingestion & semantic search (multi-scope filtering)
     chunking.py            # Markdown text splitter
     web_search.py          # TavilySearchService
   workers/
@@ -184,7 +220,7 @@ app/
     tasks.py               # Post-completion LOCAL chunk cleanup
 tests/
   conftest.py              # Shared fixtures (mock DB, LLM, vector store)
-  unit/                    # Unit tests (chunking, config, crud, routes, queue, vector_store)
+  unit/                    # Unit tests (6 files: chunking, config, crud, routes, queue, vector_store)
   agents/
     conftest.py            # Agent-specific fixtures + multi_chain_mock
     test_research_agent.py
@@ -192,11 +228,20 @@ tests/
     test_red_team_agent.py
     test_asset_studio_agent.py
     test_optimizer_agent.py
-  evals/                   # Eval test placeholder
-  golden/                  # Golden datasets for evaluation
+  integration/
+    conftest.py            # Integration-specific fixtures
+    test_orchestrator_transitions.py
+    agents-orchest-int.md  # Integration test design doc (370 lines)
+  evals/                   # Eval infrastructure (schemas, rubrics, fixtures — no test files yet)
+    schemas.py             # 20+ Pydantic models for golden dataset eval framework
+    rubrics.py             # 4 scoring rubrics (research, script, fact_check, optimizer)
+    conftest.py            # EvalRunner, ScoreAggregator, TraceCapture, BaselineRecorder
+  golden/                  # Golden dataset (23+ cases across 6 categories)
+    golden_dataset.json
+    schemas/golden_entry_schema.json  # 515-line JSON Schema
 alembic/
   env.py                   # Async→sync URL swap, factory schema + vector extension
-  versions/                # 6 migrations (initial schema → triggers → indices → locked columns)
+  versions/                # 7 migrations (initial → triggers → 2 no-ops → indices → locked columns → refined_context)
 docker-compose.yml         # pgvector:pg16 + pgAdmin4 + API
 Dockerfile                 # 2-stage build (python:3.11-slim, non-root user)
 pyproject.toml             # pytest config, ruff config, project metadata
@@ -214,8 +259,8 @@ requirements-test.txt      # Test dependencies (pytest, pytest-asyncio, httpx, d
 - **Step 2 (Extraction)** — `MarkdownTextSplitter` chunks raw_text into RAW-CONTEXT scope vectors
 - **Step 3 (Deep Research)** — Tavily web search + ResearchAgent produces refined LOCAL chunks **and a `refined_context` summary** (prompt chaining pattern)
 - **Step 4 (Source Fact-Check)** — Passthrough; Red Team catches issues downstream
-- **Step 5 (Scripting)** — CopywriterAgent receives `refined_context` from orchestrator (no direct vector store access); uses Hook-Value-Loop framework. On revision, `ScriptOptimizerAgent` surgically patches failed claims instead of full re-draft
-- **Step 6 (Red Team)** — RedTeamAgent audits script claims against vector store directly, persists verdicts, max 3 revision loops
+- **Step 5 (Scripting)** — CopywriterAgent receives `refined_context` from orchestrator (no direct vector store access). On revision, `ScriptOptimizerAgent` surgically patches failed claims instead of full re-draft
+- **Step 6 (Red Team)** — RedTeamAgent audits script claims with three-pass evaluation, persists verdicts, configurable max revision loops
 - **Step 7 (Asset Generation)** — AssetStudioAgent generates prompts (mocked `s3://` URL)
 - **Step 8 (Completion)** — LOCAL-scope chunk cleanup, final state
 
@@ -224,7 +269,9 @@ requirements-test.txt      # Test dependencies (pytest, pytest-asyncio, httpx, d
 - **Postgres-backed Queue** — `QueueWorker` with `asyncio.create_task` + `FOR UPDATE SKIP LOCKED` + crash recovery
 - **Web Search Enrichment** — Tavily results ingested as LOCAL-scope vectors before research
 - **Prompt Chaining (Semantic Memory)** — `refined_context` column on `render_jobs`; orchestrator mediates context between Research → Copywriter agents
-- **Test Suite** — Unit + agent tests with CI pipeline via GitHub Actions
+- **Evaluator-Optimizer Pattern** — Configurable models/temperatures via env vars for both Red Team and Optimizer agents
+- **Test Suite** — Unit (~55) + agent (~21) + integration tests with CI pipeline via GitHub Actions
+- **Eval Infrastructure** — Rubrics, schemas, golden dataset, and eval runner fixtures (test files pending)
 - **Docker** — 3-service Compose stack (pgvector, pgAdmin, API) with resource limits
 
 ### Intentionally Deferred (Wizard of Oz MVP)
@@ -232,4 +279,3 @@ requirements-test.txt      # Test dependencies (pytest, pytest-asyncio, httpx, d
 - **SynthID Watermarking** — Config flag exists (`synthid_watermark_enabled`) but no implementation
 - **GLOBAL Knowledge Base** — Skipped; platform constraints are hardcoded in agent system prompts
 - **Real Asset Generation** — No TTS, video rendering, or FFmpeg; agent returns mocked URLs
-- **Eval/Integration Tests** — Markers and CI stages exist but no test implementations yet
