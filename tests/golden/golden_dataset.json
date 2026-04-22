@@ -565,5 +565,726 @@
       "notes": "Conflicting evidence — UNCERTAIN verdicts expected for projection claims, script must show range",
       "tags": ["happy_path", "climate_science", "conflicting_evidence", "Arctic", "projections"]
     }
+  },
+  {
+    "id": "R-001",
+    "trace_type": "revision_loop",
+    "category": "hallucination_trap",
+    "domain": "geopolitics",
+    "difficulty": "medium",
+    "input": {
+      "topic": "Taiwan's Semiconductor Manufacturing Dominance and Global Supply Chain Risks",
+      "pre_context": {
+        "raw_text": "Taiwan Semiconductor Manufacturing Company (TSMC) is the world's largest dedicated independent semiconductor foundry, founded in 1987 by Morris Chang in Hsinchu, Taiwan. As of 2024, TSMC manufactures approximately 90% of the world's most advanced semiconductors (chips at 5nm and below). The company produces chips for major clients including Apple, Qualcomm, NVIDIA, AMD, and Broadcom. TSMC's market capitalization exceeded $800 billion in 2024, making it one of the most valuable companies globally. In response to geopolitical pressures and the US CHIPS Act, TSMC is building fabrication plants in Arizona (Fab 21), with the first phase expected to produce 4nm chips by 2025 and a second phase planning 3nm production by 2028. TSMC is also constructing a fab in Kumamoto, Japan (JASM), which began production in early 2024, and has plans for a facility in Dresden, Germany (ESMC). Samsung Foundry in South Korea is TSMC's primary competitor in advanced nodes but holds a smaller market share in cutting-edge process technology. Intel is attempting to re-enter the foundry business with its Intel Foundry Services. Taiwan produces roughly 60% of the world's total semiconductor output and over 90% of the most advanced chips, according to a 2023 report by the Semiconductor Industry Association. A disruption to Taiwan's chip production — whether from military conflict, natural disaster, or infrastructure failure — could cost the global economy an estimated $1 trillion annually, according to a 2021 Boston Consulting Group analysis commissioned by the US Semiconductor Industry Association.",
+        "source_urls": [
+          "https://www.semiconductors.org/taiwan-semiconductor/",
+          "https://www.bcg.com/publications/2022/strategic-importance-of-taiwan-semiconductor-manufacturing"
+        ],
+        "target_audience": "General",
+        "guardrail_strictness": "High"
+      },
+      "strict_compliance_mode": true
+    },
+    "trace_spec": {
+      "expected_state_sequence": [
+        "PENDING",
+        "RESEARCHING",
+        "FACT_CHECKING_RESEARCH",
+        "SCRIPTING",
+        "FACT_CHECKING_SCRIPT",
+        "SCRIPTING",
+        "FACT_CHECKING_SCRIPT"
+      ],
+      "expected_agent_calls": [
+        {
+          "state": "RESEARCHING",
+          "agent": "ResearchAgent",
+          "reason": "Enrich with latest TSMC capacity and geopolitical risk data",
+          "expected_verdict": "SUCCESS"
+        },
+        {
+          "state": "SCRIPTING:1",
+          "agent": "CopywriterAgent",
+          "reason": "First draft of script about Taiwan semiconductor dominance",
+          "expected_verdict": "SUCCESS"
+        },
+        {
+          "state": "FACT_CHECKING_SCRIPT:1",
+          "agent": "RedTeamAgent",
+          "reason": "First audit — must catch fabricated market share percentage",
+          "expected_verdict": "REVISION_NEEDED"
+        },
+        {
+          "state": "SCRIPTING:2",
+          "agent": "ScriptOptimizerAgent",
+          "reason": "Surgical patch of UNSUPPORTED fabricated statistic",
+          "expected_verdict": "SUCCESS"
+        },
+        {
+          "state": "FACT_CHECKING_SCRIPT:2",
+          "agent": "RedTeamAgent",
+          "reason": "Second audit — patched claim should now be SUPPORTED",
+          "expected_verdict": "SUCCESS"
+        }
+      ],
+      "expected_tool_calls": [
+        {
+          "agent": "orchestrator",
+          "tool": "tavily_search",
+          "args": {"query": "TSMC Taiwan semiconductor market share 2024 global supply chain"},
+          "per_claim": false
+        },
+        {
+          "agent": "ResearchAgent",
+          "tool": "semantic_search",
+          "args": {"query": "TSMC advanced chip manufacturing 5nm market share Apple NVIDIA"},
+          "per_claim": false
+        },
+        {
+          "agent": "RedTeamAgent",
+          "tool": "semantic_search",
+          "args": {"query": "TSMC global semiconductor market share percentage advanced nodes"},
+          "per_claim": true
+        }
+      ],
+      "expected_feedback_history": [
+        {
+          "feedback_type": "structured_claims",
+          "expected_failed_count": 1,
+          "expected_verdicts": ["UNSUPPORTED"]
+        }
+      ],
+      "fallback_expectations": [],
+      "rejection_expectations": [],
+      "note": "1 revision cycle: copywriter drafts with a fabricated %, Red Team catches it as UNSUPPORTED, optimizer patches with correct figure from refined_context"
+    },
+    "expected_outcomes": {
+      "research": {
+        "must_include_facts": [
+          "TSMC manufactures approximately 90% of the world's most advanced semiconductors (5nm and below)",
+          "Taiwan produces roughly 60% of the world's total semiconductor output",
+          "TSMC is building fabs in Arizona, Japan, and Germany",
+          "Global economic disruption estimated at $1 trillion annually"
+        ],
+        "must_avoid": [
+          "Claiming TSMC produces 100% of all chips globally",
+          "Conflating total semiconductor output with advanced-node output"
+        ],
+        "min_chunks": 3,
+        "min_confidence": 0.8,
+        "refined_context_word_range": [800, 1500]
+      },
+      "script": {
+        "must_include_topics": [
+          "TSMC's dominant position in advanced chip manufacturing",
+          "global supply chain concentration risk",
+          "international expansion efforts (US, Japan, Germany)",
+          "economic impact of potential disruption"
+        ],
+        "must_avoid": [
+          "Fabricated or exaggerated market share percentages not in source data"
+        ],
+        "scene_count_range": [4, 7],
+        "word_count_range": [200, 450],
+        "must_have_hook": true,
+        "must_have_loop": true,
+        "storyboard_fields": ["visual_prompt", "audio_cue"]
+      },
+      "fact_check": {
+        "expected_overall_verdict": "REVISION_NEEDED",
+        "max_unsupported_claims": 1,
+        "claims_with_known_verdicts": [
+          {
+            "claim_text": "TSMC manufactures approximately 90% of the world's most advanced semiconductors",
+            "expected_verdict": "SUPPORTED"
+          },
+          {
+            "claim_text": "Taiwan produces roughly 60% of the world's total semiconductor output",
+            "expected_verdict": "SUPPORTED"
+          },
+          {
+            "claim_text": "A disruption could cost the global economy an estimated $1 trillion annually",
+            "expected_verdict": "SUPPORTED"
+          },
+          {
+            "claim_text": "TSMC controls 95% of all global semiconductor manufacturing revenue",
+            "expected_verdict": "UNSUPPORTED"
+          }
+        ],
+        "min_claim_count": 3,
+        "evidence_must_have_references": true
+      },
+      "optimization": {
+        "must_preserve_claims": [
+          "TSMC manufactures approximately 90% of the world's most advanced semiconductors",
+          "Taiwan produces roughly 60% of the world's total semiconductor output"
+        ],
+        "must_patch_claims": [
+          "TSMC controls 95% of all global semiconductor manufacturing revenue"
+        ],
+        "patch_must_be_surgical": true,
+        "narrative_must_flow": true
+      },
+      "final_status": "FACT_CHECKING_SCRIPT (approved)",
+      "assertions": []
+    },
+    "scoring": {
+      "rubric_set": "optimizer",
+      "pass_threshold": 0.8,
+      "dimension_thresholds": {"patch_precision": 0.85, "narrative_preservation": 0.8}
+    },
+    "metadata": {
+      "created_by": "system",
+      "notes": "Revision loop: 1 UNSUPPORTED fabricated % claim, optimizer patches with correct figure, 2nd Red Team pass approves",
+      "tags": ["revision_loop", "geopolitics", "semiconductors", "hallucination_trap", "optimizer"]
+    }
+  },
+  {
+    "id": "R-002",
+    "trace_type": "revision_loop",
+    "category": "conflicting_evidence",
+    "domain": "economics",
+    "difficulty": "hard",
+    "input": {
+      "topic": "Global Sovereign Debt Crisis 2024: Rising Debt-to-GDP Ratios and Fiscal Sustainability",
+      "pre_context": {
+        "raw_text": "Global sovereign debt reached a record $92 trillion in 2023 according to the Institute of International Finance (IIF), with debt-to-GDP ratios varying dramatically across economies. Japan's government debt-to-GDP ratio stands at approximately 255% as of 2023, the highest among developed nations, yet it has not faced a sovereign debt crisis due to domestic ownership of over 90% of its bonds and persistent deflationary pressures. The United States federal debt held by the public reached approximately $27 trillion, representing about 99% of GDP according to the Congressional Budget Office (CBO) baseline projections from February 2024. However, the International Monetary Fund's World Economic Outlook from October 2023 reported US general government gross debt at 123.3% of GDP, reflecting a broader measure that includes state and local government obligations. China's official government debt-to-GDP was reported at approximately 83% by the IMF, though this excludes local government financing vehicle (LGFV) debt, which some analysts at S&P Global and Moody's estimate adds another 55-75 percentage points, potentially bringing the true figure to 138-158% of GDP. The European Union's average government debt-to-GDP was 83.4% in 2023, with Italy at 137.3% and Greece at 163.9% despite years of austerity measures. Emerging market debt distress has intensified, with over 20 low-income countries in or near debt default as tracked by the World Bank's International Debt Report 2023. Global interest payments on government debt reached an estimated $13 trillion in 2023, a 30% increase from 2021, driven by central bank rate hikes. Critics of the CBO methodology argue that it underestimates future entitlement spending, while defenders note that US debt service costs remain manageable relative to GDP at approximately 2.4% in 2023. Economists at the Peterson Institute have warned that current trajectory could push US debt-to-GDP to 166% by 2054 under current policy.",
+        "source_urls": [
+          "https://www.iif.com/Publications/Global-Debt-Monitor",
+          "https://www.imf.org/en/Publications/WEO",
+          "https://www.cbo.gov/publication/59946"
+        ],
+        "target_audience": "General",
+        "guardrail_strictness": "High"
+      },
+      "strict_compliance_mode": true
+    },
+    "trace_spec": {
+      "expected_state_sequence": [
+        "PENDING",
+        "RESEARCHING",
+        "FACT_CHECKING_RESEARCH",
+        "SCRIPTING",
+        "FACT_CHECKING_SCRIPT",
+        "SCRIPTING",
+        "FACT_CHECKING_SCRIPT",
+        "SCRIPTING",
+        "FACT_CHECKING_SCRIPT"
+      ],
+      "expected_agent_calls": [
+        {
+          "state": "RESEARCHING",
+          "agent": "ResearchAgent",
+          "reason": "Enrich with latest sovereign debt data from IMF, CBO, IIF",
+          "expected_verdict": "SUCCESS"
+        },
+        {
+          "state": "SCRIPTING:1",
+          "agent": "CopywriterAgent",
+          "reason": "First draft — presents conflicting debt-to-GDP figures as definitive",
+          "expected_verdict": "SUCCESS"
+        },
+        {
+          "state": "FACT_CHECKING_SCRIPT:1",
+          "agent": "RedTeamAgent",
+          "reason": "First audit — catches 2 CONTESTED claims from conflicting data sources",
+          "expected_verdict": "REVISION_NEEDED"
+        },
+        {
+          "state": "SCRIPTING:2",
+          "agent": "ScriptOptimizerAgent",
+          "reason": "First patch attempt — soften US and China debt figures to ranges",
+          "expected_verdict": "SUCCESS"
+        },
+        {
+          "state": "FACT_CHECKING_SCRIPT:2",
+          "agent": "RedTeamAgent",
+          "reason": "Second audit — US claim resolved, China claim still CONTESTED (LGFV estimates too wide)",
+          "expected_verdict": "REVISION_NEEDED"
+        },
+        {
+          "state": "SCRIPTING:3",
+          "agent": "ScriptOptimizerAgent",
+          "reason": "Second patch attempt — further qualify China debt with source attribution",
+          "expected_verdict": "SUCCESS"
+        },
+        {
+          "state": "FACT_CHECKING_SCRIPT:3",
+          "agent": "RedTeamAgent",
+          "reason": "Third audit — all claims now SUPPORTED or UNCERTAIN with proper hedging",
+          "expected_verdict": "SUCCESS"
+        }
+      ],
+      "expected_tool_calls": [
+        {
+          "agent": "orchestrator",
+          "tool": "tavily_search",
+          "args": {"query": "sovereign debt crisis 2024 IMF CBO debt-to-GDP global fiscal sustainability"},
+          "per_claim": false
+        },
+        {
+          "agent": "ResearchAgent",
+          "tool": "semantic_search",
+          "args": {"query": "US China Japan sovereign debt GDP ratio 2023 2024 IMF CBO"},
+          "per_claim": false
+        },
+        {
+          "agent": "RedTeamAgent",
+          "tool": "semantic_search",
+          "args": {"query": "US debt-to-GDP ratio CBO IMF different measures"},
+          "per_claim": true
+        },
+        {
+          "agent": "RedTeamAgent",
+          "tool": "semantic_search",
+          "args": {"query": "China LGFV hidden debt estimates Moody's S&P"},
+          "per_claim": true
+        }
+      ],
+      "expected_feedback_history": [
+        {
+          "feedback_type": "structured_claims",
+          "expected_failed_count": 2,
+          "expected_verdicts": ["CONTESTED", "CONTESTED"]
+        },
+        {
+          "feedback_type": "structured_claims",
+          "expected_failed_count": 1,
+          "expected_verdicts": ["CONTESTED"]
+        }
+      ],
+      "fallback_expectations": [],
+      "rejection_expectations": [],
+      "note": "3 revision cycles: 2 CONTESTED claims from conflicting IMF vs CBO data, optimizer progressively softens to ranges with source attribution, final audit approves"
+    },
+    "expected_outcomes": {
+      "research": {
+        "must_include_facts": [
+          "Global sovereign debt reached $92 trillion in 2023 (IIF)",
+          "US debt-to-GDP: 99% (CBO) vs 123.3% (IMF) — different measurement scopes",
+          "China official debt 83% of GDP, but LGFV adds 55-75pp per analysts",
+          "Japan debt-to-GDP ~255% with over 90% domestically held",
+          "Over 20 low-income countries in or near debt default (World Bank)"
+        ],
+        "must_avoid": [
+          "Presenting a single debt-to-GDP figure for the US as definitive",
+          "Stating China's true debt level as a single number",
+          "Ignoring the methodological differences between CBO and IMF measures"
+        ],
+        "min_chunks": 4,
+        "min_confidence": 0.7,
+        "refined_context_word_range": [800, 1500]
+      },
+      "script": {
+        "must_include_topics": [
+          "record sovereign debt levels",
+          "conflicting US debt-to-GDP measures",
+          "China's hidden LGFV debt problem",
+          "emerging market debt distress"
+        ],
+        "must_avoid": [
+          "Presenting contested debt figures as single definitive numbers",
+          "Ignoring source attribution for conflicting estimates"
+        ],
+        "scene_count_range": [4, 8],
+        "word_count_range": [200, 500],
+        "must_have_hook": true,
+        "must_have_loop": true,
+        "storyboard_fields": ["visual_prompt", "audio_cue"]
+      },
+      "fact_check": {
+        "expected_overall_verdict": "REVISION_NEEDED",
+        "max_unsupported_claims": 2,
+        "claims_with_known_verdicts": [
+          {
+            "claim_text": "Global sovereign debt reached a record $92 trillion in 2023",
+            "expected_verdict": "SUPPORTED"
+          },
+          {
+            "claim_text": "Japan's debt-to-GDP ratio is approximately 255%",
+            "expected_verdict": "SUPPORTED"
+          },
+          {
+            "claim_text": "The US debt-to-GDP ratio is exactly 99%",
+            "expected_verdict": "CONTESTED"
+          },
+          {
+            "claim_text": "China's true debt-to-GDP ratio including hidden debt is 158%",
+            "expected_verdict": "CONTESTED"
+          },
+          {
+            "claim_text": "Over 20 low-income countries are in or near debt default",
+            "expected_verdict": "SUPPORTED"
+          }
+        ],
+        "min_claim_count": 4,
+        "evidence_must_have_references": true
+      },
+      "optimization": {
+        "must_preserve_claims": [
+          "Global sovereign debt reached a record $92 trillion in 2023",
+          "Japan's debt-to-GDP ratio is approximately 255%",
+          "Over 20 low-income countries are in or near debt default"
+        ],
+        "must_patch_claims": [
+          "The US debt-to-GDP ratio is exactly 99%",
+          "China's true debt-to-GDP ratio including hidden debt is 158%"
+        ],
+        "patch_must_be_surgical": true,
+        "narrative_must_flow": true
+      },
+      "final_status": "FACT_CHECKING_SCRIPT (approved)",
+      "assertions": []
+    },
+    "scoring": {
+      "rubric_set": "optimizer",
+      "pass_threshold": 0.75,
+      "dimension_thresholds": {"patch_precision": 0.8, "narrative_preservation": 0.75, "grounding": 0.8}
+    },
+    "metadata": {
+      "created_by": "system",
+      "notes": "Revision loop: 2 CONTESTED claims (conflicting IMF/CBO data), 3 cycles, optimizer progressively softens to ranges with source attribution",
+      "tags": ["revision_loop", "economics", "sovereign_debt", "conflicting_evidence", "optimizer"]
+    }
+  },
+  {
+    "id": "R-003",
+    "trace_type": "revision_loop",
+    "category": "factual_accuracy",
+    "domain": "social_issues",
+    "difficulty": "medium",
+    "input": {
+      "topic": "Universal Basic Income Pilot Programs: Results from Finland, Stockton, and Kenya",
+      "pre_context": {
+        "raw_text": "Universal Basic Income (UBI) pilots have been conducted in several countries with varying designs and results. Finland's basic income experiment ran from January 2017 to December 2018, providing 2,000 randomly selected unemployed citizens with 560 euros per month unconditionally. The preliminary results published by Kela (Finland's Social Insurance Institution) in 2020 showed a small positive effect on employment (about 0.5 percentage points) compared to the control group, while participants reported significantly higher well-being, life satisfaction, and trust in institutions. The Stockton Economic Empowerment Demonstration (SEED) in Stockton, California ran from February 2019 to February 2021, providing 125 residents with $500 per month. A study by the University of Pennsylvania's Center for Guaranteed Income Research found that recipients were more likely to find full-time employment than the control group (28% increase in likelihood of full-time employment), contrary to concerns that UBI would reduce work incentives. Recipients also reported improvements in mental health, with anxiety and depression scores decreasing. GiveDirectly's UBI experiment in Kenya is the largest and longest-running pilot, providing roughly 20,000 people in rural villages with payments since 2016, with a planned 12-year duration. Early results published in 2020 showed increased consumption, asset ownership, and food security with no significant reduction in labor supply. However, critics note that pilot programs are inherently limited: they are temporary, which changes participant behavior, and small sample sizes make generalization difficult. The OECD has cautioned that nationwide UBI at meaningful levels would require significant tax increases or spending cuts elsewhere. Switzerland rejected a UBI referendum in 2016 with 77% voting against, suggesting limited public support in some contexts.",
+        "source_urls": [
+          "https://www.kela.fi/web/en/basic-income-experiment",
+          "https://stocktondemo.org/",
+          "https://www.givedirectly.org/research-at-givedirectly/"
+        ],
+        "target_audience": "General",
+        "guardrail_strictness": "High"
+      },
+      "strict_compliance_mode": true
+    },
+    "trace_spec": {
+      "expected_state_sequence": [
+        "PENDING",
+        "RESEARCHING",
+        "FACT_CHECKING_RESEARCH",
+        "SCRIPTING",
+        "FACT_CHECKING_SCRIPT",
+        "SCRIPTING",
+        "FACT_CHECKING_SCRIPT"
+      ],
+      "expected_agent_calls": [
+        {
+          "state": "RESEARCHING",
+          "agent": "ResearchAgent",
+          "reason": "Enrich with latest UBI pilot results and evaluations",
+          "expected_verdict": "SUCCESS"
+        },
+        {
+          "state": "SCRIPTING:1",
+          "agent": "CopywriterAgent",
+          "reason": "First draft of UBI pilot results script",
+          "expected_verdict": "SUCCESS"
+        },
+        {
+          "state": "FACT_CHECKING_SCRIPT:1",
+          "agent": "RedTeamAgent",
+          "reason": "First audit — passes factually but human editor rejects tone",
+          "expected_verdict": "SUCCESS"
+        },
+        {
+          "state": "SCRIPTING:2",
+          "agent": "CopywriterAgent",
+          "reason": "Human editor reject → string feedback → copywriter re-drafts (NOT optimizer)",
+          "expected_verdict": "SUCCESS"
+        },
+        {
+          "state": "FACT_CHECKING_SCRIPT:2",
+          "agent": "RedTeamAgent",
+          "reason": "Second audit after re-draft — approves revised tone",
+          "expected_verdict": "SUCCESS"
+        }
+      ],
+      "expected_tool_calls": [
+        {
+          "agent": "orchestrator",
+          "tool": "tavily_search",
+          "args": {"query": "UBI universal basic income pilot results Finland Stockton Kenya 2023 2024"},
+          "per_claim": false
+        },
+        {
+          "agent": "ResearchAgent",
+          "tool": "semantic_search",
+          "args": {"query": "Finland basic income experiment Kela employment well-being results"},
+          "per_claim": false
+        },
+        {
+          "agent": "RedTeamAgent",
+          "tool": "semantic_search",
+          "args": {"query": "Stockton SEED guaranteed income employment results"},
+          "per_claim": true
+        }
+      ],
+      "expected_feedback_history": [
+        {
+          "feedback_type": "string",
+          "expected_failed_count": 0,
+          "expected_verdicts": []
+        }
+      ],
+      "fallback_expectations": [],
+      "rejection_expectations": [],
+      "note": "String feedback (human_editor reject) triggers copywriter re-draft, NOT optimizer. Tests the legacy string feedback routing path in _transition_scripting"
+    },
+    "expected_outcomes": {
+      "research": {
+        "must_include_facts": [
+          "Finland experiment: 2,000 unemployed citizens, 560 euros/month, 2017-2018",
+          "Stockton SEED: 125 residents, $500/month, 28% increase in full-time employment likelihood",
+          "GiveDirectly Kenya: ~20,000 people, running since 2016, planned 12-year duration",
+          "Switzerland rejected UBI referendum in 2016 with 77% against"
+        ],
+        "must_avoid": [
+          "Claiming any pilot proved UBI works universally",
+          "Conflating temporary pilots with permanent policy outcomes"
+        ],
+        "min_chunks": 3,
+        "min_confidence": 0.75,
+        "refined_context_word_range": [800, 1500]
+      },
+      "script": {
+        "must_include_topics": [
+          "Finland basic income experiment results",
+          "Stockton SEED outcomes",
+          "GiveDirectly Kenya long-term study",
+          "limitations of pilot programs"
+        ],
+        "must_avoid": [
+          "Overstating pilot results as proof of national policy viability"
+        ],
+        "scene_count_range": [4, 7],
+        "word_count_range": [200, 450],
+        "must_have_hook": true,
+        "must_have_loop": true,
+        "storyboard_fields": ["visual_prompt", "audio_cue"]
+      },
+      "fact_check": {
+        "expected_overall_verdict": "SUPPORTED",
+        "max_unsupported_claims": 0,
+        "claims_with_known_verdicts": [
+          {
+            "claim_text": "Finland's basic income experiment provided 560 euros per month to 2,000 unemployed citizens from 2017 to 2018",
+            "expected_verdict": "SUPPORTED"
+          },
+          {
+            "claim_text": "Stockton SEED recipients showed a 28% increase in likelihood of full-time employment",
+            "expected_verdict": "SUPPORTED"
+          },
+          {
+            "claim_text": "GiveDirectly's Kenya experiment serves approximately 20,000 people with a planned 12-year duration",
+            "expected_verdict": "SUPPORTED"
+          },
+          {
+            "claim_text": "Switzerland rejected a UBI referendum in 2016 with 77% voting against",
+            "expected_verdict": "SUPPORTED"
+          }
+        ],
+        "min_claim_count": 3,
+        "evidence_must_have_references": true
+      },
+      "optimization": null,
+      "final_status": "FACT_CHECKING_SCRIPT (approved)",
+      "assertions": []
+    },
+    "scoring": {
+      "rubric_set": "script",
+      "pass_threshold": 0.8,
+      "dimension_thresholds": {"factual_grounding": 0.85, "narrative_structure": 0.8}
+    },
+    "metadata": {
+      "created_by": "system",
+      "notes": "Revision loop: string feedback from human_editor, copywriter re-drafts (NOT optimizer), tests legacy feedback routing path",
+      "tags": ["revision_loop", "social_issues", "UBI", "factual_accuracy", "copywriter_redraft"]
+    }
+  },
+  {
+    "id": "R-004",
+    "trace_type": "revision_loop",
+    "category": "hallucination_trap",
+    "domain": "history",
+    "difficulty": "hard",
+    "input": {
+      "topic": "The Destruction of the Library of Alexandria: Separating Myth from Historical Evidence",
+      "pre_context": {
+        "raw_text": "The Library of Alexandria in Egypt was one of the largest and most significant libraries of the ancient world, established in the early 3rd century BCE during the reign of Ptolemy I or Ptolemy II. Contrary to popular belief, the library's destruction was not a single catastrophic event but rather a gradual decline spanning centuries. The most commonly cited events associated with its decline include: Julius Caesar's fire in 48 BCE, which may have destroyed some scrolls stored in warehouses near the harbor during the Alexandrian War, though it is debated whether this fire reached the library itself. Roman Emperor Aurelian's suppression of a revolt in Alexandria around 270 CE destroyed the Brucheion quarter where the library was located. Emperor Theodosius I's decree in 391 CE banning pagan worship led to the destruction of the Serapeum, which by that time may have been a daughter library or the last remaining branch. The Muslim conquest of Alexandria in 642 CE is sometimes blamed by later sources, but this account comes primarily from the 13th-century writer Bar Hebraeus and is not supported by contemporary evidence. Scholarly consensus, as articulated by historians like Mostafa El-Abbadi and Roger Bagnall, holds that the library likely ceased to function as a major institution by the late 3rd century CE, long before the Muslim conquest. The library may have housed between 400,000 and 700,000 scrolls at its height, though these numbers come from later sources and may be exaggerated. The loss of the library is often romantically portrayed as a catastrophe that set Western civilization back by centuries, but many historians argue this narrative overstates the library's unique importance and understates the role of other centers of learning such as Pergamum, Antioch, and later Baghdad's House of Wisdom.",
+        "source_urls": [
+          "https://www.britannica.com/topic/Library-of-Alexandria",
+          "https://www.historytoday.com/archive/history-matters/death-library-alexandria"
+        ],
+        "target_audience": "General",
+        "guardrail_strictness": "High"
+      },
+      "strict_compliance_mode": true
+    },
+    "trace_spec": {
+      "expected_state_sequence": [
+        "PENDING",
+        "RESEARCHING",
+        "FACT_CHECKING_RESEARCH",
+        "SCRIPTING",
+        "FACT_CHECKING_SCRIPT",
+        "SCRIPTING",
+        "FACT_CHECKING_SCRIPT"
+      ],
+      "expected_agent_calls": [
+        {
+          "state": "RESEARCHING",
+          "agent": "ResearchAgent",
+          "reason": "Enrich with scholarly consensus on Library of Alexandria timeline",
+          "expected_verdict": "SUCCESS"
+        },
+        {
+          "state": "SCRIPTING:1",
+          "agent": "CopywriterAgent",
+          "reason": "First draft — includes single-cause attribution for library destruction",
+          "expected_verdict": "SUCCESS"
+        },
+        {
+          "state": "FACT_CHECKING_SCRIPT:1",
+          "agent": "RedTeamAgent",
+          "reason": "First audit — catches UNSUPPORTED causal claim attributing destruction to one event",
+          "expected_verdict": "REVISION_NEEDED"
+        },
+        {
+          "state": "SCRIPTING:2",
+          "agent": "ScriptOptimizerAgent",
+          "reason": "Surgical removal of causal claim, replace with debated multi-cause narrative",
+          "expected_verdict": "SUCCESS"
+        },
+        {
+          "state": "FACT_CHECKING_SCRIPT:2",
+          "agent": "RedTeamAgent",
+          "reason": "Second audit — revised script presents destruction as gradual and debated",
+          "expected_verdict": "SUCCESS"
+        }
+      ],
+      "expected_tool_calls": [
+        {
+          "agent": "orchestrator",
+          "tool": "tavily_search",
+          "args": {"query": "Library of Alexandria destruction timeline myth historical evidence Caesar Theodosius"},
+          "per_claim": false
+        },
+        {
+          "agent": "ResearchAgent",
+          "tool": "semantic_search",
+          "args": {"query": "Library of Alexandria destruction scholarly consensus El-Abbadi Bagnall"},
+          "per_claim": false
+        },
+        {
+          "agent": "RedTeamAgent",
+          "tool": "semantic_search",
+          "args": {"query": "Library of Alexandria single cause destruction myth Caesar fire 48 BCE"},
+          "per_claim": true
+        }
+      ],
+      "expected_feedback_history": [
+        {
+          "feedback_type": "structured_claims",
+          "expected_failed_count": 1,
+          "expected_verdicts": ["UNSUPPORTED"]
+        }
+      ],
+      "fallback_expectations": [],
+      "rejection_expectations": [],
+      "note": "1 revision cycle: UNSUPPORTED causal claim (single-cause attribution for destruction), optimizer removes causal claim and replaces with multi-cause debated narrative"
+    },
+    "expected_outcomes": {
+      "research": {
+        "must_include_facts": [
+          "Library was established in early 3rd century BCE under Ptolemy I or II",
+          "Destruction was gradual, not a single catastrophic event",
+          "Caesar's 48 BCE fire may have destroyed harbor warehouses, debated if library was affected",
+          "Scholarly consensus: library ceased as major institution by late 3rd century CE",
+          "Muslim conquest narrative comes from 13th-century Bar Hebraeus, not contemporary sources"
+        ],
+        "must_avoid": [
+          "Presenting a single event as the sole cause of destruction",
+          "Conflating popular myth with scholarly consensus"
+        ],
+        "min_chunks": 3,
+        "min_confidence": 0.7,
+        "refined_context_word_range": [800, 1500]
+      },
+      "script": {
+        "must_include_topics": [
+          "gradual decline over centuries",
+          "multiple contributing events (Caesar, Aurelian, Theodosius)",
+          "myth vs. evidence distinction",
+          "scholarly consensus on timeline"
+        ],
+        "must_avoid": [
+          "Attributing destruction to a single cause",
+          "Presenting myth as established fact"
+        ],
+        "scene_count_range": [4, 7],
+        "word_count_range": [200, 450],
+        "must_have_hook": true,
+        "must_have_loop": true,
+        "storyboard_fields": ["visual_prompt", "audio_cue"]
+      },
+      "fact_check": {
+        "expected_overall_verdict": "REVISION_NEEDED",
+        "max_unsupported_claims": 1,
+        "claims_with_known_verdicts": [
+          {
+            "claim_text": "The Library of Alexandria was established in the early 3rd century BCE",
+            "expected_verdict": "SUPPORTED"
+          },
+          {
+            "claim_text": "Julius Caesar single-handedly destroyed the Library of Alexandria in 48 BCE",
+            "expected_verdict": "UNSUPPORTED"
+          },
+          {
+            "claim_text": "The scholarly consensus holds that the library ceased to function as a major institution by the late 3rd century CE",
+            "expected_verdict": "SUPPORTED"
+          },
+          {
+            "claim_text": "The library may have housed between 400,000 and 700,000 scrolls at its height",
+            "expected_verdict": "SUPPORTED"
+          }
+        ],
+        "min_claim_count": 3,
+        "evidence_must_have_references": true
+      },
+      "optimization": {
+        "must_preserve_claims": [
+          "The Library of Alexandria was established in the early 3rd century BCE",
+          "The scholarly consensus holds that the library ceased to function as a major institution by the late 3rd century CE",
+          "The library may have housed between 400,000 and 700,000 scrolls at its height"
+        ],
+        "must_patch_claims": [
+          "Julius Caesar single-handedly destroyed the Library of Alexandria in 48 BCE"
+        ],
+        "patch_must_be_surgical": true,
+        "narrative_must_flow": true
+      },
+      "final_status": "FACT_CHECKING_SCRIPT (approved)",
+      "assertions": []
+    },
+    "scoring": {
+      "rubric_set": "optimizer",
+      "pass_threshold": 0.8,
+      "dimension_thresholds": {"patch_precision": 0.85, "narrative_preservation": 0.8, "claim_resolution": 0.85}
+    },
+    "metadata": {
+      "created_by": "system",
+      "notes": "Revision loop: UNSUPPORTED causal claim (single-cause attribution for destruction), optimizer removes causal assertion, presents as debated multi-cause narrative",
+      "tags": ["revision_loop", "history", "Library_of_Alexandria", "hallucination_trap", "optimizer"]
+    }
   }
 ]
