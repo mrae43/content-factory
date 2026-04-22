@@ -1868,6 +1868,621 @@
                 "no_evidence"
             ]
         }
+    },
+    {
+        "id": "F-001",
+        "trace_type": "fallback_chain",
+        "category": "factual_accuracy",
+        "domain": "cybersecurity",
+        "difficulty": "medium",
+        "input": {
+            "topic": "Zero-Day Exploit CVE-2025-3132: SAP NetWeaver Log4j-Style Deserialization Vulnerability",
+            "pre_context": {
+                "raw_text": "In March 2025, cybersecurity researchers at Shadowstar Labs disclosed a critical zero-day vulnerability in SAP NetWeaver's Java application server, tracked as CVE-2025-3132 with a CVSS score of 9.8. The vulnerability stems from an insecure deserialization flaw in the SAP ICM (Internet Communication Manager) component, reminiscent of the Log4j (CVE-2021-44228) attack surface pattern. An unauthenticated remote attacker can craft a specially serialized Java object, embed it in an HTTP request to the ICM's /com.sap.nw.lm.asi/ endpoint, and achieve arbitrary code execution with the privileges of the <sid>adm operating system user. Shadowstar Labs reported the vulnerability to SAP on February 14, 2025, and SAP released an out-of-band patch on March 18, 2025 (Security Note 3529841). However, the patch only addresses the specific deserialization gadget chain identified by Shadowstar and may not comprehensively harden the ICM input path. Internet-wide scanning by Project Sonar identified approximately 12,400 SAP NetWeaver instances with the vulnerable endpoint exposed, with the highest concentrations in Germany (3,100), the United States (2,800), and India (1,600). At least two threat actors, tracked as VEILWEAVER and SILENTSTEEL, were observed exploiting CVE-2025-3132 in the wild prior to the patch release. The initial access broker VEILWEAVER used the exploit to deploy a custom web shell dubbed ICMSpy, which provides persistent access, credential harvesting from the SAP secure store, and lateral movement via SAP RFC calls. SILENTSTEEL, a financially motivated group, used the exploit as a staging vector for Cobalt Strike beacon deployment followed by ransomware deployment using a LockBit 3.0 variant. CISA added CVE-2025-3132 to its Known Exploited Vulnerabilities (KEV) catalog on March 25, 2025, requiring federal agencies to patch within 21 days. The vulnerability highlights the continued risk of deserialization flaws in enterprise Java applications, echoing lessons from Apache Struts (CVE-2017-5638), WebLogic (CVE-2020-2551), and the original Log4Shell. SAP has stated that the next support package will include a comprehensive rewrite of the ICM input validation layer, expected in Q3 2025. Organizations running SAP NetWeaver 7.50 and above are urged to apply Security Note 3529841 immediately and to restrict external access to the ICM endpoint via network segmentation.",
+                "source_urls": [],
+                "target_audience": "General",
+                "guardrail_strictness": "High"
+            },
+            "strict_compliance_mode": true
+        },
+        "trace_spec": {
+            "expected_state_sequence": [
+                "PENDING",
+                "RESEARCHING",
+                "FACT_CHECKING_RESEARCH",
+                "SCRIPTING",
+                "FACT_CHECKING_SCRIPT"
+            ],
+            "expected_agent_calls": [
+                {
+                    "state": "RESEARCHING",
+                    "agent": "ResearchAgent",
+                    "model": "gemini-2.5-flash"
+                },
+                {
+                    "state": "SCRIPTING:1",
+                    "agent": "CopywriterAgent",
+                    "model": "gemini-1.5-pro",
+                    "reason": "first draft"
+                },
+                {
+                    "state": "FACT_CHECKING_SCRIPT:1",
+                    "agent": "RedTeamAgent",
+                    "model": "gemini-1.5-pro",
+                    "expected_verdict": "SUCCESS"
+                }
+            ],
+            "expected_tool_calls": [
+                {
+                    "agent": "Orchestrator",
+                    "tool": "TavilySearchService.search",
+                    "args": {"max_results": 5}
+                },
+                {
+                    "agent": "ResearchAgent",
+                    "tool": "semantic_search",
+                    "args": {"top_k": 10}
+                },
+                {
+                    "agent": "RedTeamAgent",
+                    "tool": "semantic_search",
+                    "args": {"top_k": 5},
+                    "per_claim": true
+                }
+            ],
+            "expected_feedback_history": [],
+            "fallback_expectations": [
+                {
+                    "step": 1,
+                    "agent": "Orchestrator",
+                    "stage": "RESEARCHING",
+                    "tool_call": "TavilySearchService.search(topic)",
+                    "expected_result": "[] — CVE-2025-3132 is a fictional emerging zero-day with no indexed web results",
+                    "fallback": "Proceed without LOCAL chunks, ResearchAgent uses only RAW-CONTEXT",
+                    "assertion": "refined_context must be non-empty despite empty web search results"
+                },
+                {
+                    "step": 2,
+                    "agent": "ResearchAgent",
+                    "stage": "RESEARCHING",
+                    "tool_call": "semantic_search(topic, scopes=['RAW-CONTEXT','LOCAL'])",
+                    "expected_result": "Only RAW-CONTEXT chunks returned — no LOCAL-scope chunks from web search",
+                    "fallback": "Produce refined_context from RAW-CONTEXT alone",
+                    "assertion": "Research output must not fabricate external sources to compensate for missing web results"
+                }
+            ],
+            "rejection_expectations": [],
+            "note": "Fallback: TavilySearch returns empty for a bleeding-edge zero-day with no web coverage. Pipeline still completes using RAW-CONTEXT chunks only. Tests that the research agent degrades gracefully without web enrichment."
+        },
+        "expected_outcomes": {
+            "research": {
+                "must_include_facts": [
+                    "CVE-2025-3132 is a deserialization vulnerability in SAP NetWeaver",
+                    "CVSS score of 9.8, critical severity",
+                    "SAP released patch via Security Note 3529841",
+                    "CISA added to Known Exploited Vulnerabilities catalog",
+                    "Approximately 12,400 exposed instances identified"
+                ],
+                "must_avoid": [
+                    "fabricating additional CVEs or security advisories",
+                    "inventing threat actor names beyond those in raw_text",
+                    "claiming real-time exploit statistics not present in source material"
+                ],
+                "min_chunks": 2,
+                "min_confidence": 0.6,
+                "refined_context_word_range": [600, 1200]
+            },
+            "script": {
+                "must_include_topics": [
+                    "CVE-2025-3132 vulnerability description",
+                    "deserialization attack pattern",
+                    "patching guidance"
+                ],
+                "must_avoid": [
+                    "actionable exploitation instructions",
+                    "unverified claims about ongoing attacks beyond what source states"
+                ],
+                "scene_count_range": [3, 8],
+                "word_count_range": [150, 500],
+                "must_have_hook": true,
+                "must_have_loop": true,
+                "storyboard_fields": ["visual_prompt", "audio_cue"]
+            },
+            "fact_check": {
+                "expected_overall_verdict": "SUPPORTED",
+                "max_unsupported_claims": 0,
+                "claims_with_known_verdicts": [
+                    {
+                        "claim_text": "CVE-2025-3132 is a deserialization vulnerability in SAP NetWeaver's ICM component with CVSS 9.8",
+                        "expected_verdict": "SUPPORTED"
+                    },
+                    {
+                        "claim_text": "SAP released an out-of-band patch on March 18, 2025 via Security Note 3529841",
+                        "expected_verdict": "SUPPORTED"
+                    },
+                    {
+                        "claim_text": "CISA added CVE-2025-3132 to its Known Exploited Vulnerabilities catalog",
+                        "expected_verdict": "SUPPORTED"
+                    }
+                ],
+                "min_claim_count": 1,
+                "evidence_must_have_references": true
+            },
+            "optimization": null,
+            "final_status": "FACT_CHECKING_SCRIPT (approved)",
+            "assertions": []
+        },
+        "scoring": {
+            "rubric_set": "research",
+            "pass_threshold": 0.7,
+            "dimension_thresholds": {
+                "completeness": 0.65,
+                "accuracy": 0.75,
+                "synthesis": 0.6,
+                "confidence_calibration": 0.7
+            }
+        },
+        "metadata": {
+            "created_by": "system",
+            "notes": "Fallback chain: TavilySearch returns [] for an emerging zero-day topic with no web coverage. ResearchAgent must produce refined_context using only RAW-CONTEXT chunks. Pipeline completes normally despite degraded web search. Tests graceful degradation when external enrichment is unavailable.",
+            "tags": [
+                "fallback_chain",
+                "cybersecurity",
+                "zero_day",
+                "empty_web_search",
+                "graceful_degradation",
+                "CVE"
+            ]
+        }
+    },
+    {
+        "id": "F-002",
+        "trace_type": "fallback_chain",
+        "category": "edge_case_minimal",
+        "domain": "history",
+        "difficulty": "hard",
+        "input": {
+            "topic": "The Amber Road Trade Route Through the Wielbark Culture Territories 150-300 CE",
+            "pre_context": {
+                "raw_text": "The Amber Road was an ancient trade route connecting the Baltic Sea coast, where amber was harvested, to the Mediterranean world. While the major routes through Roman territories such as Aquileia and Carnuntum are well-documented, a lesser-known branch traversed the territories of the Wielbark culture in what is now northern Poland between approximately 150 and 300 CE. This northern branch carried raw amber from the Samland Peninsula (now Kaliningrad Oblast) southward through the Vistula River valley, passing Wielbark culture settlements near present-day Malbork, Gniew, and Torun. Archaeological evidence includes amber workshop debris found at Wielbark sites, Roman coin hoards dated to the reigns of Marcus Aurelius and Septimius Severus, and bronze fibulae of Roman provincial manufacture. The Wielbark people appear to have served as middlemen, exchanging raw amber for Roman luxury goods including bronze vessels, glass beads, and ceramic tableware. The trade appears to have declined sharply around 250-300 CE, coinciding with the broader Crisis of the Third Century in the Roman Empire and the southward migration of Wielbark populations. However, the precise mechanisms of exchange remain debated. Some scholars argue for direct Roman-Wielbark contact based on the presence of Roman military equipment at Wielbark sites, while others propose a chain of intermediary tribes along the Vistula. No written records from the Wielbark culture itself survive, and Roman sources such as Tacitus Germania and Ptolemy's Geographia reference the Aesti people as amber collectors but do not describe the inland trade routes in detail. The Wielbark culture is also associated with the Goths by some archaeologists, though this identification remains contested. A 2019 LiDAR survey of the lower Vistula valley identified several previously unknown settlement complexes that may have served as trading posts, but these findings have not yet been fully published. The Wielbark amber trade represents a niche but illuminating case study in Roman-barbarian economic relations north of the Limes Germanicus.",
+                "source_urls": [],
+                "target_audience": "General",
+                "guardrail_strictness": "High"
+            },
+            "strict_compliance_mode": true
+        },
+        "trace_spec": {
+            "expected_state_sequence": [
+                "PENDING",
+                "RESEARCHING",
+                "FAILED"
+            ],
+            "expected_agent_calls": [
+                {
+                    "state": "RESEARCHING",
+                    "agent": "ResearchAgent",
+                    "model": "gemini-2.5-flash",
+                    "expected_verdict": "ERROR"
+                }
+            ],
+            "expected_tool_calls": [
+                {
+                    "agent": "Orchestrator",
+                    "tool": "TavilySearchService.search",
+                    "args": {"max_results": 5}
+                },
+                {
+                    "agent": "ResearchAgent",
+                    "tool": "semantic_search",
+                    "args": {"top_k": 10}
+                }
+            ],
+            "expected_feedback_history": [],
+            "fallback_expectations": [
+                {
+                    "step": 1,
+                    "agent": "Orchestrator",
+                    "stage": "RESEARCHING",
+                    "tool_call": "TavilySearchService.search(topic)",
+                    "expected_result": "[] — obscure medieval trade route has no indexed web results",
+                    "fallback": "Proceed to ResearchAgent with RAW-CONTEXT only",
+                    "assertion": "Tavily returns empty, but RAW-CONTEXT chunks exist"
+                },
+                {
+                    "step": 2,
+                    "agent": "ResearchAgent",
+                    "stage": "RESEARCHING",
+                    "tool_call": "semantic_search(topic, scopes=['RAW-CONTEXT','LOCAL'])",
+                    "expected_result": "[] — vector store has no chunks matching this niche topic",
+                    "fallback": "Agent returns ERROR status, orchestrator sets job to FAILED",
+                    "assertion": "ResearchAgent cannot produce refined_context with zero retrieval results"
+                }
+            ],
+            "rejection_expectations": [],
+            "note": "Short-circuit at RESEARCHING: both TavilySearch and semantic_search return empty. No chunks are available for the ResearchAgent to synthesize. Agent returns ERROR, orchestrator transitions job to FAILED. Tests the complete retrieval failure path."
+        },
+        "expected_outcomes": {
+            "research": null,
+            "script": null,
+            "fact_check": null,
+            "optimization": null,
+            "final_status": "FAILED",
+            "assertions": []
+        },
+        "scoring": {
+            "rubric_set": "research",
+            "pass_threshold": 0.5,
+            "dimension_thresholds": {
+                "completeness": 0.4,
+                "accuracy": 0.5
+            }
+        },
+        "metadata": {
+            "created_by": "system",
+            "notes": "Fallback chain: Obscure medieval trade route with zero web coverage and no vector store chunks. TavilySearch returns []. semantic_search returns []. ResearchAgent cannot produce output and returns ERROR. Orchestrator transitions to FAILED. Tests complete retrieval failure — pipeline terminates at RESEARCHING.",
+            "tags": [
+                "fallback_chain",
+                "history",
+                "medieval_trade",
+                "empty_web_search",
+                "empty_vector_search",
+                "complete_failure",
+                "FAILED"
+            ]
+        }
+    },
+    {
+        "id": "F-003",
+        "trace_type": "fallback_chain",
+        "category": "hallucination_trap",
+        "domain": "technology",
+        "difficulty": "hard",
+        "input": {
+            "topic": "Project Atlas: Apple's Rumored AR Smart Glasses with Neural Interface Input",
+            "pre_context": {
+                "raw_text": "Project Atlas is the reported internal codename for Apple's next-generation augmented reality smart glasses, allegedly in development at the company's secretive Silicon Valley hardware division. Unlike the Apple Vision Pro headset, which launched in February 2024 at $3,499 and relies on eye tracking and hand gestures, Project Atlas is said to be a lightweight glasses form factor targeting a sub-$1,500 price point. The most controversial rumored feature is a neural interface input system that would allow users to control the glasses through subtle jaw movements detected by electromyography (EMG) sensors embedded in the temple arms. This technology reportedly builds on Apple's acquisition of Navigate Surgical's EMG patent portfolio in 2023, though Navigate Surgical's patents were originally filed for medical surgical assistance, not consumer electronics. Industry analyst Ming-Chi Kuo has published supply chain reports indicating that TPK and Goertek are manufacturing prototype EMG sensor arrays for testing, but Kuo has not independently confirmed the neural interface feature. Bloomberg's Mark Gurman has reported that the glasses are targeting a late 2026 or early 2027 release, but notes that the neural interface remains experimental and may be dropped before launch. A leaked internal memo purportedly from Apple's hardware engineering team, published by the blog AppleTracker in January 2025, describes EMG latency targets of under 50ms and a gesture vocabulary of 12 distinct commands. The memo's authenticity has not been verified, and AppleTracker has a mixed track record on hardware leaks. Competitors in the AR glasses space include Meta's Ray-Ban Meta Smart Glasses, which use voice and touch controls, and Snap's Spectacles, which remain a developer-focused platform with no neural interface. Google's Project Astra prototype demonstrated ambient AI assistant capabilities but uses voice as its primary input. No company has shipped a consumer product with EMG-based neural interface input. The scientific literature on EMG control for AR interfaces is sparse, with a 2022 paper from ETH Zurich demonstrating a proof-of-concept using off-the-shelf Myo armbands with 78% gesture recognition accuracy in controlled conditions. Apple has filed several patents related to EMG input in head-worn devices, but patent filings do not confirm product features. The company has not publicly acknowledged Project Atlas, and its standard policy is to not comment on unannounced products.",
+                "source_urls": [],
+                "target_audience": "General",
+                "guardrail_strictness": "High"
+            },
+            "strict_compliance_mode": true
+        },
+        "trace_spec": {
+            "expected_state_sequence": [
+                "PENDING",
+                "RESEARCHING",
+                "FACT_CHECKING_RESEARCH",
+                "SCRIPTING",
+                "FACT_CHECKING_SCRIPT",
+                "HUMAN_REVIEW_NEEDED"
+            ],
+            "expected_agent_calls": [
+                {
+                    "state": "RESEARCHING",
+                    "agent": "ResearchAgent",
+                    "model": "gemini-2.5-flash"
+                },
+                {
+                    "state": "SCRIPTING:1",
+                    "agent": "CopywriterAgent",
+                    "model": "gemini-1.5-pro",
+                    "reason": "first draft"
+                },
+                {
+                    "state": "FACT_CHECKING_SCRIPT:1",
+                    "agent": "RedTeamAgent",
+                    "model": "gemini-1.5-pro",
+                    "expected_verdict": "ESCALATE"
+                }
+            ],
+            "expected_tool_calls": [
+                {
+                    "agent": "Orchestrator",
+                    "tool": "TavilySearchService.search",
+                    "args": {"max_results": 5}
+                },
+                {
+                    "agent": "ResearchAgent",
+                    "tool": "semantic_search",
+                    "args": {"top_k": 10}
+                },
+                {
+                    "agent": "RedTeamAgent",
+                    "tool": "semantic_search",
+                    "args": {"top_k": 5},
+                    "per_claim": true
+                }
+            ],
+            "expected_feedback_history": [],
+            "fallback_expectations": [
+                {
+                    "step": 1,
+                    "agent": "RedTeamAgent",
+                    "stage": "FACT_CHECKING_SCRIPT",
+                    "tool_call": "semantic_search(claim.search_query, top_k=5)",
+                    "expected_result": "All results below similarity_threshold — unreleased product features have no corroborating evidence in indexed sources",
+                    "fallback": "ESCALATE → HUMAN_REVIEW_NEEDED",
+                    "assertion": "Every extracted claim about unreleased features returns low-relevance or empty evidence, triggering escalation"
+                }
+            ],
+            "rejection_expectations": [],
+            "note": "Pipeline reaches FACT_CHECKING_SCRIPT but Red Team finds all evidence below similarity threshold. Claims about unreleased product features cannot be corroborated. Red Team escalates to HUMAN_REVIEW_NEEDED without entering revision loop."
+        },
+        "expected_outcomes": {
+            "research": {
+                "must_include_facts": [
+                    "Apple Vision Pro launched at $3,499 in February 2024",
+                    "Project Atlas is a rumored codename, not publicly confirmed by Apple",
+                    "EMG sensor technology from Navigate Surgical acquisition",
+                    "No consumer product with EMG neural interface has shipped"
+                ],
+                "must_avoid": [
+                    "stating Project Atlas features as confirmed facts",
+                    "treating leaked memo as verified source",
+                    "asserting neural interface will ship"
+                ],
+                "min_chunks": 2,
+                "min_confidence": 0.6,
+                "refined_context_word_range": [600, 1200]
+            },
+            "script": {
+                "must_include_topics": [
+                    "rumored AR smart glasses",
+                    "neural interface technology",
+                    "unverified leaked features"
+                ],
+                "must_avoid": [
+                    "stating features as confirmed",
+                    "actionable investment advice based on rumors"
+                ],
+                "scene_count_range": [3, 8],
+                "word_count_range": [150, 500],
+                "must_have_hook": true,
+                "must_have_loop": true,
+                "storyboard_fields": ["visual_prompt", "audio_cue"]
+            },
+            "fact_check": {
+                "expected_overall_verdict": "ESCALATE",
+                "max_unsupported_claims": 3,
+                "claims_with_known_verdicts": [
+                    {
+                        "claim_text": "Apple Vision Pro launched in February 2024 at $3,499",
+                        "expected_verdict": "SUPPORTED"
+                    },
+                    {
+                        "claim_text": "Project Atlas will include EMG neural interface for gesture control",
+                        "expected_verdict": "UNSUPPORTED"
+                    },
+                    {
+                        "claim_text": "Apple acquired Navigate Surgical's EMG patent portfolio in 2023",
+                        "expected_verdict": "UNSUPPORTED"
+                    }
+                ],
+                "min_claim_count": 1,
+                "evidence_must_have_references": false
+            },
+            "optimization": null,
+            "final_status": "HUMAN_REVIEW_NEEDED",
+            "assertions": []
+        },
+        "scoring": {
+            "rubric_set": "fact_check",
+            "pass_threshold": 0.65,
+            "dimension_thresholds": {
+                "claim_coverage": 0.6,
+                "verdict_accuracy": 0.7,
+                "evidence_quality": 0.5
+            }
+        },
+        "metadata": {
+            "created_by": "system",
+            "notes": "Fallback chain: Unreleased product with rumored features. TavilySearch may return sparse results. Red Team's semantic_search returns all results below similarity_threshold for claims about unconfirmed features. ESCALATE to HUMAN_REVIEW_NEEDED. Tests the low-evidence escalation path at fact-check stage.",
+            "tags": [
+                "fallback_chain",
+                "technology",
+                "unreleased_product",
+                "low_evidence",
+                "escalation",
+                "hallucination_trap",
+                "rumored_features"
+            ]
+        }
+    },
+    {
+        "id": "F-004",
+        "trace_type": "fallback_chain",
+        "category": "conflicting_evidence",
+        "domain": "economics",
+        "difficulty": "medium",
+        "input": {
+            "topic": "India GDP Growth Rate 2024: Contradictory Official and Independent Estimates",
+            "pre_context": {
+                "raw_text": "India's GDP growth rate for fiscal year 2024 has become the subject of significant debate between official government statistics and independent economic analyses. The Ministry of Statistics and Programme Implementation (MoSPI) reported GDP growth of 8.2% for FY2024, marking India as the fastest-growing major economy. However, this figure has been challenged by multiple independent economists and institutions. Former Chief Economic Adviser Arvind Subramanian published a paper arguing that India's official GDP growth may be overstated by approximately 2.5 percentage points due to methodological changes introduced in 2015, particularly the shift from a volume-based to a value-based deflator for the manufacturing sector. The Centre for Monitoring Indian Economy (CMIE), a private research firm, estimated growth at approximately 6.5% based on their independent surveys of consumer spending and employment. The International Monetary Fund (IMF) projected India's growth at 6.8% for FY2024 in its October 2024 World Economic Outlook, notably lower than the official figure. The World Bank estimated 6.3% growth in its Global Economic Prospects report. Reserve Bank of India (RBI) Governor Shaktikanta Das defended the official statistics, citing improvements in data collection methodology and broader coverage of the informal sector through GST return data. However, economists at Ashoka University published a working paper in September 2024 highlighting discrepancies between GDP growth and correlated macroeconomic indicators: electricity consumption grew 5.1%, credit growth was 7.3%, and freight traffic increased 4.8%, all significantly below the reported 8.2% GDP growth. Nitin Gadkari, India's Minister of Road Transport, made headlines in August 2024 when he suggested in a televised interview that real economic conditions on the ground were more challenging than headline GDP figures suggested, though he later clarified he was referring to specific sectors. The debate mirrors a broader global discussion about GDP measurement accuracy in rapidly digitizing economies where informal sector activity and digital transactions may be inadequately captured by traditional statistical frameworks. India's informal sector is estimated to employ approximately 90% of the workforce, yet its contribution to GDP is modeled rather than directly measured. The Parliamentary Standing Committee on Finance recommended a comprehensive review of GDP estimation methodology in its December 2024 report. Meanwhile, S&P Global and Fitch Ratings maintained their India growth forecasts at 6.5% and 6.2% respectively for FY2024, both well below the official 8.2% figure. The discrepancy matters because India's fiscal deficit targets, sovereign credit rating, and eligibility for certain World Bank lending programs are partially tied to GDP size and growth metrics.",
+                "source_urls": [],
+                "target_audience": "General",
+                "guardrail_strictness": "High"
+            },
+            "strict_compliance_mode": true
+        },
+        "trace_spec": {
+            "expected_state_sequence": [
+                "PENDING",
+                "RESEARCHING",
+                "FACT_CHECKING_RESEARCH",
+                "SCRIPTING",
+                "FACT_CHECKING_SCRIPT",
+                "SCRIPTING",
+                "FACT_CHECKING_SCRIPT"
+            ],
+            "expected_agent_calls": [
+                {
+                    "state": "RESEARCHING",
+                    "agent": "ResearchAgent",
+                    "model": "gemini-2.5-flash"
+                },
+                {
+                    "state": "SCRIPTING:1",
+                    "agent": "CopywriterAgent",
+                    "model": "gemini-1.5-pro",
+                    "reason": "first draft"
+                },
+                {
+                    "state": "FACT_CHECKING_SCRIPT:1",
+                    "agent": "RedTeamAgent",
+                    "model": "gemini-1.5-pro",
+                    "expected_verdict": "REVISION_NEEDED"
+                },
+                {
+                    "state": "SCRIPTING:2",
+                    "agent": "ScriptOptimizerAgent",
+                    "model": "gemini-2.5-flash",
+                    "reason": "structured_claims feedback for contested GDP figures"
+                },
+                {
+                    "state": "FACT_CHECKING_SCRIPT:2",
+                    "agent": "RedTeamAgent",
+                    "model": "gemini-1.5-pro",
+                    "expected_verdict": "SUCCESS"
+                }
+            ],
+            "expected_tool_calls": [
+                {
+                    "agent": "Orchestrator",
+                    "tool": "TavilySearchService.search",
+                    "args": {"max_results": 5}
+                },
+                {
+                    "agent": "ResearchAgent",
+                    "tool": "semantic_search",
+                    "args": {"top_k": 10}
+                },
+                {
+                    "agent": "RedTeamAgent",
+                    "tool": "semantic_search",
+                    "args": {"top_k": 5},
+                    "per_claim": true
+                }
+            ],
+            "expected_feedback_history": [
+                {
+                    "feedback_type": "structured_claims",
+                    "expected_failed_count": 2,
+                    "expected_verdicts": ["CONTESTED", "CONTESTED"]
+                }
+            ],
+            "fallback_expectations": [
+                {
+                    "step": 1,
+                    "agent": "ScriptOptimizerAgent",
+                    "stage": "SCRIPTING",
+                    "tool_call": "semantic_search(failed_claim.search_query, top_k=5)",
+                    "expected_result": "Multiple conflicting GDP figures from different sources — no single authoritative correction available",
+                    "fallback": "Softens contested claims to range-based language: 'estimates range from 6.2% to 8.2%'",
+                    "assertion": "Optimizer cannot find a single correct GDP figure; applies best-effort softening instead of definitive correction"
+                },
+                {
+                    "step": 2,
+                    "agent": "ScriptOptimizerAgent",
+                    "stage": "SCRIPTING",
+                    "tool_call": "LLM patch generation with conflicting evidence",
+                    "expected_result": "Partially successful — claims softened but not resolved to a single verifiable figure",
+                    "fallback": "Second Red Team cycle accepts softened language as UNCERTAIN-safe wording",
+                    "assertion": "Best-effort patch preserves narrative coherence while acknowledging data uncertainty"
+                }
+            ],
+            "rejection_expectations": [],
+            "note": "Optimizer receives 2 CONTESTED GDP claims but refined_context contains no authoritative single figure to correct them. Optimizer applies best-effort softening to range-based language. Second Red Team cycle accepts the softened claims. Tests the optimizer partial-patch fallback path."
+        },
+        "expected_outcomes": {
+            "research": {
+                "must_include_facts": [
+                    "MoSPI reported 8.2% GDP growth for FY2024",
+                    "IMF projected 6.8% growth, World Bank estimated 6.3%",
+                    "Arvind Subramanian argues GDP may be overstated by 2.5 percentage points",
+                    "CMIE independent estimate was approximately 6.5%",
+                    "India's informal sector employs approximately 90% of workforce"
+                ],
+                "must_avoid": [
+                    "stating a single definitive GDP growth figure",
+                    "dismissing either official or independent estimates as wrong"
+                ],
+                "min_chunks": 3,
+                "min_confidence": 0.7,
+                "refined_context_word_range": [800, 1500]
+            },
+            "script": {
+                "must_include_topics": [
+                    "conflicting GDP estimates",
+                    "official vs independent figures",
+                    "methodological debate"
+                ],
+                "must_avoid": [
+                    "asserting a single GDP figure as the correct one",
+                    "politically biased framing favoring government or critics"
+                ],
+                "scene_count_range": [3, 8],
+                "word_count_range": [150, 500],
+                "must_have_hook": true,
+                "must_have_loop": true,
+                "storyboard_fields": ["visual_prompt", "audio_cue"]
+            },
+            "fact_check": {
+                "expected_overall_verdict": "REVISION_NEEDED",
+                "max_unsupported_claims": 2,
+                "claims_with_known_verdicts": [
+                    {
+                        "claim_text": "India's GDP grew 8.2% in FY2024 making it the fastest-growing major economy",
+                        "expected_verdict": "CONTESTED"
+                    },
+                    {
+                        "claim_text": "Independent estimates from IMF and World Bank range from 6.3% to 6.8%",
+                        "expected_verdict": "SUPPORTED"
+                    },
+                    {
+                        "claim_text": "India's informal sector contributes the majority of GDP",
+                        "expected_verdict": "CONTESTED"
+                    }
+                ],
+                "min_claim_count": 2,
+                "evidence_must_have_references": true
+            },
+            "optimization": {
+                "must_preserve_claims": [
+                    "Independent estimates from IMF and World Bank range from 6.3% to 6.8%"
+                ],
+                "must_patch_claims": [
+                    "India's GDP grew 8.2% in FY2024 making it the fastest-growing major economy",
+                    "India's informal sector contributes the majority of GDP"
+                ],
+                "patch_must_be_surgical": true,
+                "narrative_must_flow": true
+            },
+            "final_status": "FACT_CHECKING_SCRIPT (approved)",
+            "assertions": []
+        },
+        "scoring": {
+            "rubric_set": "optimizer",
+            "pass_threshold": 0.7,
+            "dimension_thresholds": {
+                "patch_precision": 0.65,
+                "narrative_preservation": 0.7,
+                "grounding": 0.65,
+                "claim_resolution": 0.6
+            }
+        },
+        "metadata": {
+            "created_by": "system",
+            "notes": "Fallback chain: Optimizer receives 2 CONTESTED GDP claims but refined_context contains conflicting figures with no single authoritative correction. Optimizer applies best-effort softening to range-based language. Second Red Team cycle accepts softened wording. Tests optimizer partial-patch fallback where definitive correction is impossible.",
+            "tags": [
+                "fallback_chain",
+                "economics",
+                "GDP",
+                "conflicting_evidence",
+                "optimizer_partial_patch",
+                "best_effort",
+                "contested_data"
+            ]
+        }
     }
 ]
 
