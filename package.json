@@ -1,0 +1,24 @@
+{
+  "name": "content-factory",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev:api": "nx dev api",
+    "dev:web": "nx dev web",
+    "dev": "nx run-many -t dev --parallel",
+    "build": "nx run-many -t build",
+    "test": "nx run-many -t test",
+    "lint": "nx run-many -t lint",
+    "lint:fix": "nx run-many -t lint:fix",
+    "generate-types": "nx generate-types api"
+  },
+  "devDependencies": {
+    "@nx/eslint": "^22.6.5",
+    "@nx/jest": "^22.6.5",
+    "@nx/js": "^22.6.5",
+    "@nx/next": "^22.6.5",
+    "nx": "^22.6.5",
+    "openapi-typescript": "^7.13.0",
+    "typescript": "^5.9.3"
+  }
+}
