@@ -155,4 +155,4 @@ jobs:
     needs: lint-frontend
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -t content-factory-web:ci ./apps/web
+      - run: docker build -t content-factory-web:ci -f apps/web/Dockerfile .
