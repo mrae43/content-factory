@@ -21,7 +21,6 @@ services:
     networks:
       - factory-net
     healthcheck:
-      # Crucial: Ensures Postgres is fully ready before API starts
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
@@ -31,33 +30,33 @@ services:
         limits:
           cpus: '1.0'
           memory: 1G
-  
+
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: factory_pgadmin
     restart: unless-stopped
-    env_file: 
+    env_file:
       - .env
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
       PGADMIN_CONFIG_SERVER_MODE: 'False'
-    ports: 
+    ports:
       - "5050:80"
-    networks: 
+    networks:
       - factory-net
-    depends_on: 
-      db: 
+    depends_on:
+      db:
         condition: service_healthy
-    deploy: 
-      resources: 
-        limits: 
-          cpus: '0.5' 
-          memory: 512M 
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
 
   api:
     build:
-      context: .
+      context: ./apps/api
       dockerfile: Dockerfile
     container_name: factory_api
     restart: unless-stopped
@@ -66,10 +65,9 @@ services:
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:
-      # Bind mounts for live reloading and persisting migrations
-      - ./app:/workspace/app
-      - ./alembic:/workspace/alembic
-      - ./alembic.ini:/workspace/alembic.ini
+      - ./apps/api/app:/workspace/app
+      - ./apps/api/alembic:/workspace/alembic
+      - ./apps/api/alembic.ini:/workspace/alembic.ini
     networks:
       - factory-net
     depends_on:
@@ -79,4 +77,24 @@ services:
       resources:
         limits:
           cpus: '2.0'
-          memory: 2G 
+          memory: 2G
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: factory_web
+    restart: unless-stopped
+    environment:
+      - NEXT_PUBLIC_API_URL=http://api:8000
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    networks:
+      - factory-net
+    depends_on:
+      - api
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
