@@ -2,6 +2,8 @@
 
 Multi-agent system that generates short-form video content (Shorts/Reels/TikToks) for high-stakes domains — politics, macro-economics, historical analysis. Treats **Truth and Guardrails as first-class citizens** via a rigorous Red Team agentic loop that verifies claims against a vector database before any rendering occurs.
 
+**Nx monorepo** with a Python FastAPI backend, Next.js frontend, and shared TypeScript types.
+
 ## Core Differentiators
 
 - **Agentic Over Atomic** — Research, Copywriter, and Red Team agents debate and correct each other through structured revision loops.
@@ -69,7 +71,9 @@ LOCAL-scope vector chunks are cleaned up. The final job state, scripts, audit tr
 
 | Layer | Technology |
 |-------|-----------|
-| API | FastAPI (async, Pydantic V2) |
+| Monorepo | Nx workspace, pnpm |
+| Frontend | Next.js 16 (App Router), React Query, Zustand, shadcn/ui, Tailwind CSS v4 |
+| API | FastAPI (async, Pydantic V2), Python 3.11, uv |
 | Database | PostgreSQL 16 + pgvector (HNSW index, `factory` schema) |
 | ORM | SQLAlchemy 2 async (`asyncpg`) |
 | Migrations | Alembic (sync via `psycopg2`) |
@@ -80,9 +84,8 @@ LOCAL-scope vector chunks are cleaned up. The final job state, scripts, audit tr
 | Background Queue | `asyncio.create_task` + `FOR UPDATE SKIP LOCKED` (no Celery/Redis) |
 | Testing | pytest + pytest-asyncio + httpx + deepeval |
 | CI/CD | GitHub Actions (lint → unit/agent tests → eval/integration/docker) |
-| Containerization | Docker Compose (pgvector:pg16, pgAdmin4, API) |
-| Language | Python 3.11 |
-| Linter/Formatter | Ruff (line-length=88) |
+| Containerization | Docker Compose (pgvector:pg16, pgAdmin4, API, Web) |
+| Linter/Formatter | Ruff (Python), ESLint (TypeScript) |
 
 ---
 
@@ -90,42 +93,62 @@ LOCAL-scope vector chunks are cleaned up. The final job state, scripts, audit tr
 
 ```bash
 # 1. Create .env with required variables (see Environment section)
-cp .env.example .env   # or create manually
+cp .env.example .env
 
-# 2. Start Postgres + pgAdmin + API
+# 2. Start all services (db + pgadmin + api + web)
 docker compose up -d
 
 # 3. Run migrations (DB must be running)
 docker compose exec api alembic revision --autogenerate -m "description"
 docker compose exec api alembic upgrade head
-
-# 4. Or run API locally (outside Docker)
-uvicorn app.main:app --reload
 ```
 
-### Lint & Format
+### Development
 
 ```bash
-ruff format . && ruff check . --fix
-# Or on PowerShell:
-./clean_code.ps1
+# Start both dev servers locally (API on :8000, Web on :3000)
+pnpm dev
+
+# Start individually
+pnpm dev:api                     # FastAPI backend only
+pnpm dev:web                     # Next.js frontend only
+```
+
+### Build & Lint
+
+```bash
+pnpm build                       # Build all projects
+pnpm lint                        # Lint all projects
+pnpm lint:fix                    # Lint + auto-fix
 ```
 
 ### Run Tests
 
 ```bash
-# Install test dependencies
-pip install -r requirements-test.txt
+# Backend tests (from apps/api/)
+cd apps/api
+uv sync --extra test             # Install deps including test extras
+uv run pytest tests/ -v          # Run all tests
 
-# Run all tests
-pytest
+# Or via Docker
+docker compose exec api pytest tests/ -v
 
 # Run by marker
-pytest -m unit          # Unit tests only (6 files, ~55 tests)
-pytest -m agent         # Agent tests only (5 files, ~21 tests)
-pytest -m eval          # Eval benchmarks (infrastructure ready, no test files yet)
-pytest -m golden        # Golden dataset validation (data ready, no test files yet)
-pytest -m integration   # Integration tests only (CI-only)
+uv run pytest -m unit            # Unit tests only (6 files, ~55 tests)
+uv run pytest -m agent           # Agent tests only (5 files, ~21 tests)
+uv run pytest -m eval            # Eval benchmarks
+uv run pytest -m golden          # Golden dataset validation
+uv run pytest -m integration     # Integration tests (CI-only)
+```
+
+### Python Lint & Format
+
+```bash
+# From apps/api/
+cd apps/api
+ruff format . && ruff check . --fix
+# Or on PowerShell:
+./clean_code.ps1
 ```
 
 ---
@@ -159,6 +182,60 @@ Optional `.env` overrides:
 | `SYNTHID_WATERMARK_ENABLED` | `True` | SynthID flag (no implementation yet) |
 | `WORKER_POLL_INTERVAL_SECONDS` | `5` | QueueWorker poll interval |
 | `WORKER_LOCK_TIMEOUT_MINUTES` | `15` | Stuck job recovery timeout |
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Frontend API base URL |
+| `WEB_PORT` | `3000` | Docker Compose web host port |
+
+---
+
+## Project Structure
+
+```
+content-factory/                  # Nx workspace root
+├── apps/
+│   ├── api/                      # Python FastAPI backend
+│   │   ├── app/
+│   │   │   main.py               # FastAPI app + lifespan (starts/stops QueueWorker)
+│   │   │   core/config.py        # pydantic-settings, reads .env
+│   │   │   api/routes.py         # /api/v1/jobs/ endpoints + health check
+│   │   │   db/
+│   │   │     models.py           # SQLAlchemy models (factory schema)
+│   │   │     session.py          # async engine + session factory
+│   │   │     crud.py             # query helpers + queue operations
+│   │   │   schemas/shorts.py     # Pydantic request/response models
+│   │   │   services/
+│   │   │     llm.py              # LangChain + Gemini wrappers
+│   │   │     vector_store.py     # pgvector ingestion & semantic search
+│   │   │     chunking.py         # Markdown text splitter
+│   │   │     web_search.py       # TavilySearchService
+│   │   │   workers/
+│   │   │     orchestrator.py     # Agentic state machine
+│   │   │     queue_worker.py     # asyncio poll loop with SKIP LOCKED
+│   │   │     agents.py           # BaseAgent → Research, Copywriter, RedTeam, AssetStudio
+│   │   │     optimizer.py        # ScriptOptimizerAgent
+│   │   │     tasks.py            # Post-completion LOCAL chunk cleanup
+│   │   ├── alembic/              # Database migrations
+│   │   ├── tests/                # Python test suite
+│   │   ├── scripts/              # Type generation scripts
+│   │   ├── pyproject.toml        # uv-managed Python deps
+│   │   ├── Dockerfile
+│   │   └── project.json          # Nx project config
+│   └── web/                      # Next.js frontend (App Router)
+│       ├── src/
+│       │   ├── app/              # Pages: dashboard, jobs list, new job, job detail
+│       │   ├── components/       # UI components (shadcn/ui + layout + jobs + script)
+│       │   ├── hooks/            # React Query hooks (useJobs, useJob, useCreateJob)
+│       │   ├── stores/           # Zustand store (sidebarOpen)
+│       │   └── lib/              # API client, utilities
+│       ├── Dockerfile
+│       └── project.json          # Nx project config
+├── libs/
+│   └── shared-types/             # Auto-generated TS types from Pydantic schemas
+├── nx.json                       # Nx workspace config
+├── package.json                  # Root package (Nx + dev deps)
+├── pnpm-workspace.yaml           # pnpm workspace definition
+├── tsconfig.base.json            # Shared TS config
+└── docker-compose.yml            # All services (db + pgadmin + api + web)
+```
 
 ---
 
@@ -174,79 +251,12 @@ The project uses pytest with `asyncio_mode = "auto"` and five custom markers:
 | `golden` | Trajectory validation against golden dataset | `tests/golden/` (23+ cases across 6 categories) |
 | `integration` | End-to-end orchestrator flows | `tests/integration/` (CI-only) |
 
-### Eval Infrastructure
-
-`tests/evals/` contains a fully implemented evaluation framework (no test files yet):
-- `schemas.py` — 20+ Pydantic models for the golden dataset eval framework
-- `rubrics.py` — 4 weighted scoring rubrics (research, script, fact_check, optimizer)
-- `conftest.py` — EvalRunner, ScoreAggregator, TraceCapture, BaselineRecorder fixtures
-
-### Golden Dataset
-
-`tests/golden/` contains 23+ golden test cases across 6 categories with a 515-line JSON Schema for validation.
-
 ### CI Pipeline (GitHub Actions)
 
 The `.github/workflows/ci.yml` pipeline runs on push/PR:
 
 ```
 lint → unit-tests + agent-tests (parallel) → eval-tests + integration-tests (PR only) + docker-build
-```
-
----
-
-## Project Structure
-
-```
-app/
-  main.py                  # FastAPI app + lifespan (starts/stops QueueWorker)
-  core/config.py           # pydantic-settings, reads .env
-  api/routes.py            # /api/v1/jobs/ endpoints + health check
-  db/
-    models.py              # SQLAlchemy models (factory schema)
-    session.py             # async engine + session factory
-    crud.py                # query helpers + queue operations
-  schemas/shorts.py        # Pydantic request/response models + FailedClaim, OptimizerFeedbackEntry
-  services/
-    llm.py                 # LangChain + Gemini model/embedding wrappers
-    vector_store.py        # pgvector ingestion & semantic search (multi-scope filtering)
-    chunking.py            # Markdown text splitter
-    web_search.py          # TavilySearchService
-  workers/
-    orchestrator.py        # Agentic state machine (one transition per call)
-    queue_worker.py        # asyncio poll loop with SKIP LOCKED
-    agents.py              # BaseAgent → Research, Copywriter, RedTeam, AssetStudio
-    optimizer.py           # ScriptOptimizerAgent — surgical claim patching
-    tasks.py               # Post-completion LOCAL chunk cleanup
-tests/
-  conftest.py              # Shared fixtures (mock DB, LLM, vector store)
-  unit/                    # Unit tests (6 files: chunking, config, crud, routes, queue, vector_store)
-  agents/
-    conftest.py            # Agent-specific fixtures + multi_chain_mock
-    test_research_agent.py
-    test_copywriter_agent.py
-    test_red_team_agent.py
-    test_asset_studio_agent.py
-    test_optimizer_agent.py
-  integration/
-    conftest.py            # Integration-specific fixtures
-    test_orchestrator_transitions.py
-    agents-orchest-int.md  # Integration test design doc (370 lines)
-  evals/                   # Eval infrastructure (schemas, rubrics, fixtures — no test files yet)
-    schemas.py             # 20+ Pydantic models for golden dataset eval framework
-    rubrics.py             # 4 scoring rubrics (research, script, fact_check, optimizer)
-    conftest.py            # EvalRunner, ScoreAggregator, TraceCapture, BaselineRecorder
-  golden/                  # Golden dataset (23+ cases across 6 categories)
-    golden_dataset.json
-    schemas/golden_entry_schema.json  # 515-line JSON Schema
-alembic/
-  env.py                   # Async→sync URL swap, factory schema + vector extension
-  versions/                # 7 migrations (initial → triggers → 2 no-ops → indices → locked columns → refined_context)
-docker-compose.yml         # pgvector:pg16 + pgAdmin4 + API
-Dockerfile                 # 2-stage build (python:3.11-slim, non-root user)
-pyproject.toml             # pytest config, ruff config, project metadata
-requirements.txt           # Runtime dependencies
-requirements-test.txt      # Test dependencies (pytest, pytest-asyncio, httpx, deepeval)
 ```
 
 ---
@@ -266,13 +276,15 @@ requirements-test.txt      # Test dependencies (pytest, pytest-asyncio, httpx, d
 
 ### Infrastructure
 
+- **Nx Monorepo** — Backend (`apps/api/`), Frontend (`apps/web/`), Shared types (`libs/shared-types/`)
+- **Next.js Frontend** — App Router with shadcn/ui, React Query, Zustand; Docker-ready with standalone output
 - **Postgres-backed Queue** — `QueueWorker` with `asyncio.create_task` + `FOR UPDATE SKIP LOCKED` + crash recovery
 - **Web Search Enrichment** — Tavily results ingested as LOCAL-scope vectors before research
 - **Prompt Chaining (Semantic Memory)** — `refined_context` column on `render_jobs`; orchestrator mediates context between Research → Copywriter agents
 - **Evaluator-Optimizer Pattern** — Configurable models/temperatures via env vars for both Red Team and Optimizer agents
 - **Test Suite** — Unit (~55) + agent (~21) + integration tests with CI pipeline via GitHub Actions
 - **Eval Infrastructure** — Rubrics, schemas, golden dataset, and eval runner fixtures (test files pending)
-- **Docker** — 3-service Compose stack (pgvector, pgAdmin, API) with resource limits
+- **Docker** — 4-service Compose stack (pgvector, pgAdmin, API, Web)
 
 ### Intentionally Deferred (Wizard of Oz MVP)
 
