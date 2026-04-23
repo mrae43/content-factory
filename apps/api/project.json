@@ -1,0 +1,88 @@
+{
+  "name": "api",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/api",
+  "projectType": "application",
+  "targets": {
+    "dev": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/api",
+        "command": "uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker build -t content-factory-api .",
+        "cwd": "apps/api"
+      },
+      "dependsOn": []
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/api",
+        "command": "ruff format . --check && ruff check ."
+      }
+    },
+    "lint:fix": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/api",
+        "command": "ruff format . && ruff check . --fix"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/api",
+        "command": "pytest tests/ -v"
+      }
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/api",
+        "command": "pytest tests/ -v -m unit"
+      }
+    },
+    "test:agent": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/api",
+        "command": "pytest tests/ -v -m agent"
+      }
+    },
+    "test:integration": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/api",
+        "command": "pytest tests/ -v -m integration"
+      }
+    },
+    "migrate": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/api",
+        "command": "alembic upgrade head"
+      }
+    },
+    "migrate:create": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/api",
+        "command": "alembic revision --autogenerate -m"
+      }
+    },
+    "generate-types": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/api",
+        "command": "python scripts/generate_ts_types.py"
+      },
+      "outputs": ["{workspaceRoot}/libs/shared-types/src"]
+    }
+  },
+  "tags": ["scope:backend", "lang:python"]
+}
