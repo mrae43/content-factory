@@ -24,6 +24,7 @@ from app.workers.agents import (
     RedTeamAgent,
 )
 from app.workers.optimizer import ScriptOptimizerAgent
+from tests.evals.judge import judge_score as _judge_score
 from tests.evals.rubrics import (
     RUBRICS,
     compute_weighted_score,
@@ -64,6 +65,26 @@ def judge_llm():
     from app.services.llm import get_llm
 
     return get_llm(model_name="gemini-2.5-flash", temperature=0.0)
+
+
+# ==========================================
+# 1b. JUDGE SCORER (wraps judge_llm)
+# ==========================================
+
+
+@pytest.fixture
+def judge_scorer(judge_llm):
+    """
+    Callable that wraps judge_score() with the session-scoped judge_llm.
+    Usage: result = await judge_scorer("research", input, output, reference)
+    """
+
+    async def _score(rubric_name, agent_input, agent_output, reference):
+        return await _judge_score(
+            judge_llm, rubric_name, agent_input, agent_output, reference
+        )
+
+    return _score
 
 
 # ==========================================
