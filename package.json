@@ -6,7 +6,7 @@
     "dev:api": "nx dev api",
     "dev:web": "nx dev web",
     "dev": "nx run-many -t dev --parallel",
-    "build": "nx run-many -t build",
+    "build": "nx run-many -t build --skip-nx-cache",
     "test": "nx run-many -t test",
     "lint": "nx run-many -t lint",
     "lint:fix": "nx run-many -t lint:fix",
