@@ -167,3 +167,15 @@ outputs/
 *.log
 *.sqlite
 docker-compose.override.yml
+
+/node_modules
+
+# Node.js
+dist/
+.next/
+out/
+.nx/
+.cache/
+
+# uv
+*.python-version

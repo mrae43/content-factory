@@ -1,5 +1,5 @@
 [project]
-name = "content-factory"
+name = "content-factory-api"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
@@ -21,6 +21,7 @@ dependencies = [
     "langchain-tavily>=0.2.0",
     "tenacity>=8.2.3",
     "langchain-text-splitters>=0.0.1",
+    "pydantic-to-typescript>=2.0.0",
 ]
 
 [project.optional-dependencies]

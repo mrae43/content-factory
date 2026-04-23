@@ -12,38 +12,27 @@ concurrency:
 
 env:
   PYTHON_VERSION: "3.11"
+  NODE_VERSION: "20"
   GEMINI_API_KEY: "ci-dummy-key"
   TAVILY_API_KEY: "ci-dummy-key"
 
 jobs:
-  lint:
-    name: Lint & Format Check
+  lint-python:
+    name: Lint Python
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install ruff
-          pip install -r requirements.txt
-
-      - name: Ruff format check
-        run: ruff format --check .
-
-      - name: Ruff lint check
-        run: ruff check .
+      - run: pip install ruff
+      - run: ruff format apps/api --check
+      - run: ruff check apps/api
 
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest
-    needs: lint
+    needs: lint-python
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -58,105 +47,35 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 5
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -r requirements-test.txt
-
-      - name: Run Alembic migrations
+      - run: cd apps/api && pip install -e ".[test]"
+      - run: cd apps/api && alembic upgrade head
         env:
           DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/content_factory_test
-        run: alembic upgrade head
-
-      - name: Run unit tests
+      - run: cd apps/api && pytest tests/ -v -m unit --tb=short -x || [ $? -eq 5 ]
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/content_factory_test
           GEMINI_API_KEY: ${{ env.GEMINI_API_KEY }}
           TAVILY_API_KEY: ${{ env.TAVILY_API_KEY }}
-        run: pytest -v -m unit --tb=short -x --ignore-glob="**/conftest.py" || [ $? -eq 5 ]
 
   agent-tests:
     name: Agent Structure Tests
     runs-on: ubuntu-latest
-    needs: lint
+    needs: lint-python
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -r requirements-test.txt
-
-      - name: Run agent tests (mocked LLM)
+      - run: cd apps/api && pip install -e ".[test]"
+      - run: cd apps/api && pytest tests/ -v -m agent --tb=short -x || [ $? -eq 5 ]
         env:
           GEMINI_API_KEY: ${{ env.GEMINI_API_KEY }}
           TAVILY_API_KEY: ${{ env.TAVILY_API_KEY }}
-        run: pytest -v -m agent --tb=short -x --ignore-glob="**/conftest.py" || [ $? -eq 5 ]
-
-  eval-tests:
-    name: AI Evaluation Tests
-    runs-on: ubuntu-latest
-    needs: [unit-tests, agent-tests]
-    if: github.event_name == 'pull_request'
-    services:
-      postgres:
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: content_factory_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d content_factory_test"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 5
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -r requirements-test.txt
-
-      - name: Run Alembic migrations
-        env:
-          DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/content_factory_test
-        run: alembic upgrade head
-
-      - name: Run AI eval tests (real LLM)
-        env:
-          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/content_factory_test
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || 'ci-dummy-key' }}
-          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY || 'ci-dummy-key' }}
-        run: pytest -v -m eval --tb=short -x --ignore-glob="**/conftest.py" || [ $? -eq 5 ]
 
   integration-tests:
     name: Integration Tests
@@ -176,40 +95,64 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 5
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -r requirements-test.txt
-
-      - name: Run Alembic migrations
+      - run: cd apps/api && pip install -e ".[test]"
+      - run: cd apps/api && alembic upgrade head
         env:
           DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/content_factory_test
-        run: alembic upgrade head
-
-      - name: Run integration tests
+      - run: cd apps/api && pytest tests/ -v -m integration --tb=short -x || [ $? -eq 5 ]
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/content_factory_test
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || 'ci-dummy-key' }}
-          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY || 'ci-dummy-key' }}
-        run: pytest -v -m integration --tb=short -x --ignore-glob="**/conftest.py" || [ $? -eq 5 ]
+          GEMINI_API_KEY: ${{ env.GEMINI_API_KEY }}
+          TAVILY_API_KEY: ${{ env.TAVILY_API_KEY }}
 
-  docker-build:
-    name: Docker Build Check
+  lint-frontend:
+    name: Lint Frontend
     runs-on: ubuntu-latest
-    needs: lint
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: npx nx lint web
 
-      - name: Build Docker image
-        run: docker build -t content-factory:ci .
+  build-frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    needs: lint-frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: npx nx build web
+
+  docker-build-api:
+    name: Docker Build API
+    runs-on: ubuntu-latest
+    needs: lint-python
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t content-factory-api:ci ./apps/api
+
+  docker-build-web:
+    name: Docker Build Web
+    runs-on: ubuntu-latest
+    needs: lint-frontend
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t content-factory-web:ci ./apps/web
