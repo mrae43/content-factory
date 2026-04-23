@@ -104,7 +104,7 @@ jobs:
       - run: cd apps/api && alembic upgrade head
         env:
           DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/content_factory_test
-      - run: cd apps/api && pytest tests/ -v -m integration --tb=short -x || [ $? -eq 5 ]
+      - run: cd apps/api && pytest tests/ -v -m integration --tb=short -x
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/content_factory_test
           GEMINI_API_KEY: ${{ env.GEMINI_API_KEY }}
@@ -155,4 +155,4 @@ jobs:
     needs: lint-frontend
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -t content-factory-web:ci ./apps/web
+      - run: docker build -t content-factory-web:ci -f apps/web/Dockerfile .

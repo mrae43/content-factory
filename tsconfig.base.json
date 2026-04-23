@@ -12,6 +12,7 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
+    "baseUrl": ".",
     "paths": {
       "@content-factory/shared-types": ["libs/shared-types/src/index.ts"],
       "@content-factory/shared-types/*": ["libs/shared-types/src/*"]
