@@ -251,6 +251,43 @@ class NegativeAssertion(BaseModel):
     )
 
 
+class ResearchReference(BaseModel):
+    refined_context: str = Field("", description="Pre-recorded research output")
+    chunks: List[str] = Field(
+        default_factory=list, description="Pre-recorded research chunks"
+    )
+
+
+class ScriptReference(BaseModel):
+    script_content: str = Field("", description="Pre-recorded script output")
+    storyboard: List[Dict[str, Any]] = Field(
+        default_factory=list, description="Pre-recorded storyboard"
+    )
+
+
+class FactCheckReference(BaseModel):
+    verdict: str = Field("SUPPORTED", description="Pre-recorded overall verdict")
+    claims: List[Dict[str, Any]] = Field(
+        default_factory=list, description="Pre-recorded claim items"
+    )
+    overall_reasoning: str = Field("", description="Pre-recorded overall reasoning")
+
+
+class OptimizationReference(BaseModel):
+    script_content: str = Field("", description="Pre-recorded patched script")
+    storyboard: List[Dict[str, Any]] = Field(
+        default_factory=list, description="Pre-recorded patched storyboard"
+    )
+    patch_summary: str = Field("", description="Pre-recorded patch summary")
+
+
+class ReferenceOutputs(BaseModel):
+    research: Optional[ResearchReference] = None
+    script: Optional[ScriptReference] = None
+    fact_check: Optional[FactCheckReference] = None
+    optimization: Optional[OptimizationReference] = None
+
+
 class ExpectedOutcomes(BaseModel):
     research: Optional[ResearchOutcome] = None
     script: Optional[ScriptOutcome] = None
@@ -326,6 +363,9 @@ class GoldenCase(BaseModel):
     input: CaseInput
     trace_spec: TraceSpec
     expected_outcomes: ExpectedOutcomes
+    reference_outputs: Optional[ReferenceOutputs] = Field(
+        None, description="Pre-recorded agent outputs for deterministic eval"
+    )
     scoring: Optional[ScoringSpec] = None
 
     safety_constraint: Optional[SafetyConstraint] = Field(

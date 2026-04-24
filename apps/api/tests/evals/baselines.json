@@ -1,5 +1,175 @@
 {
-  "last_updated": null,
-  "cases": {},
-  "summary": {}
+  "last_updated": "2026-04-24T14:57:59.757563+00:00",
+  "cases": {
+    "H-001": {
+      "research": {
+        "weighted_average": 1.0,
+        "dimensions": {
+          "completeness": 1.0,
+          "accuracy": 1.0,
+          "synthesis": 1.0,
+          "confidence_calibration": 1.0
+        },
+        "reasoning": "The output fully captures all required facts, maintains high accuracy by grounding claims in the source material, and synthesizes information into a cohesive narrative. It avoids prohibited claims and presents data with appropriate precision. The absence of an explicit confidence score is not penalized, as the language itself reflects calibrated confidence. This is an excellent response across all dimensions.",
+        "assertion_warnings": []
+      }
+    },
+    "H-002": {
+      "research": {
+        "weighted_average": 1.0,
+        "dimensions": {
+          "completeness": 1.0,
+          "accuracy": 1.0,
+          "synthesis": 1.0,
+          "confidence_calibration": 1.0
+        },
+        "reasoning": "The output fully captures all required facts, accurately reflects the source material without fabrication, and synthesizes the information into a fluent, well-structured narrative. The absence of unsupported claims and the precise alignment with the input indicate strong performance across all dimensions. Given the high guardrail strictness and compliance demands, the agent's output is both reliable and appropriately confident.",
+        "assertion_warnings": []
+      }
+    },
+    "H-003": {
+      "research": {
+        "weighted_average": 0.9,
+        "dimensions": {
+          "completeness": 1.0,
+          "accuracy": 1.0,
+          "synthesis": 1.0,
+          "confidence_calibration": 0.5
+        },
+        "reasoning": "The output excels in completeness, accuracy, and synthesis, capturing all required facts without fabrication and presenting them in a well-structured narrative. The primary weakness lies in confidence calibration: while most claims are well-supported, the refined_context makes a broad qualitative assertion about risk ('relatively low risk') that extends beyond the input's explicit data, implying overconfidence in risk interpretation. This does not constitute inaccuracy but reflects a slight overreach in confidence for a high-strictness guardrail context.",
+        "assertion_warnings": []
+      }
+    },
+    "H-004": {
+      "research": {
+        "weighted_average": 1.0,
+        "dimensions": {
+          "completeness": 1.0,
+          "accuracy": 1.0,
+          "synthesis": 1.0,
+          "confidence_calibration": 1.0
+        },
+        "reasoning": "The output fully captures all required facts, accurately represents the source material without fabrication, and synthesizes the information into a cohesive narrative. It appropriately conveys uncertainty in projections, avoiding overstatement. The refined_context exceeds minimum length requirements and adheres to guardrail strictness by not presenting any estimate as certain, making it a strong response across all dimensions.",
+        "assertion_warnings": []
+      }
+    },
+    "R-001": {
+      "research": {
+        "weighted_average": 1.0,
+        "dimensions": {
+          "completeness": 1.0,
+          "accuracy": 1.0,
+          "synthesis": 1.0,
+          "confidence_calibration": 1.0
+        },
+        "reasoning": "The output fully captures all required facts, avoids prohibited claims, and accurately reflects the source material without fabrication. It synthesizes information into a well-structured narrative that connects TSMC's dominance with global supply chain risks. The use of attributed claims ensures proper confidence calibration, with no overstatement of certainty. This is an excellent response across all dimensions.",
+        "assertion_warnings": []
+      }
+    },
+    "R-002": {
+      "research": {
+        "weighted_average": 0.9,
+        "dimensions": {
+          "completeness": 1.0,
+          "accuracy": 1.0,
+          "synthesis": 1.0,
+          "confidence_calibration": 0.5
+        },
+        "reasoning": "The output excels in completeness, accuracy, and synthesis, fully capturing all required facts, maintaining fidelity to source distinctions, and weaving them into a coherent, well-structured narrative. However, it fails to include a confidence score, which is required under strict_compliance_mode and the reference's min_confidence threshold, resulting in a borderline score for confidence_calibration. This omission prevents full compliance despite otherwise excellent performance.",
+        "assertion_warnings": []
+      }
+    },
+    "R-003": {
+      "research": {
+        "weighted_average": 1.0,
+        "dimensions": {
+          "completeness": 1.0,
+          "accuracy": 1.0,
+          "synthesis": 1.0,
+          "confidence_calibration": 1.0
+        },
+        "reasoning": "The output excels across all dimensions, fully capturing all required facts, maintaining strict accuracy, and synthesizing information into a fluent, well-structured narrative. It avoids overclaiming by acknowledging limitations and contextualizing results appropriately. The absence of an explicit confidence_score is mitigated by the calibrated language used throughout, which aligns with high-confidence claims only where evidence is strong.",
+        "assertion_warnings": []
+      }
+    },
+    "R-004": {
+      "research": {
+        "weighted_average": 1.0,
+        "dimensions": {
+          "completeness": 1.0,
+          "accuracy": 1.0,
+          "synthesis": 1.0,
+          "confidence_calibration": 1.0
+        },
+        "reasoning": "The output excels across all dimensions, fully capturing required facts without omission or distortion. It accurately represents historical debates and source limitations, synthesizes information into a fluent narrative, and uses appropriately cautious language throughout. The absence of overstatement or myth-conflation demonstrates strict adherence to the guardrail_strictness and reference requirements, making this a model response.",
+        "assertion_warnings": []
+      }
+    },
+    "F-001": {
+      "research": {
+        "weighted_average": 0.9,
+        "dimensions": {
+          "completeness": 1.0,
+          "accuracy": 1.0,
+          "synthesis": 1.0,
+          "confidence_calibration": 0.5
+        },
+        "reasoning": "The output excels in completeness, accuracy, and synthesis, capturing all critical facts and weaving them into a clear, concise narrative. The only deficiency is the absence of a confidence score, which prevents proper calibration and limits the ability to assess reliability transparency. This missing element reduces the score in confidence_calibration despite otherwise strong performance.",
+        "assertion_warnings": [
+          "F-001/confidence_calibration: score 0.5 below threshold 0.7"
+        ]
+      }
+    },
+    "M-002": {
+      "research": {
+        "weighted_average": 0.9,
+        "dimensions": {
+          "completeness": 1.0,
+          "accuracy": 1.0,
+          "synthesis": 1.0,
+          "confidence_calibration": 0.5
+        },
+        "reasoning": "The output excels in completeness, accuracy, and synthesis, fully capturing all required facts and weaving them into a well-structured, evidence-based narrative. The only significant shortcoming is the absence of a confidence score, which prevents proper calibration and violates the expected output format under strict compliance mode. This omission limits the ability to evaluate metacognitive awareness, pulling the overall score down despite strong content performance.",
+        "assertion_warnings": [
+          "Missing required facts: ['The Dunhuang manuscripts contain approximately 50,000 documents (matched 1/6 key terms = 17%)']",
+          "M-002/confidence_calibration: score 0.5 below threshold 0.7"
+        ]
+      }
+    },
+    "M-003": {
+      "research": {
+        "weighted_average": 0.9,
+        "dimensions": {
+          "completeness": 1.0,
+          "accuracy": 1.0,
+          "synthesis": 1.0,
+          "confidence_calibration": 0.5
+        },
+        "reasoning": "The output excels in completeness, accuracy, and synthesis, effectively capturing and summarizing the multilingual and multiscript nature of the input. The refined_context is well-structured and avoids any factual errors. However, the most critical weakness is the missing confidence_score, which under strict_compliance_mode and high guardrail_strictness renders confidence_calibration only partially met, limiting the score to 0.5 in that dimension.",
+        "assertion_warnings": [
+          "M-003/confidence_calibration: score 0.5 below threshold 0.6"
+        ]
+      }
+    },
+    "M-004": {
+      "research": {
+        "weighted_average": 0.9,
+        "dimensions": {
+          "completeness": 1.0,
+          "accuracy": 1.0,
+          "synthesis": 1.0,
+          "confidence_calibration": 0.5
+        },
+        "reasoning": "The output excels in completeness, accuracy, and synthesis, fully capturing required facts and weaving them into a concise, natural summary. The only critical weakness is the absence of a confidence_score, which prevents proper calibration assessment and limits the score in that dimension despite otherwise strong performance.",
+        "assertion_warnings": []
+      }
+    }
+  },
+  "summary": {
+    "overall_avg": 0.95,
+    "by_category": {
+      "research": 0.95
+    },
+    "regression_threshold": 0.05
+  }
 }

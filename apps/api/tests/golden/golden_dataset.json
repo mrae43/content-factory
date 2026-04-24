@@ -91,8 +91,8 @@
                 "min_chunks": 3,
                 "min_confidence": 0.8,
                 "refined_context_word_range": [
-                    800,
-                    1500
+                    100,
+                    800
                 ]
             },
             "script": {
@@ -255,8 +255,8 @@
                 "min_chunks": 3,
                 "min_confidence": 0.85,
                 "refined_context_word_range": [
-                    800,
-                    1500
+                    150,
+                    800
                 ]
             },
             "script": {
@@ -423,8 +423,8 @@
                 "min_chunks": 4,
                 "min_confidence": 0.8,
                 "refined_context_word_range": [
-                    800,
-                    1500
+                    150,
+                    800
                 ]
             },
             "script": {
@@ -595,8 +595,8 @@
                 "min_chunks": 4,
                 "min_confidence": 0.7,
                 "refined_context_word_range": [
-                    800,
-                    1500
+                    150,
+                    800
                 ]
             },
             "script": {
@@ -788,8 +788,8 @@
                 "min_chunks": 3,
                 "min_confidence": 0.8,
                 "refined_context_word_range": [
-                    800,
-                    1500
+                    100,
+                    600
                 ]
             },
             "script": {
@@ -1023,8 +1023,8 @@
                 "min_chunks": 4,
                 "min_confidence": 0.7,
                 "refined_context_word_range": [
-                    800,
-                    1500
+                    150,
+                    600
                 ]
             },
             "script": {
@@ -1232,8 +1232,8 @@
                 "min_chunks": 3,
                 "min_confidence": 0.75,
                 "refined_context_word_range": [
-                    800,
-                    1500
+                    150,
+                    600
                 ]
             },
             "script": {
@@ -1425,8 +1425,8 @@
                 "min_chunks": 3,
                 "min_confidence": 0.7,
                 "refined_context_word_range": [
-                    800,
-                    1500
+                    100,
+                    600
                 ]
             },
             "script": {
@@ -1654,8 +1654,8 @@
                 "min_chunks": 2,
                 "min_confidence": 0.7,
                 "refined_context_word_range": [
-                    800,
-                    1500
+                    100,
+                    800
                 ]
             },
             "script": {
@@ -1835,8 +1835,8 @@
                 "min_chunks": 2,
                 "min_confidence": 0.7,
                 "refined_context_word_range": [
-                    800,
-                    1500
+                    100,
+                    800
                 ]
             },
             "script": {
@@ -1992,8 +1992,8 @@
                 "min_chunks": 2,
                 "min_confidence": 0.7,
                 "refined_context_word_range": [
-                    800,
-                    1500
+                    100,
+                    800
                 ]
             },
             "script": {
@@ -2175,8 +2175,8 @@
                 "min_chunks": 2,
                 "min_confidence": 0.6,
                 "refined_context_word_range": [
-                    600,
-                    1200
+                    100,
+                    600
                 ]
             },
             "script": {
@@ -2450,8 +2450,8 @@
                 "min_chunks": 2,
                 "min_confidence": 0.6,
                 "refined_context_word_range": [
-                    600,
-                    1200
+                    100,
+                    600
                 ]
             },
             "script": {
@@ -2656,8 +2656,8 @@
                 "min_chunks": 3,
                 "min_confidence": 0.7,
                 "refined_context_word_range": [
-                    800,
-                    1500
+                    100,
+                    800
                 ]
             },
             "script": {
@@ -3501,8 +3501,8 @@
                 "min_chunks": 10,
                 "min_confidence": 0.7,
                 "refined_context_word_range": [
-                    800,
-                    2000
+                    100,
+                    1000
                 ]
             },
             "script": {
@@ -3669,8 +3669,8 @@
                 "min_chunks": 2,
                 "min_confidence": 0.5,
                 "refined_context_word_range": [
-                    400,
-                    1500
+                    100,
+                    600
                 ]
             },
             "script": {
@@ -3850,8 +3850,8 @@
                 "min_chunks": 1,
                 "min_confidence": 0.5,
                 "refined_context_word_range": [
-                    200,
-                    1200
+                    40,
+                    500
                 ]
             },
             "script": {

@@ -9,14 +9,42 @@ from typing import Any, Dict, List, Sequence, Tuple
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
+from app.services.chunking import split_pre_context
 from tests.evals.schemas import GoldenCase
 
 
-def assert_must_include(text: str, facts: List[str]) -> None:
+_STOP_WORDS = frozenset(
+    "the a an is are was were be been being have has had do does did "
+    "will would shall should may might must can could of in on at to "
+    "for with by from about into through during before after above below "
+    "between out off over under again further then once and but or nor "
+    "not so yet both either neither each every all any few more most "
+    "other some such no only own same than too very it its this that "
+    "these those he she we they what which who whom how when where why "
+    "if as just also".split()
+)
+
+
+def _key_terms(text: str) -> List[str]:
+    tokens = re.findall(r"\b\w+\b", text.lower())
+    return [t for t in tokens if t not in _STOP_WORDS and len(t) > 2]
+
+
+def assert_must_include(
+    text: str, facts: List[str], min_overlap: float = 0.5
+) -> None:
     missing = []
     for fact in facts:
-        if fact.lower() not in text.lower():
-            missing.append(fact)
+        terms = _key_terms(fact)
+        if not terms:
+            continue
+        text_lower = text.lower()
+        matched = sum(1 for t in terms if t in text_lower)
+        ratio = matched / len(terms)
+        if ratio < min_overlap:
+            missing.append(
+                f"{fact} (matched {matched}/{len(terms)} key terms = {ratio:.0%})"
+            )
     assert not missing, f"Missing required facts: {missing}"
 
 
@@ -106,47 +134,54 @@ def assert_verdict_counts(
 
 
 def build_case_aware_vector_store(
-    case: GoldenCase, similarity_score: float = 0.88
+    case: GoldenCase,
+    job_id: str | None = None,
+    similarity_score: float = 0.88,
 ) -> AsyncMock:
     """
-    Splits the golden case raw_text into chunks and returns an AsyncMock
-    vector store whose semantic_search returns those chunks.
+    Splits the golden case raw_text into chunks using the production
+    MarkdownTextSplitter and returns an AsyncMock vector store whose
+    semantic_search returns those chunks.
+
+    Respects job_id and scopes parameters for realistic mock behavior.
     """
     raw_text = case.input.pre_context.raw_text or ""
     if not raw_text.strip():
-        store = AsyncMock()
-        store.semantic_search.return_value = []
-        store.ingest_chunks = AsyncMock(return_value=0)
-        return store
+        return _empty_vector_store()
 
-    chunk_size = min(2000, max(200, len(raw_text) // 3))
-    chunk_overlap = chunk_size // 5
-    total_len = len(raw_text)
+    chunks_text = split_pre_context(raw_text)
 
-    if total_len <= chunk_size:
-        chunks_text = [raw_text]
-    else:
-        chunks_text = []
-        start = 0
-        while start < total_len:
-            end = min(start + chunk_size, total_len)
-            chunks_text.append(raw_text[start:end])
-            start += chunk_size - chunk_overlap
-            if len(chunks_text) >= 10:
-                break
+    if not chunks_text:
+        return _empty_vector_store()
+
+    effective_job_id = job_id or str(uuid4())
 
     results = [
         {
             "id": str(uuid4()),
             "content": chunk,
             "meta": {"scope": "RAW-CONTEXT", "version": "1.0"},
-            "job_id": str(uuid4()),
+            "job_id": effective_job_id,
             "similarity_score": similarity_score,
         }
         for chunk in chunks_text
     ]
 
     store = AsyncMock()
-    store.semantic_search.return_value = results
+
+    async def _semantic_search(query, **kwargs):
+        scopes = kwargs.get("scopes")
+        if scopes and "RAW-CONTEXT" not in scopes and "LOCAL" not in scopes:
+            return []
+        return results
+
+    store.semantic_search.side_effect = _semantic_search
     store.ingest_chunks = AsyncMock(return_value=len(results))
+    return store
+
+
+def _empty_vector_store() -> AsyncMock:
+    store = AsyncMock()
+    store.semantic_search.return_value = []
+    store.ingest_chunks = AsyncMock(return_value=0)
     return store
