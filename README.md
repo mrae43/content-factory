@@ -77,12 +77,12 @@ LOCAL-scope vector chunks are cleaned up. The final job state, scripts, audit tr
 | Database | PostgreSQL 16 + pgvector (HNSW index, `factory` schema) |
 | ORM | SQLAlchemy 2 async (`asyncpg`) |
 | Migrations | Alembic (sync via `psycopg2`) |
-| AI Orchestration | LangChain + Google GenAI |
-| Models | `gemini-2.5-flash` (research, assets, optimizer), `gemini-1.5-pro` (copywriting, red team) — both configurable via env vars |
+| AI Orchestration | LangChain + Google GenAI + Together AI (OpenAI-compatible) |
+| Models | `gemini-2.5-flash` (research, assets, optimizer), `gemini-1.5-pro` (copywriting, red team) — both configurable via env vars. Eval suite supports Together AI models (Llama-3.3-70B, MiniMax-M2.7, Qwen3-235B, etc.) |
 | Embeddings | `models/gemini-embedding-001` (768-dim, pgvector HNSW with cosine) |
 | Web Search | Tavily (`langchain-tavily`) |
 | Background Queue | `asyncio.create_task` + `FOR UPDATE SKIP LOCKED` (no Celery/Redis) |
-| Testing | pytest + pytest-asyncio + httpx + deepeval |
+| Testing | pytest + pytest-asyncio + httpx + deepeval + LLM-as-Judge (Together AI) |
 | CI/CD | GitHub Actions (lint → unit/agent tests → eval/integration/docker) |
 | Containerization | Docker Compose (pgvector:pg16, pgAdmin4, API, Web) |
 | Linter/Formatter | Ruff (Python), ESLint (TypeScript) |
@@ -161,6 +161,7 @@ Required `.env` variables:
 |----------|-------------|
 | `GEMINI_API_KEY` | Mandatory — Google AI API key |
 | `TAVILY_API_KEY` | Mandatory — Tavily web search API key |
+| `TOGETHER_API_KEY` | Optional — Together AI API key (required for live eval mode) |
 | `DATABASE_URL` | Async connection string, e.g. `postgresql+asyncpg://postgres:postgres@localhost:5432/content_factory` |
 | `POSTGRES_USER` | Docker Compose DB user |
 | `POSTGRES_DB` | Docker Compose DB name |
@@ -182,6 +183,11 @@ Optional `.env` overrides:
 | `SYNTHID_WATERMARK_ENABLED` | `True` | SynthID flag (no implementation yet) |
 | `WORKER_POLL_INTERVAL_SECONDS` | `5` | QueueWorker poll interval |
 | `WORKER_LOCK_TIMEOUT_MINUTES` | `15` | Stuck job recovery timeout |
+| `EVAL_RESEARCH_MODEL` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` | Eval research agent model (Together AI) |
+| `EVAL_COPYWRITER_MODEL` | `MiniMaxAI/MiniMax-M2.7` | Eval copywriter agent model (Together AI) |
+| `EVAL_RED_TEAM_MODEL` | `openai/gpt-oss-120b` | Eval Red Team agent model (Together AI) |
+| `EVAL_OPTIMIZER_MODEL` | `openai/gpt-oss-20b` | eval optimizer model (Together AI) |
+| `EVAL_JUDGE_MODEL` | `Qwen/Qwen3-235B-A22B-Instruct-2507-tput` | LLM-as-Judge model (Together AI) |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Frontend API base URL |
 | `WEB_PORT` | `3000` | Docker Compose web host port |
 
@@ -195,7 +201,7 @@ content-factory/                  # Nx workspace root
 │   ├── api/                      # Python FastAPI backend
 │   │   ├── app/
 │   │   │   main.py               # FastAPI app + lifespan (starts/stops QueueWorker)
-│   │   │   core/config.py        # pydantic-settings, reads .env
+│   │   │   core/config.py        # pydantic-settings, reads .env (eval model configs, Together AI)
 │   │   │   api/routes.py         # /api/v1/jobs/ endpoints + health check
 │   │   │   db/
 │   │   │     models.py           # SQLAlchemy models (factory schema)
@@ -203,7 +209,7 @@ content-factory/                  # Nx workspace root
 │   │   │     crud.py             # query helpers + queue operations
 │   │   │   schemas/shorts.py     # Pydantic request/response models
 │   │   │   services/
-│   │   │     llm.py              # LangChain + Gemini wrappers
+│   │   │     llm.py              # Multi-provider LLM routing (Gemini + Together AI)
 │   │   │     vector_store.py     # pgvector ingestion & semantic search
 │   │   │     chunking.py         # Markdown text splitter
 │   │   │     web_search.py       # TavilySearchService
@@ -247,9 +253,22 @@ The project uses pytest with `asyncio_mode = "auto"` and five custom markers:
 |--------|-------|-------|
 | `unit` | Core logic — chunking, config, CRUD, routes, queue worker, vector store | `tests/unit/` (6 files, ~55 tests) |
 | `agent` | Agent behavior — research, copywriter, red team, asset studio, optimizer | `tests/agents/` (5 files, ~21 tests) |
-| `eval` | AI quality metrics with DeepEval rubrics | `tests/evals/` (infrastructure: schemas, rubrics, fixtures) |
+| `eval` | Outcome evals with LLM-as-Judge scoring across pipeline stages | `tests/evals/` (4 test files, 34 parametrized cases) |
 | `golden` | Trajectory validation against golden dataset | `tests/golden/` (23+ cases across 6 categories) |
 | `integration` | End-to-end orchestrator flows | `tests/integration/` (CI-only) |
+
+### Outcome Eval Test Matrix
+
+| Test File | Cases | Pipeline Stage |
+|-----------|-------|----------------|
+| `test_outcome_research.py` | 14 (H-001..H-004, R-001..R-004, F-001..F-002, M-001..M-004) | ResearchAgent |
+| `test_outcome_script.py` | 6 (H-001..H-004, R-003, M-004) | CopywriterAgent |
+| `test_outcome_factcheck.py` | 10 (H-001..H-004, R-001..R-002, R-004, E-001, F-003, F-004) | RedTeamAgent |
+| `test_outcome_optimizer.py` | 4 (R-001, R-002, R-004, F-004) | ScriptOptimizerAgent |
+
+Eval modes:
+- **Golden mode** (default): Uses pre-recorded `reference_outputs` from `golden_dataset.json` — deterministic, fast, no API calls.
+- **Live mode** (`--live`): Runs real agents with LLM calls, scores live output. Use `--update-baselines` to refresh golden references.
 
 ### CI Pipeline (GitHub Actions)
 
@@ -283,7 +302,8 @@ lint → unit-tests + agent-tests (parallel) → eval-tests + integration-tests 
 - **Prompt Chaining (Semantic Memory)** — `refined_context` column on `render_jobs`; orchestrator mediates context between Research → Copywriter agents
 - **Evaluator-Optimizer Pattern** — Configurable models/temperatures via env vars for both Red Team and Optimizer agents
 - **Test Suite** — Unit (~55) + agent (~21) + integration tests with CI pipeline via GitHub Actions
-- **Eval Infrastructure** — Rubrics, schemas, golden dataset, and eval runner fixtures (test files pending)
+- **Eval Infrastructure** — LLM-as-Judge scoring (judge.py), deterministic assertions, rubrics, golden dataset (23+ cases), 4 outcome test files with 34 parametrized cases
+- **Multi-provider LLM** — Gemini (production) + Together AI (evals) routing via model name prefix. Configurable eval models for each agent stage
 - **Docker** — 4-service Compose stack (pgvector, pgAdmin, API, Web)
 
 ### Intentionally Deferred (Wizard of Oz MVP)
