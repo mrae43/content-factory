@@ -30,9 +30,7 @@ def _key_terms(text: str) -> List[str]:
     return [t for t in tokens if t not in _STOP_WORDS and len(t) > 2]
 
 
-def assert_must_include(
-    text: str, facts: List[str], min_overlap: float = 0.5
-) -> None:
+def assert_must_include(text: str, facts: List[str], min_overlap: float = 0.5) -> None:
     missing = []
     for fact in facts:
         terms = _key_terms(fact)

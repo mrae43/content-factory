@@ -168,7 +168,9 @@ async def test_research_outcome(
                     "dimensions": {},
                     "assertion_errors": assertion_errors,
                     "status": str(result.status.value),
-                    "word_count": len(refined_context.split()) if refined_context else 0,
+                    "word_count": len(refined_context.split())
+                    if refined_context
+                    else 0,
                 },
             )
 
