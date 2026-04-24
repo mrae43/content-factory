@@ -560,7 +560,7 @@ class AssetStudioAgent(BaseAgent):
 
         return AgentResult(
             status=AgentActionStatus.SUCCESS,
-            payload={"video_url": video_url, "prompts": result.dict()},
+            payload={"video_url": video_url, "prompts": result.model_dump()},
             reasoning="Visual/Audio directives optimized for cinematic output and data accuracy.",
             confidence_score=0.9,
             metadata={
