@@ -96,6 +96,7 @@ def mock_settings():
     with patch("app.core.config.Settings") as mock_cls:
         instance = MagicMock()
         instance.gemini_api_key = "test-gemini-key"
+        instance.together_api_key = "test-together-key"
         instance.tavily_api_key = "test-tavily-key"
         instance.synthid_watermark_enabled = True
         instance.max_red_team_revisions = 3
@@ -129,6 +130,7 @@ def override_settings():
         os.environ,
         {
             "GEMINI_API_KEY": "test-gemini-key",
+            "TOGETHER_API_KEY": "test-together-key",
             "TAVILY_API_KEY": "test-tavily-key",
         },
     ):

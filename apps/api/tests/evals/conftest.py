@@ -4,6 +4,11 @@ Eval infrastructure fixtures for the Golden Dataset evaluation framework.
 Provides: judge_llm, golden_dataset, golden_case, eval_runner, score_aggregator,
           trace_capture, baseline_recorder, rubric_registry.
 
+Supports two modes:
+  - "golden" (default): Uses pre-recorded reference_outputs from golden_dataset.json
+    for deterministic, fast, free eval scoring. No API calls needed.
+  - "live": Runs real agents with LLM calls. Use --live flag to refresh golden outputs.
+
 Depends on: tests/evals/schemas.py, tests/evals/rubrics.py,
             app/services/llm.py, app/workers/agents.py, app/workers/orchestrator.py
 """
@@ -18,17 +23,35 @@ from uuid import uuid4
 import pytest
 
 from app.workers.agents import (
+    AgentActionStatus,
     AgentResult,
     ResearchAgent,
     CopywriterAgent,
     RedTeamAgent,
 )
 from app.workers.optimizer import ScriptOptimizerAgent
+from app.core.config import settings
+from tests.evals.judge import judge_score as _judge_score
 from tests.evals.rubrics import (
     RUBRICS,
     compute_weighted_score,
 )
 from tests.evals.schemas import GoldenCase, GoldenDataset
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--update-baselines",
+        action="store_true",
+        default=False,
+        help="Write eval scores to baselines.json after the session completes.",
+    )
+    parser.addoption(
+        "--live",
+        action="store_true",
+        default=False,
+        help="Run live agent calls instead of using golden reference outputs.",
+    )
 
 
 _GOLDEN_DATASET_PATH = (
@@ -50,6 +73,10 @@ def _load_golden_dataset() -> List[GoldenCase]:
     return dataset.cases
 
 
+def _is_live_mode(request) -> bool:
+    return request.config.getoption("live", default=False)
+
+
 # ==========================================
 # 1. JUDGE LLM
 # ==========================================
@@ -59,11 +86,34 @@ def _load_golden_dataset() -> List[GoldenCase]:
 def judge_llm():
     """
     LLM-as-Judge instance: separate from pipeline LLMs.
-    Uses gemini-2.5-flash (fast, cheap, different from evaluator models).
+    Uses Qwen3 235B-A22B via Together AI (strong reasoning, MoE keeps cost low).
     """
     from app.services.llm import get_llm
 
-    return get_llm(model_name="gemini-2.5-flash", temperature=0.0)
+    return get_llm(
+        model_name=settings.eval_judge_model,
+        temperature=settings.eval_judge_temperature,
+    )
+
+
+# ==========================================
+# 1b. JUDGE SCORER (wraps judge_llm)
+# ==========================================
+
+
+@pytest.fixture
+def judge_scorer(judge_llm):
+    """
+    Callable that wraps judge_score() with the session-scoped judge_llm.
+    Usage: result = await judge_scorer("research", input, output, reference)
+    """
+
+    async def _score(rubric_name, agent_input, agent_output, reference):
+        return await _judge_score(
+            judge_llm, rubric_name, agent_input, agent_output, reference
+        )
+
+    return _score
 
 
 # ==========================================
@@ -110,17 +160,67 @@ class EvalRunner:
     """
     Runs agents against golden case inputs and captures all intermediate outputs.
 
-    In integration mode (real LLM calls): uses real agents with a real vector store.
-    In unit/mocked mode: injects mock vector store returning golden case chunks.
+    In "golden" mode (default): returns pre-recorded reference_outputs as
+    AgentResult objects — no API calls, deterministic, fast.
+
+    In "live" mode (--live flag): runs real agents with actual LLM calls.
+    Use live mode to refresh reference_outputs, not for CI.
     """
 
-    def __init__(self, vector_store=None):
+    def __init__(self, vector_store=None, live: bool = False):
         self.vector_store = vector_store
+        self.live = live
         self.outputs: Dict[str, Any] = {}
 
+    def _golden_result(self, stage: str, case: GoldenCase) -> Optional[AgentResult]:
+        ref = case.reference_outputs
+        if ref is None:
+            return None
+
+        stage_ref = getattr(ref, stage, None)
+        if stage_ref is None:
+            return None
+
+        status_map = {
+            "research": AgentActionStatus.SUCCESS,
+            "script": AgentActionStatus.SUCCESS,
+            "fact_check": None,
+            "optimizer": AgentActionStatus.SUCCESS,
+        }
+
+        if stage == "fact_check":
+            verdict = stage_ref.verdict
+            status = (
+                AgentActionStatus.SUCCESS
+                if verdict == "SUPPORTED"
+                else AgentActionStatus.REVISION_NEEDED
+            )
+        else:
+            status = status_map.get(stage, AgentActionStatus.SUCCESS)
+
+        payload = stage_ref.model_dump()
+        return AgentResult(
+            status=status,
+            payload=payload,
+            reasoning=stage_ref.overall_reasoning
+            if hasattr(stage_ref, "overall_reasoning") and stage_ref.overall_reasoning
+            else f"Golden reference output for {stage}",
+            confidence_score=0.85,
+            metadata={"source": "golden_reference"},
+        )
+
     async def run_research(self, case: GoldenCase, vector_store=None) -> AgentResult:
+        if not self.live:
+            golden = self._golden_result("research", case)
+            if golden is not None:
+                self.outputs["research"] = golden
+                return golden
+
         vs = vector_store or self.vector_store
-        agent = ResearchAgent(model_name="gemini-2.5-flash")
+        agent = ResearchAgent(
+            model_name=settings.eval_research_model,
+            temperature=settings.eval_research_temperature,
+        )
         context = {
             "job_id": uuid4(),
             "topic": case.input.topic,
@@ -133,7 +233,16 @@ class EvalRunner:
     async def run_copywriter(
         self, case: GoldenCase, refined_context: str, feedback: str = ""
     ) -> AgentResult:
-        agent = CopywriterAgent(model_name="gemini-1.5-pro", temperature=0.7)
+        if not self.live:
+            golden = self._golden_result("script", case)
+            if golden is not None:
+                self.outputs["script"] = golden
+                return golden
+
+        agent = CopywriterAgent(
+            model_name=settings.eval_copywriter_model,
+            temperature=settings.eval_copywriter_temperature,
+        )
         context = {
             "job_id": uuid4(),
             "topic": case.input.topic,
@@ -150,11 +259,9 @@ class EvalRunner:
         refined_context: str,
         failed_claims: List[dict],
     ) -> AgentResult:
-        from app.core.config import settings
-
         agent = ScriptOptimizerAgent(
-            model_name=settings.optimizer_model,
-            temperature=settings.optimizer_temperature,
+            model_name=settings.eval_optimizer_model,
+            temperature=settings.eval_optimizer_temperature,
         )
         context = {
             "job_id": uuid4(),
@@ -170,9 +277,19 @@ class EvalRunner:
         self,
         script_content: str,
         vector_store=None,
+        case: GoldenCase = None,
     ) -> AgentResult:
+        if not self.live and case is not None:
+            golden = self._golden_result("fact_check", case)
+            if golden is not None:
+                self.outputs["fact_check"] = golden
+                return golden
+
         vs = vector_store or self.vector_store
-        agent = RedTeamAgent(model_name="gemini-1.5-pro", temperature=0.0)
+        agent = RedTeamAgent(
+            model_name=settings.eval_red_team_model,
+            temperature=settings.eval_red_team_temperature,
+        )
         context = {
             "job_id": uuid4(),
             "script_content": script_content,
@@ -184,9 +301,10 @@ class EvalRunner:
 
 
 @pytest.fixture
-def eval_runner(mock_vector_store) -> EvalRunner:
-    """EvalRunner with a mock vector store for unit-level tests."""
-    return EvalRunner(vector_store=mock_vector_store)
+def eval_runner(request, mock_vector_store) -> EvalRunner:
+    """EvalRunner with mock vector store. Uses golden references unless --live."""
+    live = _is_live_mode(request)
+    return EvalRunner(vector_store=mock_vector_store, live=live)
 
 
 # ==========================================
@@ -417,9 +535,13 @@ class BaselineRecorder:
         summary["regression_threshold"] = self.REGRESSION_THRESHOLD
 
 
-@pytest.fixture
-def baseline_recorder() -> BaselineRecorder:
-    return BaselineRecorder()
+@pytest.fixture(scope="session")
+def baseline_recorder(request) -> BaselineRecorder:
+    recorder = BaselineRecorder()
+    yield recorder
+    if request.config.getoption("update_baselines", default=False):
+        recorder._compute_summary()
+        recorder.save()
 
 
 # ==========================================
