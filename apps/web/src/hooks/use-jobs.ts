@@ -1,45 +1,85 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 
-interface RenderJobResponse {
-  id: string;
-  status: string;
-  topic: string;
-  raw_text: string;
-  created_at: string;
-  updated_at: string;
-  scripts: ScriptResponse[];
-  claims: FactCheckClaimResponse[];
-  assets: AssetResponse[];
-}
+type JobStatusEnum =
+  | "PENDING"
+  | "RESEARCHING"
+  | "FACT_CHECKING_RESEARCH"
+  | "SCRIPTING"
+  | "FACT_CHECKING_SCRIPT"
+  | "ASSET_GENERATION"
+  | "COMPLETED"
+  | "FAILED"
+  | "HUMAN_REVIEW_NEEDED";
 
-interface ScriptResponse {
-  id: string;
-  content: string;
-  storyboard: string;
-  version: number;
-  created_at: string;
+type VerdictEnum = "SUPPORTED" | "CONTESTED" | "UNSUPPORTED" | "UNCERTAIN";
+
+type AssetTypeEnum =
+  | "VISUAL_VEO"
+  | "AUDIO_LYRIA"
+  | "VOICEOVER"
+  | "SUBTITLE_JSON"
+  | "DATA_CHART";
+
+interface AssetRenderMeta {
+  start_time_sec?: number | null;
+  end_time_sec?: number | null;
+  synthid_watermark?: string | null;
+  prompt_used?: string | null;
 }
 
 interface FactCheckClaimResponse {
   id: string;
   claim_text: string;
-  verdict: string;
-  evidence: string;
-  search_query: string;
+  verdict: VerdictEnum;
+  confidence: number;
+  evidence_references: string[];
+}
+
+interface ScriptResponse {
+  id: string;
+  version: number;
+  content: string;
+  is_approved: boolean;
+  feedback_history: Array<string | Record<string, unknown>>;
+  claims: FactCheckClaimResponse[];
+  created_at: string;
+  updated_at: string;
 }
 
 interface AssetResponse {
   id: string;
-  asset_type: string;
-  url: string;
-  prompt: string;
+  asset_type: AssetTypeEnum;
+  url_or_path: string;
+  render_meta: AssetRenderMeta;
+  created_at: string;
+}
+
+interface RenderJobResponse {
+  id: string;
+  topic: string;
+  status: JobStatusEnum;
+  strict_compliance_mode: boolean;
+  final_video_url: string | null;
+  refined_context: string | null;
+  error_log: Record<string, unknown> | null;
+  scripts: ScriptResponse[];
+  assets: AssetResponse[];
+  created_at: string;
+  updated_at: string;
+}
+
+interface PreContextPayload {
+  source_urls: string[];
+  raw_text?: string | null;
+  target_audience: string;
+  guardrail_strictness: string;
 }
 
 interface CreateJobRequest {
   topic: string;
-  raw_text: string;
-  platform_constraints?: Record<string, unknown>;
+  pre_context: PreContextPayload;
+  strict_compliance_mode?: boolean;
 }
 
 export function useJobs() {
@@ -81,9 +121,13 @@ export function useCreateJob() {
 export function useApproveScript(jobId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (scriptId: string) =>
-      apiClient(`/api/v1/jobs/${jobId}/approve-script/${scriptId}`, {
+    mutationFn: (vars: { isApproved: boolean; feedback?: string }) =>
+      apiClient(`/api/v1/jobs/${jobId}/approve-script`, {
         method: "POST",
+        body: JSON.stringify({
+          is_approved: vars.isApproved,
+          human_feedback: vars.feedback,
+        }),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["jobs", jobId] });
