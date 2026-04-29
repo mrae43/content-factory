@@ -261,3 +261,57 @@ class TestApproveScript:
 
         assert resp.status_code == 400
         assert "no script" in resp.json()["detail"].lower()
+
+
+@pytest.mark.unit
+class TestListRenderJobs:
+    async def test_should_return_200_with_empty_list(self, client, mock_db):
+        mock_count_result = MagicMock()
+        mock_count_result.scalar_one.return_value = 0
+        mock_list_result = MagicMock()
+        mock_list_result.unique.return_value.scalars.return_value.all.return_value = (
+            []
+        )
+        mock_db.execute.side_effect = [mock_count_result, mock_list_result]
+
+        resp = await client.get("/api/v1/jobs/")
+
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    async def test_should_return_jobs_in_reverse_chronological_order(
+        self, client, mock_db
+    ):
+        job1 = make_mock_job()
+        job2 = make_mock_job()
+        mock_count_result = MagicMock()
+        mock_count_result.scalar_one.return_value = 2
+        mock_list_result = MagicMock()
+        mock_list_result.unique.return_value.scalars.return_value.all.return_value = [
+            job2,
+            job1,
+        ]
+        mock_db.execute.side_effect = [mock_count_result, mock_list_result]
+
+        resp = await client.get("/api/v1/jobs/")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 2
+
+    async def test_should_filter_by_status(self, client, mock_db):
+        job = make_mock_job(status=JobStatusEnum.COMPLETED)
+        mock_count_result = MagicMock()
+        mock_count_result.scalar_one.return_value = 1
+        mock_list_result = MagicMock()
+        mock_list_result.unique.return_value.scalars.return_value.all.return_value = [
+            job,
+        ]
+        mock_db.execute.side_effect = [mock_count_result, mock_list_result]
+
+        resp = await client.get("/api/v1/jobs/?status=COMPLETED")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["status"] == "COMPLETED"
