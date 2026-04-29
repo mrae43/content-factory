@@ -71,9 +71,7 @@ async def list_jobs(
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
 ):
-    jobs, _total = await crud_list_jobs(
-        db, status=status, limit=limit, offset=offset
-    )
+    jobs, _total = await crud_list_jobs(db, status=status, limit=limit, offset=offset)
     return jobs
 
 

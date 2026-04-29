@@ -269,9 +269,7 @@ class TestListRenderJobs:
         mock_count_result = MagicMock()
         mock_count_result.scalar_one.return_value = 0
         mock_list_result = MagicMock()
-        mock_list_result.unique.return_value.scalars.return_value.all.return_value = (
-            []
-        )
+        mock_list_result.unique.return_value.scalars.return_value.all.return_value = []
         mock_db.execute.side_effect = [mock_count_result, mock_list_result]
 
         resp = await client.get("/api/v1/jobs/")
