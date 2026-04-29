@@ -1,7 +1,7 @@
 from uuid import UUID
 from datetime import datetime, timezone
 from typing import List, Optional
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -31,6 +31,34 @@ async def get_render_job(db: AsyncSession, job_id: UUID) -> Optional[RenderJob]:
     )
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
+
+
+async def list_render_jobs(
+    db: AsyncSession,
+    status: Optional[JobStatusEnum] = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[list[RenderJob], int]:
+    count_stmt = select(func.count()).select_from(RenderJob)
+    if status:
+        count_stmt = count_stmt.filter(RenderJob.status == status)
+    total_result = await db.execute(count_stmt)
+    total = total_result.scalar_one()
+
+    query = (
+        select(RenderJob)
+        .options(selectinload(RenderJob.scripts))
+        .order_by(RenderJob.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    if status:
+        query = query.filter(RenderJob.status == status)
+
+    result = await db.execute(query)
+    jobs = result.unique().scalars().all()
+
+    return list(jobs), total
 
 
 async def update_job_status(db: AsyncSession, job_id: UUID, status: JobStatusEnum):

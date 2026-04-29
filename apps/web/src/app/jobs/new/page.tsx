@@ -17,7 +17,16 @@ export default function NewJobPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const result = await createJob.mutateAsync({ topic, raw_text: rawText });
+    const result = await createJob.mutateAsync({
+      topic,
+      pre_context: {
+        raw_text: rawText,
+        source_urls: [],
+        target_audience: "General",
+        guardrail_strictness: "High",
+      },
+      strict_compliance_mode: true,
+    });
     router.push(`/jobs/${result.id}`);
   };
 

@@ -20,6 +20,8 @@ export default function JobDetailPage({
     return <div className="text-muted-foreground">Loading job...</div>;
   }
 
+  const allClaims = job.scripts.flatMap((s) => s.claims);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -57,18 +59,18 @@ export default function JobDetailPage({
         </Card>
       )}
 
-      {job.claims.length > 0 && (
+      {allClaims.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-lg font-semibold">
-            Fact Check Claims ({job.claims.length})
+            Fact Check Claims ({allClaims.length})
           </h3>
-          {job.claims.map((claim) => (
+          {allClaims.map((claim) => (
             <ClaimCard
               key={claim.id}
               claim_text={claim.claim_text}
               verdict={claim.verdict}
-              evidence={claim.evidence}
-              search_query={claim.search_query}
+              confidence={claim.confidence}
+              evidence_references={claim.evidence_references}
             />
           ))}
         </div>
@@ -86,7 +88,14 @@ export default function JobDetailPage({
               {job.assets.map((asset) => (
                 <div key={asset.id} className="rounded-lg border p-3">
                   <Badge className="mb-2">{asset.asset_type}</Badge>
-                  <p className="text-xs text-muted-foreground">{asset.prompt}</p>
+                  <p className="text-xs text-muted-foreground break-all">
+                    {asset.url_or_path}
+                  </p>
+                  {asset.render_meta?.prompt_used && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {asset.render_meta.prompt_used}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>
