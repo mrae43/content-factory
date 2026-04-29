@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException, Depends, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +15,7 @@ from app.schemas.shorts import (
 )
 from app.db.models import RenderJob, Script
 from app.db.session import get_db
+from app.db.crud import list_render_jobs as crud_list_jobs
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +58,23 @@ async def create_render_job(
         raise HTTPException(
             status_code=500, detail=f"Database transaction failed: {str(e)}"
         )
+
+
+@router.get(
+    "/",
+    response_model=list[RenderJobResponse],
+    status_code=status.HTTP_200_OK,
+)
+async def list_jobs(
+    status: Optional[JobStatusEnum] = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db),
+):
+    jobs, _total = await crud_list_jobs(
+        db, status=status, limit=limit, offset=offset
+    )
+    return jobs
 
 
 @router.get(
