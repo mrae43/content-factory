@@ -17,6 +17,9 @@ export default function JobDetailPage({
 }) {
   const { id } = use(params);
   const { data: job, isLoading } = useJobDetail(id);
+  const approvalMutation = useApproveScript(id);
+  const [feedbackText, setFeedbackText] = useState("");
+  const [showRejectForm, setShowRejectForm] = useState(false);
 
   if (isLoading || !job) {
     return <div className="text-muted-foreground">Loading job...</div>;
@@ -45,6 +48,30 @@ export default function JobDetailPage({
           <StateMachineProgress currentStatus={job.status} />
         </CardContent>
       </Card>
+
+      {job.status === "FAILED" && job.error_log && (
+        <Card className="border-red-300 bg-red-50">
+          <CardHeader>
+            <CardTitle className="text-sm text-red-800">Error Log</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <pre className="whitespace-pre-wrap text-sm text-red-900">
+              {JSON.stringify(job.error_log, null, 2)}
+            </pre>
+          </CardContent>
+        </Card>
+      )}
+
+      {job.refined_context && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Research Summary (refined_context)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <pre className="whitespace-pre-wrap text-sm">{job.refined_context}</pre>
+          </CardContent>
+        </Card>
+      )}
 
       {job.scripts.length > 0 && (
         <Card>
@@ -76,6 +103,70 @@ export default function JobDetailPage({
             />
           ))}
         </div>
+      )}
+
+      {(job.status === "HUMAN_REVIEW_NEEDED" || job.status === "FACT_CHECKING_SCRIPT") && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Script Review</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Review the script and claims above, then approve or request a revision.
+            </p>
+            {approvalMutation.isError && (
+              <p className="text-sm text-red-600">
+                Error: {(approvalMutation.error as Error)?.message || "Failed to submit"}
+              </p>
+            )}
+            {showRejectForm ? (
+              <div className="space-y-3">
+                <Textarea
+                  placeholder="Optional feedback for the script agent..."
+                  value={feedbackText}
+                  onChange={(e) => setFeedbackText(e.target.value)}
+                />
+                <div className="flex gap-2">
+                  <Button
+                    variant="destructive"
+                    disabled={approvalMutation.isPending}
+                    onClick={() => {
+                      approvalMutation.mutate(
+                        { isApproved: false, feedback: feedbackText || undefined },
+                        { onSettled: () => { setShowRejectForm(false); setFeedbackText(""); } }
+                      );
+                    }}
+                  >
+                    {approvalMutation.isPending ? "Submitting..." : "Confirm Revision"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowRejectForm(false)}
+                    disabled={approvalMutation.isPending}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <Button
+                  disabled={approvalMutation.isPending}
+                  onClick={() => approvalMutation.mutate({ isApproved: true })}
+                >
+                  {approvalMutation.isPending ? "Approving..." : "Approve Script"}
+                </Button>
+                <Button
+                  variant="destructive"
+                  disabled={approvalMutation.isPending}
+                  onClick={() => setShowRejectForm(true)}
+                >
+                  Request Revision
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {job.assets.length > 0 && (
