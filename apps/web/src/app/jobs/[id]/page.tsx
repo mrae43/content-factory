@@ -1,12 +1,14 @@
 "use client";
 
-import { useJobDetail } from "@/hooks/use-jobs";
-import { use } from "react";
+import { useJobDetail, useApproveScript } from "@/hooks/use-jobs";
+import { use, useState } from "react";
 import { JobStatusBadge } from "@/components/jobs/job-status-badge";
 import { StateMachineProgress } from "@/components/jobs/state-machine-progress";
 import { ClaimCard } from "@/components/script/claim-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 
 export default function JobDetailPage({
   params,
