@@ -178,3 +178,6 @@ out/
 
 # uv
 *.python-version
+
+# Graphify - local knowledge graph
+graphify-out/
