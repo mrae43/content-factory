@@ -8,8 +8,10 @@ def _find_repo_root() -> Path:
     for _ in range(10):
         if (p / ".env").exists() or (p / "nx.json").exists():
             return p
+        if p.parent == p:
+            break
         p = p.parent
-    return Path(__file__).resolve().parents[4]
+    return p
 
 
 _REPO_ROOT = _find_repo_root()
