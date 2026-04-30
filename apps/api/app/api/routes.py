@@ -139,11 +139,14 @@ async def approve_script(
 
         stmt = (
             select(RenderJob)
-            .options(selectinload(RenderJob.scripts))
+            .options(
+                selectinload(RenderJob.scripts).selectinload(Script.claims),
+                selectinload(RenderJob.assets),
+            )
             .filter(RenderJob.id == job.id)
         )
         result = await db.execute(stmt)
-        job = result.scalar_one()
+        job = result.unique().scalar_one()
 
     else:
         job.status = JobStatusEnum.SCRIPTING
@@ -159,10 +162,13 @@ async def approve_script(
 
         stmt = (
             select(RenderJob)
-            .options(selectinload(RenderJob.scripts))
+            .options(
+                selectinload(RenderJob.scripts).selectinload(Script.claims),
+                selectinload(RenderJob.assets),
+            )
             .filter(RenderJob.id == job.id)
         )
         result = await db.execute(stmt)
-        job = result.scalar_one()
+        job = result.unique().scalar_one()
 
     return job

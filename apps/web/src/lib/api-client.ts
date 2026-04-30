@@ -10,7 +10,9 @@ async function apiClient<T>(
 ): Promise<T> {
   const { params, ...fetchOptions } = options;
 
-  const url = new URL(`${API_BASE}${endpoint}`, "http://localhost:3000");
+  const url = API_BASE
+    ? new URL(`${API_BASE}${endpoint}`)
+    : new URL(endpoint, window.location.origin);
   if (params) {
     Object.entries(params).forEach(([key, value]) =>
       url.searchParams.set(key, value)

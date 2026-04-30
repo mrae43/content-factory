@@ -83,10 +83,10 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:${API_PORT:-8000}
     container_name: factory_web
     restart: unless-stopped
-    environment:
-      - NEXT_PUBLIC_API_URL=http://api:8000
     ports:
       - "${WEB_PORT:-3000}:3000"
     networks:

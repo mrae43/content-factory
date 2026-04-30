@@ -114,6 +114,7 @@ celerybeat.pid
 
 # Environments
 .env
+.env.local
 .venv
 env/
 venv/
@@ -178,3 +179,6 @@ out/
 
 # uv
 *.python-version
+
+# Graphify - local knowledge graph
+graphify-out/

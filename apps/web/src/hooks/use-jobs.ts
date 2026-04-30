@@ -63,6 +63,7 @@ interface RenderJobResponse {
   final_video_url: string | null;
   refined_context: string | null;
   error_log: Record<string, unknown> | null;
+  pre_context: Record<string, unknown> | null;
   scripts: ScriptResponse[];
   assets: AssetResponse[];
   created_at: string;
