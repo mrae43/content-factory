@@ -20,6 +20,7 @@ def make_mock_job(**overrides):
         "final_video_url": None,
         "refined_context": None,
         "error_log": None,
+        "pre_context": {},
         "scripts": [],
         "assets": [],
         "created_at": datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
