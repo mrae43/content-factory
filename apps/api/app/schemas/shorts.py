@@ -166,7 +166,9 @@ class RenderJobResponse(BaseModel):
     final_video_url: Optional[str]
     refined_context: Optional[str] = None
     error_log: Optional[Dict[str, Any]]
-    pre_context: Optional[Dict[str, Any]] = Field(None, description="Original user-provided context")
+    pre_context: Optional[Dict[str, Any]] = Field(
+        None, description="Original user-provided context"
+    )
 
     # We only expose the most recently active script to keep payloads light
     scripts: List[ScriptResponse] = Field(default_factory=list)

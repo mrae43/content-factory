@@ -44,7 +44,11 @@ class BaseAgent(ABC):
     Abstract Base Agent leveraging LangChain and Gemini 2.5 Flash.
     """
 
-    def __init__(self, model_name: str = "meta-llama/Llama-3.3-70B-Instruct-Turbo", temperature: float = 0.2):
+    def __init__(
+        self,
+        model_name: str = "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        temperature: float = 0.2,
+    ):
         self.model_name = model_name
         self.temperature = temperature
         self.llm = get_llm(model_name=self.model_name, temperature=self.temperature)

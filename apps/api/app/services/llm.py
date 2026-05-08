@@ -7,7 +7,8 @@ _TOGETHER_BASE_URL = "https://api.together.xyz/v1"
 
 
 def get_llm(
-    model_name: str = "meta-llama/Llama-3.3-70B-Instruct-Turbo", temperature: float = 0.2
+    model_name: str = "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    temperature: float = 0.2,
 ) -> BaseChatModel:
     if model_name.startswith("gemini"):
         return ChatGoogleGenerativeAI(

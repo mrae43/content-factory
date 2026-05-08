@@ -33,6 +33,7 @@ logging.config.dictConfig(LOGGING_CONFIG)
 
 worker = QueueWorker()
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await worker.start()
