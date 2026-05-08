@@ -47,7 +47,10 @@ async def list_render_jobs(
 
     query = (
         select(RenderJob)
-        .options(selectinload(RenderJob.scripts))
+        .options(
+            selectinload(RenderJob.scripts).selectinload(Script.claims),
+            selectinload(RenderJob.assets),
+        )
         .order_by(RenderJob.created_at.desc())
         .limit(limit)
         .offset(offset)
