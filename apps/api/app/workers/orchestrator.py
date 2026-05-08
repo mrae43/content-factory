@@ -128,7 +128,10 @@ async def _transition_researching(db: AsyncSession, job) -> None:
                 },
             )
 
-    researcher = ResearchAgent(model_name="gemini-2.5-flash")
+    researcher = ResearchAgent(
+        model_name=settings.research_model,
+        temperature=settings.research_temperature,
+    )
     agent_context = {
         "job_id": job.id,
         "topic": job.topic,
@@ -176,7 +179,10 @@ async def _transition_scripting(db: AsyncSession, job) -> None:
 
 
 async def _run_copywriter(db: AsyncSession, job, feedback: str = "") -> None:
-    copywriter = CopywriterAgent(model_name="gemini-1.5-pro", temperature=0.7)
+    copywriter = CopywriterAgent(
+        model_name=settings.copywriter_model,
+        temperature=settings.copywriter_temperature,
+    )
     agent_context = {
         "job_id": job.id,
         "topic": job.topic,
@@ -218,7 +224,10 @@ async def _run_optimizer(
 
 
 async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
-    red_team = RedTeamAgent(model_name="gemini-1.5-pro", temperature=0.0)
+    red_team = RedTeamAgent(
+        model_name=settings.evaluator_model,
+        temperature=settings.evaluator_temperature,
+    )
     vector_store = ContentFactoryVectorStore(db)
 
     latest_script_obj = await get_latest_script(db, job.id)
@@ -285,7 +294,10 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
 
 
 async def _transition_asset_generation(db: AsyncSession, job) -> None:
-    studio = AssetStudioAgent(model_name="gemini-2.5-flash")
+    studio = AssetStudioAgent(
+        model_name=settings.asset_model,
+        temperature=settings.asset_temperature,
+    )
     result = await studio.run(context={"job_id": job.id})
 
     if result.status == AgentActionStatus.SUCCESS:
