@@ -216,8 +216,8 @@
         },
         "expected_failed_count": {
           "type": "integer",
-          "minimum": 1,
-          "description": "How many claims should fail in this revision cycle"
+          "minimum": 0,
+          "description": "How many claims should fail in this revision cycle (0 for string feedback)"
         },
         "expected_verdicts": {
           "type": "array",
