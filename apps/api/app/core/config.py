@@ -33,11 +33,17 @@ class Settings(BaseSettings):
     max_red_team_revisions: int = 3
     similarity_threshold: float = 0.75
 
-    # Evaluator-Optimizer Model Configuration
-    evaluator_model: str = "gemini-1.5-pro"
+    # Agent Model Configuration (Together AI)
+    research_model: str = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
+    research_temperature: float = 0.2
+    copywriter_model: str = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
+    copywriter_temperature: float = 0.7
+    evaluator_model: str = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
     evaluator_temperature: float = 0.0
-    optimizer_model: str = "gemini-2.5-flash"
+    optimizer_model: str = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
     optimizer_temperature: float = 0.3
+    asset_model: str = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
+    asset_temperature: float = 0.5
 
     # Eval Model Configuration (Together AI)
     eval_research_model: str = "meta-llama/Llama-3.3-70B-Instruct-Turbo"

@@ -157,7 +157,9 @@ class FeedbackHistorySpec(BaseModel):
     feedback_type: str = Field(
         "structured_claims", description="Expected feedback_type value"
     )
-    expected_failed_count: int = Field(..., description="How many claims should fail")
+    expected_failed_count: int = Field(
+        ..., ge=0, description="How many claims should fail (0 for string feedback)"
+    )
     expected_verdicts: List[EvalVerdict] = Field(
         default_factory=list, description="Expected verdicts for failed claims"
     )

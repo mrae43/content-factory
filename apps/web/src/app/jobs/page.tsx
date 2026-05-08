@@ -10,15 +10,17 @@ const statusFilters = [
   "all",
   "PENDING",
   "RESEARCHING",
+  "FACT_CHECKING_RESEARCH",
   "SCRIPTING",
   "FACT_CHECKING_SCRIPT",
   "ASSET_GENERATION",
   "COMPLETED",
   "HUMAN_REVIEW_NEEDED",
+  "FAILED",
 ];
 
 export default function JobsPage() {
-  const { data: jobs, isLoading } = useJobs();
+  const { data: jobs, isLoading, isError, error } = useJobs();
   const { selectedJobFilter, setJobFilter } = useUIStore();
 
   const filtered =
@@ -56,6 +58,10 @@ export default function JobsPage() {
 
       {isLoading ? (
         <div className="text-muted-foreground">Loading...</div>
+      ) : isError ? (
+        <p className="text-sm text-red-600">
+          Failed to load jobs: {error?.message}
+        </p>
       ) : (
         <div className="space-y-2">
           {filtered?.map((job) => (

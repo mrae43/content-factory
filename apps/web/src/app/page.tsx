@@ -6,10 +6,21 @@ import { JobStatusBadge } from "@/components/jobs/job-status-badge";
 import Link from "next/link";
 
 export default function HomePage() {
-  const { data: jobs, isLoading } = useJobs();
+  const { data: jobs, isLoading, isError, error } = useJobs();
 
   if (isLoading) {
     return <div className="text-muted-foreground">Loading...</div>;
+  }
+
+  if (isError) {
+    return (
+      <div className="space-y-6">
+        <h2 className="text-2xl font-bold">Dashboard</h2>
+        <p className="text-sm text-red-600">
+          Failed to load jobs: {error?.message}
+        </p>
+      </div>
+    );
   }
 
   const activeJobs = jobs?.filter(
