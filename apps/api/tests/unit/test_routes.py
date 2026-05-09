@@ -191,7 +191,7 @@ class TestApproveScript:
         mock_result_1 = MagicMock()
         mock_result_1.unique.return_value.scalar_one_or_none.return_value = job
         mock_result_2 = MagicMock()
-        mock_result_2.scalar_one.return_value = job
+        mock_result_2.unique.return_value.scalar_one.return_value = job
         mock_db.execute.side_effect = [mock_result_1, mock_result_2]
 
         resp = await client.post(
@@ -216,7 +216,7 @@ class TestApproveScript:
         mock_result_1 = MagicMock()
         mock_result_1.unique.return_value.scalar_one_or_none.return_value = job
         mock_result_2 = MagicMock()
-        mock_result_2.scalar_one.return_value = job
+        mock_result_2.unique.return_value.scalar_one.return_value = job
         mock_db.execute.side_effect = [mock_result_1, mock_result_2]
 
         resp = await client.post(
