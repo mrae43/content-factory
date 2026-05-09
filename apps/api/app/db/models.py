@@ -94,6 +94,9 @@ class RenderJob(Base):
     refined_context = Column(Text, nullable=True)
     error_log = Column(JSONB, nullable=True)
 
+    format_type = Column(String, nullable=False, server_default="all")
+    platform = Column(String, nullable=True)
+
     created_at = Column(
         DateTime(timezone=True), server_default=text("now()"), nullable=False
     )
@@ -176,6 +179,9 @@ class Script(Base):
 
     # Agentic Reflection Loop history
     feedback_history = Column(JSONB, nullable=False, server_default="[]")
+
+    format_type = Column(String, nullable=False, server_default="VIDEO")
+    format_payload = Column(JSONB, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
     updated_at = Column(DateTime(timezone=True), server_default=text("now()"))
