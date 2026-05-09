@@ -15,6 +15,9 @@ env:
   NODE_VERSION: "22"
   GEMINI_API_KEY: "ci-dummy-key"
   TAVILY_API_KEY: "ci-dummy-key"
+  TEST_DB_SYNC: postgresql+psycopg2://postgres:postgres@localhost:5432/content_factory_test
+  TEST_DB_ASYNC: postgresql+asyncpg://postgres:postgres@localhost:5432/content_factory_test
+  DUMMY_DB: postgresql://localhost/test
 
 jobs:
   lint-python:
@@ -55,10 +58,10 @@ jobs:
       - run: cd apps/api && pip install -e ".[test]"
       - run: cd apps/api && alembic upgrade head
         env:
-          DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/content_factory_test
+          DATABASE_URL: ${{ env.TEST_DB_SYNC }}
       - run: cd apps/api && pytest tests/ -v -m unit --tb=short -x || [ $? -eq 5 ]
         env:
-          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/content_factory_test
+          DATABASE_URL: ${{ env.TEST_DB_ASYNC }}
           GEMINI_API_KEY: ${{ env.GEMINI_API_KEY }}
           TAVILY_API_KEY: ${{ env.TAVILY_API_KEY }}
 
@@ -74,6 +77,7 @@ jobs:
       - run: cd apps/api && pip install -e ".[test]"
       - run: cd apps/api && pytest tests/ -v -m agent --tb=short -x || [ $? -eq 5 ]
         env:
+          DATABASE_URL: ${{ env.DUMMY_DB }}
           GEMINI_API_KEY: ${{ env.GEMINI_API_KEY }}
           TAVILY_API_KEY: ${{ env.TAVILY_API_KEY }}
 
@@ -103,10 +107,10 @@ jobs:
       - run: cd apps/api && pip install -e ".[test]"
       - run: cd apps/api && alembic upgrade head
         env:
-          DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/content_factory_test
+          DATABASE_URL: ${{ env.TEST_DB_SYNC }}
       - run: cd apps/api && pytest tests/ -v -m integration --tb=short -x
         env:
-          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/content_factory_test
+          DATABASE_URL: ${{ env.TEST_DB_ASYNC }}
           GEMINI_API_KEY: ${{ env.GEMINI_API_KEY }}
           TAVILY_API_KEY: ${{ env.TAVILY_API_KEY }}
 
