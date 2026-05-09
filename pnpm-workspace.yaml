@@ -1,3 +1,11 @@
 packages:
   - "apps/*"
   - "libs/*"
+
+allowBuilds:
+  "@parcel/watcher": true
+  less: true
+  msw: true
+  nx: true
+  sharp: true
+  unrs-resolver: true
