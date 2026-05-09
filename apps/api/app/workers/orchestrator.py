@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import traceback
 from uuid import UUID
@@ -8,13 +9,16 @@ from app.db.crud import (
     update_job_status,
     log_error,
     save_script,
+    save_format_script,
     get_latest_script,
+    get_script_claims,
     append_script_feedback,
     save_fact_check_claims,
 )
 from app.services.vector_store import ContentFactoryVectorStore
 from app.services.web_search import TavilySearchService
 from app.services.chunking import process_extraction_job
+from app.services.format_validator import BlogValidator, CarouselValidator
 from app.workers.tasks import cleanup_local_research_chunks
 from app.workers.agents import (
     ResearchAgent,
@@ -24,7 +28,9 @@ from app.workers.agents import (
     AgentActionStatus,
 )
 from app.workers.optimizer import ScriptOptimizerAgent
-from app.schemas.shorts import JobStatusEnum
+from app.workers.formatters import BlogFormatterAgent, CarouselFormatterAgent
+from app.workers.harness import FormatterHarness
+from app.schemas.shorts import JobStatusEnum, next_status_after_fact_check
 from app.core.config import settings
 
 logger = logging.getLogger("factory.orchestrator")
@@ -54,6 +60,9 @@ async def execute_state_transition(db: AsyncSession, job) -> None:
 
         elif job.status == JobStatusEnum.FACT_CHECKING_SCRIPT:
             await _transition_fact_checking_script(db, job)
+
+        elif job.status == JobStatusEnum.FORMATTING:
+            await _transition_formatting(db, job)
 
         elif job.status == JobStatusEnum.ASSET_GENERATION:
             await _transition_asset_generation(db, job)
@@ -253,9 +262,11 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
 
         logger.info(
             f"Red Team Approved for Job {job.id}. "
-            f"{len(claims_data)} claims persisted. Proceeding to Asset Gen."
+            f"{len(claims_data)} claims persisted. Proceeding to {next_status_after_fact_check(job.format_type).value}."
         )
-        await update_job_status(db, job.id, JobStatusEnum.ASSET_GENERATION)
+        await update_job_status(
+            db, job.id, next_status_after_fact_check(job.format_type)
+        )
 
     elif result.status == AgentActionStatus.REVISION_NEEDED:
         claims_data = result.payload.get("claims", [])
@@ -324,3 +335,140 @@ async def _resolve_evidence_refs(
                 for m in matches
                 if m.get("similarity_score", 0) >= settings.similarity_threshold
             ]
+
+
+def _next_status_after_formatting(format_type: str) -> JobStatusEnum:
+    fmt = (format_type or "all").lower()
+    if fmt == "all":
+        return JobStatusEnum.ASSET_GENERATION
+    return JobStatusEnum.COMPLETED
+
+
+async def _transition_formatting(db: AsyncSession, job) -> None:
+    latest_script = await get_latest_script(db, job.id)
+    if not latest_script:
+        raise Exception(f"No script found for Job {job.id} at FORMATTING stage")
+
+    verified_claims = await get_script_claims(db, latest_script.id)
+
+    base_context = {
+        "script_content": latest_script.content,
+        "refined_context": job.refined_context or "",
+        "verified_claims": verified_claims,
+        "platform": job.platform or "",
+    }
+
+    format_type = (job.format_type or "all").lower()
+    formatter_specs: list[tuple[str, FormatterHarness, dict]] = []
+
+    if format_type in ("blog", "all"):
+        blog_ctx = {**base_context, "format_type": "blog"}
+        blog_harness = FormatterHarness(
+            formatter=BlogFormatterAgent(
+                model_name=settings.formatter_model,
+                temperature=settings.formatter_temperature,
+            ),
+            validator=BlogValidator(),
+            max_retries=2,
+        )
+        formatter_specs.append(("BLOG", blog_harness, blog_ctx))
+
+    if format_type in ("carousel", "all"):
+        carousel_ctx = {
+            **base_context,
+            "format_type": "carousel",
+            "platform": job.platform or "default",
+        }
+        carousel_harness = FormatterHarness(
+            formatter=CarouselFormatterAgent(
+                model_name=settings.formatter_model,
+                temperature=settings.formatter_temperature,
+            ),
+            validator=CarouselValidator(platform=job.platform or "default"),
+            max_retries=2,
+        )
+        formatter_specs.append(("CAROUSEL", carousel_harness, carousel_ctx))
+
+    if not formatter_specs:
+        logger.warning(
+            f"No formatters configured for format_type='{format_type}' on Job {job.id}"
+        )
+        await update_job_status(
+            db, job.id, _next_status_after_formatting(job.format_type)
+        )
+        return
+
+    logger.info(
+        f"Running {len(formatter_specs)} formatter(s) in parallel for Job {job.id} "
+        f"(format_type={format_type})"
+    )
+
+    harness_results = await asyncio.gather(
+        *[h.run_with_harness(ctx) for _, h, ctx in formatter_specs],
+        return_exceptions=True,
+    )
+
+    next_version = latest_script.version + 1
+    any_success = False
+
+    for i, raw_result in enumerate(harness_results):
+        fmt_name, harness, ctx = formatter_specs[i]
+
+        if isinstance(raw_result, Exception):
+            logger.error(
+                f"Formatter {fmt_name} threw exception for Job {job.id}: {raw_result}"
+            )
+            await save_format_script(
+                db,
+                job_id=job.id,
+                content=f"[{fmt_name} FORMATTING FAILED: {raw_result}]",
+                version=next_version,
+                format_type=fmt_name,
+                format_payload=None,
+                is_approved=False,
+            )
+            next_version += 1
+            continue
+
+        if raw_result.success:
+            title = raw_result.payload.get(
+                "title", raw_result.payload.get("thread_title", fmt_name)
+            )
+            await save_format_script(
+                db,
+                job_id=job.id,
+                content=title,
+                version=next_version,
+                format_type=fmt_name,
+                format_payload=raw_result.payload,
+                is_approved=True,
+            )
+            any_success = True
+            logger.info(
+                f"Formatter {fmt_name} succeeded for Job {job.id} "
+                f"(attempts={raw_result.attempts})"
+            )
+        else:
+            logger.error(
+                f"Formatter {fmt_name} failed for Job {job.id} after "
+                f"{raw_result.attempts} attempts: {raw_result.error_log}"
+            )
+            await save_format_script(
+                db,
+                job_id=job.id,
+                content=f"[{fmt_name} FORMATTING FAILED]",
+                version=next_version,
+                format_type=fmt_name,
+                format_payload=None,
+                is_approved=False,
+            )
+
+        next_version += 1
+
+    if not any_success:
+        raise Exception(
+            f"All formatters failed for Job {job.id}. "
+            "Failed script rows recorded."
+        )
+
+    await update_job_status(db, job.id, _next_status_after_formatting(job.format_type))

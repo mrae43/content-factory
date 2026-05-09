@@ -12,6 +12,7 @@ from app.schemas.shorts import (
     RenderJobResponse,
     ScriptApprovalRequest,
     JobStatusEnum,
+    next_status_after_fact_check,
 )
 from app.db.models import RenderJob, Script
 from app.db.session import get_db
@@ -34,6 +35,8 @@ async def create_render_job(
             topic=request.topic,
             pre_context=request.pre_context.model_dump(mode="json"),
             strict_compliance_mode=request.strict_compliance_mode,
+            format_type=request.format_type.value,
+            platform=request.platform.value if request.platform else None,
             status=JobStatusEnum.PENDING,
         )
         db.add(new_job)
@@ -134,7 +137,7 @@ async def approve_script(
 
     if request.is_approved:
         latest_script.is_approved = True
-        job.status = JobStatusEnum.ASSET_GENERATION
+        job.status = next_status_after_fact_check(job.format_type)
         await db.commit()
 
         stmt = (

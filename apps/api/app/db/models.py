@@ -30,6 +30,7 @@ JobStatusEnum = ENUM(
     "FACT_CHECKING_RESEARCH",
     "SCRIPTING",
     "FACT_CHECKING_SCRIPT",
+    "FORMATTING",
     "ASSET_GENERATION",
     "COMPLETED",
     "FAILED",
@@ -217,7 +218,8 @@ class FactCheckClaim(Base):
     verdict = Column(VerdictEnum, nullable=False)
     confidence = Column(Float, nullable=False)
 
-    # Link to the ResearchChunk IDs that support/contest this claim
+    evidence_text = Column(Text, nullable=True)
+
     evidence_references = Column(JSONB, nullable=False, server_default="[]")
 
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))

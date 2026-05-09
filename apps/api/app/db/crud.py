@@ -99,6 +99,42 @@ async def save_script(db: AsyncSession, job_id: UUID, content: str, version: int
     await db.commit()
 
 
+async def save_format_script(
+    db: AsyncSession,
+    job_id: UUID,
+    content: str,
+    version: int,
+    format_type: str = "VIDEO",
+    format_payload: Optional[dict] = None,
+    is_approved: bool = True,
+):
+    new_script = Script(
+        job_id=job_id,
+        content=content,
+        version=version,
+        is_approved=is_approved,
+        format_type=format_type,
+        format_payload=format_payload,
+    )
+    db.add(new_script)
+    await db.commit()
+
+
+async def get_script_claims(db: AsyncSession, script_id: UUID) -> list[dict]:
+    stmt = select(FactCheckClaim).where(FactCheckClaim.script_id == script_id)
+    result = await db.execute(stmt)
+    claims = result.scalars().all()
+    return [
+        {
+            "claim_text": c.claim_text,
+            "verdict": c.verdict,
+            "evidence_text": c.evidence_text or "",
+            "evidence_references": c.evidence_references,
+        }
+        for c in claims
+    ]
+
+
 async def append_script_feedback(
     db: AsyncSession,
     job_id: UUID,
@@ -135,6 +171,7 @@ async def save_fact_check_claims(
             claim_text=c["claim_text"],
             verdict=c["verdict"],
             confidence=c["confidence"],
+            evidence_text=c.get("evidence_text"),
             evidence_references=c.get("evidence_references", []),
         )
         for c in claims
