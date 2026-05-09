@@ -467,8 +467,7 @@ async def _transition_formatting(db: AsyncSession, job) -> None:
 
     if not any_success:
         raise Exception(
-            f"All formatters failed for Job {job.id}. "
-            "Failed script rows recorded."
+            f"All formatters failed for Job {job.id}. Failed script rows recorded."
         )
 
     await update_job_status(db, job.id, _next_status_after_formatting(job.format_type))
