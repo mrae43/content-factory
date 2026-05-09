@@ -1,5 +1,4 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Optional
 from pathlib import Path
 
 
@@ -26,7 +25,7 @@ class Settings(BaseSettings):
     gemini_api_key: str
     together_api_key: str = ""
     tavily_api_key: str
-    postgres_uri: Optional[str] = None
+    database_url: str
 
     # 2026 Governance & Compliance Standards
     synthid_watermark_enabled: bool = True

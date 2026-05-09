@@ -12,12 +12,34 @@ class _IsolatedSettings(Settings):
 _ENV_KEYS = [
     "GEMINI_API_KEY",
     "TAVILY_API_KEY",
+    "TOGETHER_API_KEY",
+    "DATABASE_URL",
     "POSTGRES_URI",
     "SYNTHID_WATERMARK_ENABLED",
     "MAX_RED_TEAM_REVISIONS",
     "SIMILARITY_THRESHOLD",
     "WORKER_POLL_INTERVAL_SECONDS",
     "WORKER_LOCK_TIMEOUT_MINUTES",
+    "RESEARCH_MODEL",
+    "RESEARCH_TEMPERATURE",
+    "COPYWRITER_MODEL",
+    "COPYWRITER_TEMPERATURE",
+    "EVALUATOR_MODEL",
+    "EVALUATOR_TEMPERATURE",
+    "OPTIMIZER_MODEL",
+    "OPTIMIZER_TEMPERATURE",
+    "ASSET_MODEL",
+    "ASSET_TEMPERATURE",
+    "EVAL_RESEARCH_MODEL",
+    "EVAL_RESEARCH_TEMPERATURE",
+    "EVAL_COPYWRITER_MODEL",
+    "EVAL_COPYWRITER_TEMPERATURE",
+    "EVAL_RED_TEAM_MODEL",
+    "EVAL_RED_TEAM_TEMPERATURE",
+    "EVAL_OPTIMIZER_MODEL",
+    "EVAL_OPTIMIZER_TEMPERATURE",
+    "EVAL_JUDGE_MODEL",
+    "EVAL_JUDGE_TEMPERATURE",
 ]
 
 
@@ -50,8 +72,12 @@ class TestSettings:
 
     def test_default_values(self, monkeypatch):
         _del_all_env(monkeypatch)
-        s = _IsolatedSettings(gemini_api_key="g", tavily_api_key="t")
-        assert s.postgres_uri is None
+        with pytest.raises(ValidationError):
+            _IsolatedSettings(gemini_api_key="g", tavily_api_key="t")
+
+        s = _IsolatedSettings(
+            gemini_api_key="g", tavily_api_key="t", database_url="postgresql://test"
+        )
         assert s.synthid_watermark_enabled is True
         assert s.max_red_team_revisions == 3
         assert s.similarity_threshold == 0.75
@@ -62,14 +88,14 @@ class TestSettings:
         s = Settings(
             gemini_api_key="g",
             tavily_api_key="t",
-            postgres_uri="postgresql://custom",
+            database_url="postgresql://custom",
             synthid_watermark_enabled=False,
             max_red_team_revisions=5,
             similarity_threshold=0.9,
             worker_poll_interval_seconds=10,
             worker_lock_timeout_minutes=30,
         )
-        assert s.postgres_uri == "postgresql://custom"
+        assert s.database_url == "postgresql://custom"
         assert s.synthid_watermark_enabled is False
         assert s.max_red_team_revisions == 5
         assert s.similarity_threshold == 0.9
