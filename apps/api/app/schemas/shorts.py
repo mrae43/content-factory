@@ -14,10 +14,18 @@ class JobStatusEnum(str, Enum):
     FACT_CHECKING_RESEARCH = "FACT_CHECKING_RESEARCH"
     SCRIPTING = "SCRIPTING"
     FACT_CHECKING_SCRIPT = "FACT_CHECKING_SCRIPT"
+    FORMATTING = "FORMATTING"
     ASSET_GENERATION = "ASSET_GENERATION"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
     HUMAN_REVIEW_NEEDED = "HUMAN_REVIEW_NEEDED"
+
+
+class FormatTypeEnum(str, Enum):
+    ALL = "all"
+    VIDEO = "video"
+    BLOG = "blog"
+    CAROUSEL = "carousel"
 
 
 class AssetTypeEnum(str, Enum):
@@ -33,6 +41,20 @@ class VerdictEnum(str, Enum):
     CONTESTED = "CONTESTED"
     UNSUPPORTED = "UNSUPPORTED"
     UNCERTAIN = "UNCERTAIN"
+
+
+class PlatformEnum(str, Enum):
+    TWITTER = "twitter"
+    LINKEDIN = "linkedin"
+    INSTAGRAM = "instagram"
+    YOUTUBE = "youtube"
+
+
+def next_status_after_fact_check(format_type: str) -> "JobStatusEnum":
+    fmt = (format_type or "all").lower()
+    if fmt == "video":
+        return JobStatusEnum.ASSET_GENERATION
+    return JobStatusEnum.FORMATTING
 
 
 # ==========================================
@@ -101,6 +123,13 @@ class JobCreateRequest(BaseModel):
     strict_compliance_mode: bool = Field(
         True, description="Enforce rigorous fact-checking"
     )
+    format_type: FormatTypeEnum = Field(
+        FormatTypeEnum.ALL,
+        description="Output format: all, video, blog, or carousel",
+    )
+    platform: Optional[PlatformEnum] = Field(
+        None, description="Target platform: twitter, linkedin, instagram, youtube"
+    )
 
 
 class ScriptApprovalRequest(BaseModel):
@@ -138,6 +167,8 @@ class ScriptResponse(BaseModel):
     is_approved: bool
     feedback_history: List[Union[str, Dict[str, Any]]]
     claims: List[FactCheckClaimResponse] = Field(default_factory=list)
+    format_type: Optional[str] = "VIDEO"
+    format_payload: Optional[Dict[str, Any]] = None
     created_at: datetime
     updated_at: datetime
 
@@ -163,6 +194,8 @@ class RenderJobResponse(BaseModel):
     topic: str
     status: JobStatusEnum
     strict_compliance_mode: bool
+    format_type: Optional[str] = "all"
+    platform: Optional[str] = None
     final_video_url: Optional[str]
     refined_context: Optional[str] = None
     error_log: Optional[Dict[str, Any]]

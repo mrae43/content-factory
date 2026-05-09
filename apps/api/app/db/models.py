@@ -30,6 +30,7 @@ JobStatusEnum = ENUM(
     "FACT_CHECKING_RESEARCH",
     "SCRIPTING",
     "FACT_CHECKING_SCRIPT",
+    "FORMATTING",
     "ASSET_GENERATION",
     "COMPLETED",
     "FAILED",
@@ -93,6 +94,9 @@ class RenderJob(Base):
     final_video_url = Column(String, nullable=True)
     refined_context = Column(Text, nullable=True)
     error_log = Column(JSONB, nullable=True)
+
+    format_type = Column(String, nullable=False, server_default="all")
+    platform = Column(String, nullable=True)
 
     created_at = Column(
         DateTime(timezone=True), server_default=text("now()"), nullable=False
@@ -177,6 +181,9 @@ class Script(Base):
     # Agentic Reflection Loop history
     feedback_history = Column(JSONB, nullable=False, server_default="[]")
 
+    format_type = Column(String, nullable=False, server_default="VIDEO")
+    format_payload = Column(JSONB, nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
     updated_at = Column(DateTime(timezone=True), server_default=text("now()"))
 
@@ -211,7 +218,8 @@ class FactCheckClaim(Base):
     verdict = Column(VerdictEnum, nullable=False)
     confidence = Column(Float, nullable=False)
 
-    # Link to the ResearchChunk IDs that support/contest this claim
+    evidence_text = Column(Text, nullable=True)
+
     evidence_references = Column(JSONB, nullable=False, server_default="[]")
 
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))

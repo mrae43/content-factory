@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     optimizer_temperature: float = 0.3
     asset_model: str = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
     asset_temperature: float = 0.5
+    formatter_model: str = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
+    formatter_temperature: float = 0.3
 
     # Eval Model Configuration (Together AI)
     eval_research_model: str = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
