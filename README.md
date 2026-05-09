@@ -71,7 +71,7 @@ LOCAL-scope vector chunks are cleaned up. The final job state, scripts, audit tr
 
 | Layer | Technology |
 |-------|-----------|
-| Monorepo | Nx workspace, pnpm |
+| Monorepo | Nx workspace, pnpm 11 (with `allowBuilds` in `pnpm-workspace.yaml`) |
 | Frontend | Next.js 16 (App Router), React Query, Zustand, shadcn/ui, Tailwind CSS v4 |
 | API | FastAPI (async, Pydantic V2), Python 3.11, uv |
 | Database | PostgreSQL 16 + pgvector (HNSW index, `factory` schema) |
@@ -98,7 +98,8 @@ cp .env.example .env
 # 2. Start all services (db + pgadmin + api + web)
 docker compose up -d
 
-# 3. Run migrations (DB must be running)
+# 3. Migrations auto-run on container start via entrypoint.sh
+# To generate new migrations or run manually:
 docker compose exec api alembic revision --autogenerate -m "description"
 docker compose exec api alembic upgrade head
 ```
@@ -121,6 +122,19 @@ pnpm build                       # Build all projects
 pnpm lint                        # Lint all projects
 pnpm lint:fix                    # Lint + auto-fix
 ```
+
+### Docker Service Access
+
+After `docker compose up -d`, services are available at:
+
+| Service | URL | Notes |
+|---------|-----|-------|
+| Web (Next.js) | http://localhost:3000 | Frontend dashboard |
+| API (FastAPI) | http://localhost:8000/docs | Swagger UI |
+| pgAdmin | http://localhost:5050 | Login with `PGADMIN_EMAIL` / `PGADMIN_PASSWORD` |
+| PostgreSQL | `127.0.0.1:5433` | Binary protocol only — use pgAdmin or a DB client, not a browser |
+
+**pgAdmin DB connection:** When adding a server in pgAdmin, use Host `db` and Port `5432` (Docker internal), **not** `localhost`. pgAdmin and the database share the `factory_isolated_net` bridge network.
 
 ### Run Tests
 
@@ -162,7 +176,7 @@ Required `.env` variables:
 | `GEMINI_API_KEY` | Mandatory — Google AI API key |
 | `TAVILY_API_KEY` | Mandatory — Tavily web search API key |
 | `TOGETHER_API_KEY` | Optional — Together AI API key (required for live eval mode) |
-| `DATABASE_URL` | Async connection string, e.g. `postgresql+asyncpg://postgres:postgres@localhost:5432/content_factory` |
+| `DATABASE_URL` | Async connection string, e.g. `postgresql+asyncpg://user:password@db:5432/content_factory` (Docker hostname `db` in container, `localhost` for local dev) |
 | `POSTGRES_USER` | Docker Compose DB user |
 | `POSTGRES_DB` | Docker Compose DB name |
 | `POSTGRES_PORT` | Docker Compose host port (default `5433`) |
@@ -201,11 +215,11 @@ content-factory/                  # Nx workspace root
 │   ├── api/                      # Python FastAPI backend
 │   │   ├── app/
 │   │   │   main.py               # FastAPI app + lifespan (starts/stops QueueWorker)
-│   │   │   core/config.py        # pydantic-settings, reads .env (eval model configs, Together AI)
+│   │   │   core/config.py        # pydantic-settings, reads .env (database_url — required, eval model configs)
 │   │   │   api/routes.py         # /api/v1/jobs/ endpoints + health check
 │   │   │   db/
 │   │   │     models.py           # SQLAlchemy models (factory schema)
-│   │   │     session.py          # async engine + session factory
+│   │   │     session.py          # async engine + session factory (settings.database_url)
 │   │   │     crud.py             # query helpers + queue operations
 │   │   │   schemas/shorts.py     # Pydantic request/response models
 │   │   │   services/
@@ -223,6 +237,8 @@ content-factory/                  # Nx workspace root
 │   │   ├── tests/                # Python test suite
 │   │   ├── scripts/              # Type generation scripts
 │   │   ├── pyproject.toml        # uv-managed Python deps
+│   │   ├── uv.lock               # Lockfile for deterministic Python builds
+│   │   ├── entrypoint.sh         # Auto-runs alembic upgrade head, then uvicorn
 │   │   ├── Dockerfile
 │   │   └── project.json          # Nx project config
 │   └── web/                      # Next.js frontend (App Router)
@@ -238,7 +254,8 @@ content-factory/                  # Nx workspace root
 │   └── shared-types/             # Auto-generated TS types from Pydantic schemas
 ├── nx.json                       # Nx workspace config
 ├── package.json                  # Root package (Nx + dev deps)
-├── pnpm-workspace.yaml           # pnpm workspace definition
+├── pnpm-lock.yaml                # Workspace lockfile (lockfileVersion 9.0, pnpm 11)
+├── pnpm-workspace.yaml           # pnpm workspace definition + allowBuilds for pnpm 11
 ├── tsconfig.base.json            # Shared TS config
 └── docker-compose.yml            # All services (db + pgadmin + api + web)
 ```
@@ -304,7 +321,7 @@ lint → unit-tests + agent-tests (parallel) → eval-tests + integration-tests 
 - **Test Suite** — Unit (~55) + agent (~21) + integration tests with CI pipeline via GitHub Actions
 - **Eval Infrastructure** — LLM-as-Judge scoring (judge.py), deterministic assertions, rubrics, golden dataset (23+ cases), 4 outcome test files with 34 parametrized cases
 - **Multi-provider LLM** — Gemini (production) + Together AI (evals) routing via model name prefix. Configurable eval models for each agent stage
-- **Docker** — 4-service Compose stack (pgvector, pgAdmin, API, Web)
+- **Docker** — 4-service Compose stack (pgvector, pgAdmin, API, Web). Migrations auto-run on API container start via `entrypoint.sh`. Single workspace lockfile at repo root (`apps/web/pnpm-lock.yaml` removed). pnpm 11 `allowBuilds` in `pnpm-workspace.yaml`.
 
 ### Intentionally Deferred (Wizard of Oz MVP)
 
