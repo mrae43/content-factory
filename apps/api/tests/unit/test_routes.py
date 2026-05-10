@@ -23,6 +23,8 @@ def make_mock_job(**overrides):
         "pre_context": {},
         "scripts": [],
         "assets": [],
+        "format_type": "all",
+        "platform": "youtube",
         "created_at": datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
         "updated_at": datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
     }
@@ -41,6 +43,8 @@ def make_mock_script(**overrides):
         "is_approved": False,
         "feedback_history": [],
         "claims": [],
+        "format_type": "VIDEO",
+        "format_payload": None,
         "created_at": datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
         "updated_at": datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
     }
@@ -186,6 +190,7 @@ class TestApproveScript:
         job = make_mock_job(
             status=JobStatusEnum.HUMAN_REVIEW_NEEDED,
             scripts=[script],
+            format_type="video",
         )
 
         mock_result_1 = MagicMock()
