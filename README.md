@@ -1,6 +1,6 @@
 # Content Factory
 
-Multi-agent system that generates short-form video content (Shorts/Reels/TikToks) for high-stakes domains — politics, macro-economics, historical analysis. Treats **Truth and Guardrails as first-class citizens** via a rigorous Red Team agentic loop that verifies claims against a vector database before any rendering occurs.
+Multi-agent system that generates multi-format content (Shorts/Reels/TikToks, blog articles, social carousels) for high-stakes domains — politics, macro-economics, historical analysis. Treats **Truth and Guardrails as first-class citizens** via a rigorous Red Team agentic loop that verifies claims against a vector database before any rendering occurs.
 
 **Nx monorepo** with a Python FastAPI backend, Next.js frontend, and shared TypeScript types.
 
@@ -12,12 +12,18 @@ Multi-agent system that generates short-form video content (Shorts/Reels/TikToks
 - **Governance-as-Code** — Full audit trail via `fact_check_claims` table with evidence references linked to source chunks. API returns the complete fact-check report alongside scripts and assets.
 - **Web-Enriched RAG** — Tavily search enriches user-provided context with live web results, ingested as vector chunks for semantic retrieval by downstream agents.
 - **Evaluator-Optimizer Pattern** — On revision, a dedicated `ScriptOptimizerAgent` surgically patches failed claims instead of re-drafting the entire script, preserving quality sections and reducing hallucination drift.
+- **Multi-Format Output** — Pipeline branches by `format_type` after Red Team approval: `video` (asset generation), `blog` (structured articles with SEO metadata), `carousel` (platform-specific slide decks), or `all` (blog + carousel in parallel, then assets). `FormatterHarness` wraps each formatter with generate-validate-retry loops and doom loop detection.
+- **Platform-Aware Validation** — `BlogValidator` and `CarouselValidator` enforce schema constraints and platform-specific character limits (Twitter 280, LinkedIn 700, Instagram 2200) before accepting output.
 
 ---
 
-## The 8-Step Pipeline
+## The 9-Step Pipeline
 
-A `RenderJob` flows through these state transitions asynchronously:
+A `RenderJob` flows through these state transitions asynchronously. After Red Team approval (Step 6), the pipeline branches by `format_type`:
+
+- **`video`** → skips FORMATTING, goes straight to ASSET_GENERATION
+- **`blog`** or **`carousel`** → FORMATTING → COMPLETED
+- **`all`** (default) → FORMATTING (blog + carousel in parallel) → ASSET_GENERATION → COMPLETED
 
 ### 1. Ingestion (`PENDING`)
 User submits a topic (e.g., *"BRICS De-dollarization 2025"*) along with pre-context (source URLs, raw text, audience target) via `POST /api/v1/jobs/`.
@@ -44,14 +50,24 @@ The critical step. The **Red Team Agent** (`gemini-1.5-pro`, temp=0.0, both conf
 3. **Verdict** — Evaluates each claim against enriched evidence
 
 Results:
-- **SUPPORTED** → Script passes, claims persisted to `fact_check_claims` table with evidence references
+- **SUPPORTED** → Script passes, claims persisted to `fact_check_claims` table with evidence references. Pipeline branches based on `format_type`.
 - **UNSUPPORTED/CONTESTED** → Script sent back to Step 5 with structured feedback. After 3 failures → `HUMAN_REVIEW_NEEDED`
 - Human override available via `POST /api/v1/jobs/{id}/approve-script`
 
-### 7. Asset Generation (`ASSET_GENERATION`)
+### 7. Format Output (`FORMATTING`)
+**Skipped for `video` format.** For `blog`, `carousel`, or `all` formats, structured output agents run:
+
+- **BlogFormatterAgent** — Two-phase LLM calls (plan outline → execute full output) producing structured blog sections with SEO metadata
+- **CarouselFormatterAgent** — Two-phase LLM calls producing platform-specific slide decks with character-limit enforcement
+
+Each formatter is wrapped in a **`FormatterHarness`** — a generate-validate-retry loop with doom loop detection (SHA-256 payload hashing). `BlogValidator` and `CarouselValidator` enforce schema constraints and platform rules. Max 2 retries (3 total attempts).
+
+When `format_type = "all"`, both formatters run concurrently via `asyncio.gather()`.
+
+### 8. Asset Generation (`ASSET_GENERATION`)
 **MVP: Mocked** — The **Asset Studio Agent** (`gemini-2.5-flash`) generates Veo/Lyria production prompts but returns a fake `s3://` URL. No real TTS, video rendering, or FFmpeg yet.
 
-### 8. Completion (`COMPLETED`)
+### 9. Completion (`COMPLETED`)
 LOCAL-scope vector chunks are cleaned up. The final job state, scripts, audit trail, and asset metadata are available via the API.
 
 ---
@@ -148,11 +164,11 @@ uv run pytest tests/ -v          # Run all tests
 docker compose exec api pytest tests/ -v
 
 # Run by marker
-uv run pytest -m unit            # Unit tests only (6 files, ~55 tests)
-uv run pytest -m agent           # Agent tests only (5 files, ~21 tests)
+uv run pytest -m unit            # Unit tests only (9 files, ~100 tests)
+uv run pytest -m agent           # Agent tests only (7 files, ~41 tests)
 uv run pytest -m eval            # Eval benchmarks
 uv run pytest -m golden          # Golden dataset validation
-uv run pytest -m integration     # Integration tests (CI-only)
+uv run pytest -m integration     # Integration tests (format branching, CI-only)
 ```
 
 ### Python Lint & Format
@@ -197,6 +213,8 @@ Optional `.env` overrides:
 | `SYNTHID_WATERMARK_ENABLED` | `True` | SynthID flag (no implementation yet) |
 | `WORKER_POLL_INTERVAL_SECONDS` | `5` | QueueWorker poll interval |
 | `WORKER_LOCK_TIMEOUT_MINUTES` | `15` | Stuck job recovery timeout |
+| `FORMATTER_MODEL` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` | Blog/Carousel formatter model |
+| `FORMATTER_TEMPERATURE` | `0.3` | Blog/Carousel formatter temperature |
 | `EVAL_RESEARCH_MODEL` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` | Eval research agent model (Together AI) |
 | `EVAL_COPYWRITER_MODEL` | `MiniMaxAI/MiniMax-M2.7` | Eval copywriter agent model (Together AI) |
 | `EVAL_RED_TEAM_MODEL` | `openai/gpt-oss-120b` | Eval Red Team agent model (Together AI) |
@@ -221,17 +239,22 @@ content-factory/                  # Nx workspace root
 │   │   │     models.py           # SQLAlchemy models (factory schema)
 │   │   │     session.py          # async engine + session factory (settings.database_url)
 │   │   │     crud.py             # query helpers + queue operations
-│   │   │   schemas/shorts.py     # Pydantic request/response models
+│   │   │   schemas/
+│   │   │     shorts.py           # Pydantic request/response models + FormatTypeEnum, PlatformEnum
+│   │   │     formats.py          # Structured format schemas (BlogSection, CarouselSlide, SeoMeta)
 │   │   │   services/
 │   │   │     llm.py              # Multi-provider LLM routing (Gemini + Together AI)
 │   │   │     vector_store.py     # pgvector ingestion & semantic search
 │   │   │     chunking.py         # Markdown text splitter
 │   │   │     web_search.py       # TavilySearchService
+│   │   │     format_validator.py # FormatValidator → BlogValidator, CarouselValidator
 │   │   │   workers/
 │   │   │     orchestrator.py     # Agentic state machine
 │   │   │     queue_worker.py     # asyncio poll loop with SKIP LOCKED
 │   │   │     agents.py           # BaseAgent → Research, Copywriter, RedTeam, AssetStudio
 │   │   │     optimizer.py        # ScriptOptimizerAgent
+│   │   │     formatters.py       # BlogFormatterAgent, CarouselFormatterAgent
+│   │   │     harness.py          # FormatterHarness — generate-validate-retry with doom loop detection
 │   │   │     tasks.py            # Post-completion LOCAL chunk cleanup
 │   │   ├── alembic/              # Database migrations
 │   │   ├── tests/                # Python test suite
@@ -268,8 +291,8 @@ The project uses pytest with `asyncio_mode = "auto"` and five custom markers:
 
 | Marker | Scope | Files |
 |--------|-------|-------|
-| `unit` | Core logic — chunking, config, CRUD, routes, queue worker, vector store | `tests/unit/` (6 files, ~55 tests) |
-| `agent` | Agent behavior — research, copywriter, red team, asset studio, optimizer | `tests/agents/` (5 files, ~21 tests) |
+| `unit` | Core logic — chunking, config, CRUD, routes, queue worker, vector store, formatter harness, format validator | `tests/unit/` (9 files, ~100 tests) |
+| `agent` | Agent behavior — research, copywriter, red team, asset studio, optimizer, blog formatter, carousel formatter | `tests/agents/` (7 files, ~41 tests) |
 | `eval` | Outcome evals with LLM-as-Judge scoring across pipeline stages | `tests/evals/` (4 test files, 34 parametrized cases) |
 | `golden` | Trajectory validation against golden dataset | `tests/golden/` (23+ cases across 6 categories) |
 | `integration` | End-to-end orchestrator flows | `tests/integration/` (CI-only) |
@@ -299,7 +322,7 @@ lint → unit-tests + agent-tests (parallel) → eval-tests + integration-tests 
 
 ## MVP Status
 
-### Fully Implemented (Pipeline Steps 1–8)
+### Fully Implemented (Pipeline Steps 1–9)
 
 - **Step 1 (Ingestion)** — `POST /api/v1/jobs/` creates a PENDING RenderJob
 - **Step 2 (Extraction)** — `MarkdownTextSplitter` chunks raw_text into RAW-CONTEXT scope vectors
@@ -307,8 +330,9 @@ lint → unit-tests + agent-tests (parallel) → eval-tests + integration-tests 
 - **Step 4 (Source Fact-Check)** — Passthrough; Red Team catches issues downstream
 - **Step 5 (Scripting)** — CopywriterAgent receives `refined_context` from orchestrator (no direct vector store access). On revision, `ScriptOptimizerAgent` surgically patches failed claims instead of full re-draft
 - **Step 6 (Red Team)** — RedTeamAgent audits script claims with three-pass evaluation, persists verdicts, configurable max revision loops
-- **Step 7 (Asset Generation)** — AssetStudioAgent generates prompts (mocked `s3://` URL)
-- **Step 8 (Completion)** — LOCAL-scope chunk cleanup, final state
+- **Step 7 (Format Output)** — BlogFormatterAgent and CarouselFormatterAgent produce structured blog/carousel outputs via Plan-then-Execute two-phase LLM calls. Wrapped in `FormatterHarness` with doom loop detection. Platform-aware validation (Twitter 280, LinkedIn 700, Instagram 2200 character limits). Branches by `format_type`: `video` skips, `blog`/`carousel` format then complete, `all` runs both in parallel then continues to asset generation
+- **Step 8 (Asset Generation)** — AssetStudioAgent generates prompts (mocked `s3://` URL)
+- **Step 9 (Completion)** — LOCAL-scope chunk cleanup, final state
 
 ### Infrastructure
 
@@ -318,9 +342,10 @@ lint → unit-tests + agent-tests (parallel) → eval-tests + integration-tests 
 - **Web Search Enrichment** — Tavily results ingested as LOCAL-scope vectors before research
 - **Prompt Chaining (Semantic Memory)** — `refined_context` column on `render_jobs`; orchestrator mediates context between Research → Copywriter agents
 - **Evaluator-Optimizer Pattern** — Configurable models/temperatures via env vars for both Red Team and Optimizer agents
-- **Test Suite** — Unit (~55) + agent (~21) + integration tests with CI pipeline via GitHub Actions
+- **Test Suite** — Unit (~100) + agent (~41) + integration tests with CI pipeline via GitHub Actions
 - **Eval Infrastructure** — LLM-as-Judge scoring (judge.py), deterministic assertions, rubrics, golden dataset (23+ cases), 4 outcome test files with 34 parametrized cases
 - **Multi-provider LLM** — Gemini (production) + Together AI (evals) routing via model name prefix. Configurable eval models for each agent stage
+- **Multi-Format Output** — Blog and carousel formatters with Plan-then-Execute two-phase LLM calls, `FormatterHarness` generate-validate-retry with doom loop detection, platform-aware validation (per-slide character limits)
 - **Docker** — 4-service Compose stack (pgvector, pgAdmin, API, Web). Migrations auto-run on API container start via `entrypoint.sh`. Single workspace lockfile at repo root (`apps/web/pnpm-lock.yaml` removed). pnpm 11 `allowBuilds` in `pnpm-workspace.yaml`.
 
 ### Intentionally Deferred (Wizard of Oz MVP)
