@@ -223,9 +223,7 @@ class TestTransitionFormattingAll:
         mock_script.version = 1
         mock_script.content = "Script content"
 
-        blog_result = _harness_success(
-            {"title": "Blog", "_format": "blog"}, "blog"
-        )
+        blog_result = _harness_success({"title": "Blog", "_format": "blog"}, "blog")
         carousel_result = _harness_success(
             {"thread_title": "Thread", "_format": "carousel"}, "carousel"
         )
@@ -282,9 +280,7 @@ class TestTransitionFormattingAll:
             await execute_state_transition(mock_db_session, mock_job)
 
             assert mock_save.call_count == 2
-            fmt_types = [
-                c.kwargs["format_type"] for c in mock_save.call_args_list
-            ]
+            fmt_types = [c.kwargs["format_type"] for c in mock_save.call_args_list]
             assert "BLOG" in fmt_types
             assert "CAROUSEL" in fmt_types
             mock_update.assert_awaited_once_with(
@@ -352,9 +348,7 @@ class TestTransitionFormattingFailure:
                 mock_db_session, mock_job.id, JobStatusEnum.FAILED
             )
 
-    async def test_should_raise_when_no_script_found(
-        self, mock_db_session, mock_job
-    ):
+    async def test_should_raise_when_no_script_found(self, mock_db_session, mock_job):
         mock_job.status = JobStatusEnum.FORMATTING
         mock_job.format_type = "blog"
 

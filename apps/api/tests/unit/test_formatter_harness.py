@@ -46,9 +46,7 @@ def _always_invalid_validator(msg="Schema validation failed"):
 class TestFormatterHarnessSuccess:
     async def test_should_succeed_on_first_attempt(self):
         mock_agent = AsyncMock()
-        mock_agent.run = AsyncMock(
-            return_value=_success_result({"title": "Blog Post"})
-        )
+        mock_agent.run = AsyncMock(return_value=_success_result({"title": "Blog Post"}))
         validator = _always_valid_validator()
         harness = FormatterHarness(
             formatter=mock_agent, validator=validator, max_retries=2
@@ -66,9 +64,7 @@ class TestFormatterHarnessSuccess:
 
     async def test_should_set_format_type_from_context(self):
         mock_agent = AsyncMock()
-        mock_agent.run = AsyncMock(
-            return_value=_success_result({"title": "Blog"})
-        )
+        mock_agent.run = AsyncMock(return_value=_success_result({"title": "Blog"}))
         validator = _always_valid_validator()
         harness = FormatterHarness(
             formatter=mock_agent, validator=validator, max_retries=2
@@ -80,9 +76,7 @@ class TestFormatterHarnessSuccess:
 
     async def test_should_default_format_type_to_unknown(self):
         mock_agent = AsyncMock()
-        mock_agent.run = AsyncMock(
-            return_value=_success_result({"title": "Blog"})
-        )
+        mock_agent.run = AsyncMock(return_value=_success_result({"title": "Blog"}))
         validator = _always_valid_validator()
         harness = FormatterHarness(
             formatter=mock_agent, validator=validator, max_retries=2
@@ -274,9 +268,7 @@ class TestFormatterHarnessCorrectiveContext:
             FormatValidationResult(
                 valid=False, error_message="Missing required field: seo_meta"
             ),
-            FormatValidationResult(
-                valid=True, validated_payload={"_format": "blog"}
-            ),
+            FormatValidationResult(valid=True, validated_payload={"_format": "blog"}),
         ]
 
         harness = FormatterHarness(

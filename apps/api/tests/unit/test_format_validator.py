@@ -387,9 +387,7 @@ class TestCarouselValidator:
 
     def test_should_clear_char_limit_violations_on_valid_payload(self):
         validator = CarouselValidator()
-        payload = _valid_carousel_payload(
-            char_limit_violations=["old violation"]
-        )
+        payload = _valid_carousel_payload(char_limit_violations=["old violation"])
 
         result = validator.validate(payload)
 
