@@ -17,7 +17,7 @@ env:
   TAVILY_API_KEY: "ci-dummy-key"
   TEST_DB_SYNC: postgresql+psycopg2://postgres:postgres@localhost:5432/content_factory_test
   TEST_DB_ASYNC: postgresql+asyncpg://postgres:postgres@localhost:5432/content_factory_test
-  DUMMY_DB: postgresql://localhost/test
+  DUMMY_DB: postgresql+asyncpg://localhost/test
 
 jobs:
   lint-python:
