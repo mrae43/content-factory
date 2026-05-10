@@ -17,6 +17,8 @@ def mock_job():
     job.status = JobStatusEnum.PENDING
     job.final_video_url = None
     job.error_log = None
+    job.format_type = "video"
+    job.platform = "youtube"
     return job
 
 
