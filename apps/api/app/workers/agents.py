@@ -183,9 +183,6 @@ class ResearchAgent(BaseAgent):
 
 class CopywriterSchema(BaseModel):
     script_content: str = Field(description="The final narrated script text.")
-    storyboard: List[Dict[str, str]] = Field(
-        description="Sequence of scenes [ {visual_prompt: '...', audio_cue: '...'} ]"
-    )
     reasoning: str = Field(
         description="The retention-first psychology used to draft this."
     )
@@ -258,7 +255,6 @@ class CopywriterAgent(BaseAgent):
             status=AgentActionStatus.SUCCESS,
             payload={
                 "script_content": result.script_content,
-                "storyboard": result.storyboard,
             },
             reasoning=result.reasoning,
             confidence_score=result.confidence,
