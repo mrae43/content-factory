@@ -1056,6 +1056,13 @@ class TestTransitionAssetGeneration:
             payload={"video_url": "s3://factory/renders/test_rendered.mp4"}
         )
 
+        mock_format_script = MagicMock()
+        mock_format_script.format_payload = {
+            "scenes": [],
+            "visual_style": "Cinematic"
+        }
+        mock_format_script.content = "Video script content"
+
         with (
             patch(
                 "app.workers.orchestrator.get_latest_format_script",
@@ -1069,7 +1076,7 @@ class TestTransitionAssetGeneration:
                 "app.workers.orchestrator.update_job_status", new_callable=AsyncMock
             ) as mock_update,
         ):
-            mock_get_format_script.return_value = None
+            mock_get_format_script.return_value = mock_format_script
             await execute_state_transition(mock_db_session, mock_job)
 
             assert mock_job.final_video_url == (
@@ -1091,6 +1098,10 @@ class TestTransitionAssetGeneration:
             confidence_score=0.0,
         )
 
+        mock_script = MagicMock()
+        mock_script.format_payload = {"scenes": [], "visual_style": "cinematic"}
+        mock_script.content = "script content"
+
         with (
             patch(
                 "app.workers.orchestrator.get_latest_format_script",
@@ -1104,7 +1115,7 @@ class TestTransitionAssetGeneration:
                 "app.workers.orchestrator.update_job_status", new_callable=AsyncMock
             ) as mock_update,
         ):
-            mock_get_format_script.return_value = None
+            mock_get_format_script.return_value = mock_script
             await execute_state_transition(mock_db_session, mock_job)
 
             assert mock_job.final_video_url is None
