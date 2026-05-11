@@ -1,9 +1,11 @@
 import asyncio
 import logging
 import traceback
+from typing import Any, Dict
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.db.crud import (
     update_job_status,
@@ -15,6 +17,7 @@ from app.db.crud import (
     append_script_feedback,
     save_fact_check_claims,
 )
+from app.db.models import Script
 from app.services.vector_store import ContentFactoryVectorStore
 from app.services.web_search import TavilySearchService
 from app.services.chunking import process_extraction_job
@@ -305,11 +308,32 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
 
 
 async def _transition_asset_generation(db: AsyncSession, job) -> None:
+    video_script_stmt = (
+        select(Script)
+        .where(
+            Script.job_id == job.id,
+            Script.format_type == "VIDEO",
+            Script.format_payload.isnot(None),
+        )
+        .order_by(Script.version.desc())
+        .limit(1)
+    )
+    video_script_result = await db.execute(video_script_stmt)
+    video_script = video_script_result.scalar_one_or_none()
+
+    studio_context: Dict[str, Any] = {"job_id": job.id}
+
+    if video_script and video_script.format_payload:
+        format_payload = video_script.format_payload
+        studio_context["scenes"] = format_payload.get("scenes", [])
+        studio_context["visual_style"] = format_payload.get("visual_style", "")
+        studio_context["script_content"] = video_script.content
+
     studio = AssetStudioAgent(
         model_name=settings.asset_model,
         temperature=settings.asset_temperature,
     )
-    result = await studio.run(context={"job_id": job.id})
+    result = await studio.run(context=studio_context)
 
     if result.status == AgentActionStatus.SUCCESS:
         job.final_video_url = result.payload["video_url"]
