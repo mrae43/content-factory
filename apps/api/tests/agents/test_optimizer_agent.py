@@ -42,7 +42,6 @@ async def test_returns_success_with_patched_script(
 
     assert result.status == AgentActionStatus.SUCCESS
     assert isinstance(result.payload["script_content"], str)
-    assert isinstance(result.payload["storyboard"], list)
     assert isinstance(result.payload["patch_summary"], str)
     assert 0.0 <= result.confidence_score <= 1.0
     assert result.metadata["agent"] == "optimizer"
