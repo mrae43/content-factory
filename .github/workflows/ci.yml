@@ -29,8 +29,8 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - run: uv run --project apps/api --group dev ruff format . --check
-      - run: uv run --project apps/api --group dev ruff check .
+      - run: cd apps/api && uv run --group dev ruff format . --check
+      - run: cd apps/api && uv run --group dev ruff check .
 
   unit-tests:
     name: Unit Tests
@@ -56,10 +56,10 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: uv sync --project apps/api --extra test
-      - run: uv run --project apps/api alembic upgrade head
+      - run: cd apps/api && uv run alembic upgrade head
         env:
           DATABASE_URL: ${{ env.TEST_DB_SYNC }}
-      - run: uv run --project apps/api pytest tests/ -v -m unit --tb=short -x || [ $? -eq 5 ]
+      - run: cd apps/api && uv run pytest tests/ -v -m unit --tb=short -x || [ $? -eq 5 ]
         env:
           DATABASE_URL: ${{ env.TEST_DB_ASYNC }}
           GEMINI_API_KEY: ${{ env.GEMINI_API_KEY }}
@@ -75,7 +75,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: uv sync --project apps/api --extra test
-      - run: uv run --project apps/api pytest tests/ -v -m agent --tb=short -x || [ $? -eq 5 ]
+      - run: cd apps/api && uv run pytest tests/ -v -m agent --tb=short -x || [ $? -eq 5 ]
         env:
           DATABASE_URL: ${{ env.DUMMY_DB }}
           GEMINI_API_KEY: ${{ env.GEMINI_API_KEY }}
@@ -105,10 +105,10 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: uv sync --project apps/api --extra test
-      - run: uv run --project apps/api alembic upgrade head
+      - run: cd apps/api && uv run alembic upgrade head
         env:
           DATABASE_URL: ${{ env.TEST_DB_SYNC }}
-      - run: uv run --project apps/api pytest tests/ -v -m integration --tb=short -x
+      - run: cd apps/api && uv run pytest tests/ -v -m integration --tb=short -x
         env:
           DATABASE_URL: ${{ env.TEST_DB_ASYNC }}
           GEMINI_API_KEY: ${{ env.GEMINI_API_KEY }}
