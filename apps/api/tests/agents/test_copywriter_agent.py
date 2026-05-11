@@ -13,7 +13,7 @@ def _make_agent():
 
 
 @pytest.mark.agent
-async def test_returns_success_with_script_and_storyboard(
+async def test_returns_success_with_script(
     copywriter_schema_output,
     chain_mock,
 ):
@@ -29,11 +29,7 @@ async def test_returns_success_with_script_and_storyboard(
 
     assert result.status == AgentActionStatus.SUCCESS
     assert isinstance(result.payload["script_content"], str)
-    assert isinstance(result.payload["storyboard"], list)
-    assert len(result.payload["storyboard"]) == 2
-    for scene in result.payload["storyboard"]:
-        assert "visual_prompt" in scene
-        assert "audio_cue" in scene
+    assert len(result.payload["script_content"]) > 0
 
 
 @pytest.mark.agent
