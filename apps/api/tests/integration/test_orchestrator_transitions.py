@@ -1264,9 +1264,7 @@ class TestOrchestratorMultiStep:
                 "app.workers.orchestrator.VideoValidator",
                 return_value=MagicMock(),
             ),
-            patch(
-                "app.workers.orchestrator.log_error", new_callable=AsyncMock
-            ),
+            patch("app.workers.orchestrator.log_error", new_callable=AsyncMock),
             patch(
                 "app.workers.orchestrator.update_job_status", new_callable=AsyncMock
             ) as mock_update,
