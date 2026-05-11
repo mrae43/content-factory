@@ -1057,10 +1057,7 @@ class TestTransitionAssetGeneration:
         )
 
         mock_format_script = MagicMock()
-        mock_format_script.format_payload = {
-            "scenes": [],
-            "visual_style": "Cinematic"
-        }
+        mock_format_script.format_payload = {"scenes": [], "visual_style": "Cinematic"}
         mock_format_script.content = "Video script content"
 
         with (
