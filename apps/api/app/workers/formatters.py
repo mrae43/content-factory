@@ -5,7 +5,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel
 
 from app.workers.agents import AgentActionStatus, AgentResult, BaseAgent
-from app.schemas.formats import BlogSection, SeoMeta, CarouselSlide
+from app.schemas.formats import BlogSection, SeoMeta, CarouselSlide, VideoScene
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +52,26 @@ class CarouselFormatterOutput(BaseModel):
     thread_title: str
     hashtags: List[str]
     cta_slide: str
+
+
+class VideoSceneOutline(BaseModel):
+    scene_number: int
+    purpose: str
+    key_visual: str
+    duration_estimate: float
+
+
+class VideoPlan(BaseModel):
+    proposed_title: str
+    scene_outline: List[VideoSceneOutline]
+    visual_style_direction: str
+
+
+class VideoFormatterOutput(BaseModel):
+    scenes: List[VideoScene]
+    total_duration_seconds: float
+    visual_style: str
+    audio_direction: str
 
 
 BLOG_PLAN_SYSTEM = (
@@ -162,6 +182,63 @@ CAROUSEL_FORMATTER_HUMAN = (
     "<platform>\n{platform}\n</platform>\n\n"
     "<correction_hint>\n{correction_hint}\n</correction_hint>\n\n"
     "Follow the plan's slide sequence and purposes. Generate the full carousel with visual prompts."
+)
+
+VIDEO_PLAN_SYSTEM = (
+    "You are the Video Formatter Planner at the AI Content Factory.\n"
+    "Your task is to PLAN a video scene structure from a verified narrative script.\n"
+    "You do NOT produce the final scenes — you produce a structured scene outline.\n\n"
+    "## PLANNING RULES\n"
+    "1. Break the script into 3-8 distinct scenes with a clear narrative arc.\n"
+    "2. First scene: hook — grab attention with a striking visual or provocative opening.\n"
+    "3. Last scene: closer — end with a call-to-action or thought-provoking statement.\n"
+    "4. Each scene needs a purpose, key visual description, and duration estimate.\n"
+    "5. Note which verified claims map to which scenes.\n"
+    "6. Total duration must be 60-300 seconds (1-5 minutes).\n"
+    "7. Each scene should be 5-45 seconds.\n"
+    "8. Define a visual style direction (cinematic, documentary, animated, etc.)."
+)
+
+VIDEO_PLAN_HUMAN = (
+    "Plan a video scene outline from the following verified narrative script.\n\n"
+    "<script>\n{script_content}\n</script>\n\n"
+    "<refined_context>\n{refined_context}\n</refined_context>\n\n"
+    "<verified_claims>\n{verified_claims}\n</verified_claims>\n\n"
+    "<correction_hint>\n{correction_hint}\n</correction_hint>\n\n"
+    "Produce a structured scene outline with scene number, purpose, key visual, "
+    "and duration estimate per scene. Do NOT write the full narration or visual prompts."
+)
+
+VIDEO_FORMATTER_SYSTEM = (
+    "You are the Video Formatter Agent at the AI Content Factory.\n"
+    "You receive a verified narrative script, refined research context, verified claims, and a PLAN.\n"
+    "Your task is to execute the plan — generate complete video scenes with narration and visual direction.\n\n"
+    "## RULES\n"
+    "1. Every factual claim MUST trace to the verified claims or refined_context.\n"
+    "2. Follow the plan's scene sequence, purposes, and duration estimates.\n"
+    "3. Each scene must have:\n"
+    "   - narration_text: the voiceover narration (min 10 chars)\n"
+    "   - visual_prompt: a detailed visual description for AI video generation (min 10 chars)\n"
+    "   - audio_cue: background music or SFX direction\n"
+    "   - duration_seconds: scene length (3-60 seconds)\n"
+    "4. Total duration must be 60-300 seconds.\n"
+    "5. Minimum 3 scenes.\n"
+    "6. visual_style: describe the overall visual style of the video.\n"
+    "7. audio_direction: describe the overall audio/music direction.\n"
+    "8. Scene transitions should feel natural and maintain narrative flow.\n"
+    "9. Write narration in a conversational, engaging tone.\n"
+    "10. Visual prompts should be cinematic and specific (camera angles, lighting, colors)."
+)
+
+VIDEO_FORMATTER_HUMAN = (
+    "Execute the following video plan to produce complete scenes.\n\n"
+    "<plan>\n{plan}\n</plan>\n\n"
+    "<script>\n{script_content}\n</script>\n\n"
+    "<refined_context>\n{refined_context}\n</refined_context>\n\n"
+    "<verified_claims>\n{verified_claims}\n</verified_claims>\n\n"
+    "<correction_hint>\n{correction_hint}\n</correction_hint>\n\n"
+    "Follow the plan's scene structure. Generate complete scenes with narration, visual prompts, "
+    "and audio cues. Include overall visual_style and audio_direction."
 )
 
 
@@ -329,5 +406,88 @@ class CarouselFormatterAgent(BaseAgent):
                 "agent": "carousel_formatter",
                 "planned_slides": len(plan.slides),
                 "generated_slides": len(result.slides),
+            },
+        )
+
+
+class VideoFormatterAgent(BaseAgent):
+    async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
+        script_content = context.get("script_content", "")
+        refined_context = context.get("refined_context", "")
+        verified_claims = context.get("verified_claims", [])
+        correction_hint = context.get("correction_hint", "")
+
+        if not script_content:
+            return AgentResult(
+                status=AgentActionStatus.ERROR,
+                payload={},
+                reasoning="No script content provided for video formatting.",
+                confidence_score=0.0,
+            )
+
+        if not refined_context:
+            return AgentResult(
+                status=AgentActionStatus.ERROR,
+                payload={},
+                reasoning="No refined context provided for video formatting.",
+                confidence_score=0.0,
+            )
+
+        claims_text = "\n".join(
+            f"- {c.get('claim_text', '')} [{c.get('verdict', 'UNKNOWN')}]: {c.get('evidence_text', 'N/A')}"
+            for c in verified_claims
+        )
+
+        plan_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", VIDEO_PLAN_SYSTEM),
+                ("human", VIDEO_PLAN_HUMAN),
+            ]
+        )
+        plan_chain = plan_prompt | self.llm.with_structured_output(VideoPlan)
+        plan: VideoPlan = await plan_chain.ainvoke(
+            {
+                "script_content": script_content,
+                "refined_context": refined_context,
+                "verified_claims": claims_text,
+                "correction_hint": correction_hint,
+            }
+        )
+        plan_text = plan.model_dump_json(indent=2)
+        logger.info("Video plan produced: %d scenes", len(plan.scene_outline))
+
+        exec_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", VIDEO_FORMATTER_SYSTEM),
+                ("human", VIDEO_FORMATTER_HUMAN),
+            ]
+        )
+        exec_chain = exec_prompt | self.llm.with_structured_output(
+            VideoFormatterOutput
+        )
+        result: VideoFormatterOutput = await exec_chain.ainvoke(
+            {
+                "plan": plan_text,
+                "script_content": script_content,
+                "refined_context": refined_context,
+                "verified_claims": claims_text,
+                "correction_hint": correction_hint,
+            }
+        )
+
+        payload = result.model_dump()
+        payload["_format"] = "video"
+        payload["_version"] = 1
+
+        return AgentResult(
+            status=AgentActionStatus.SUCCESS,
+            payload=payload,
+            reasoning="Video format generated via Plan→Execute from verified script and research context.",
+            confidence_score=0.9,
+            metadata={
+                "model": self.model_name,
+                "agent": "video_formatter",
+                "planned_scenes": len(plan.scene_outline),
+                "generated_scenes": len(result.scenes),
             },
         )
