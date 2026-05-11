@@ -50,6 +50,7 @@ markers = [
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
+addopts = "-m 'not eval'"
 
 [tool.ruff]
 target-version = "py311"
