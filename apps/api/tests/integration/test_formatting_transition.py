@@ -35,7 +35,7 @@ def _mock_harness(result: HarnessResult):
 
 @pytest.mark.integration
 class TestTransitionFormattingVideo:
-    async def test_should_skip_formatting_and_go_to_asset_generation(
+    async def test_should_route_to_formatting_from_fact_check(
         self, mock_db_session, mock_job
     ):
         mock_job.status = JobStatusEnum.FACT_CHECKING_SCRIPT
@@ -79,7 +79,7 @@ class TestTransitionFormattingVideo:
             await execute_state_transition(mock_db_session, mock_job)
 
             mock_update.assert_awaited_once_with(
-                mock_db_session, mock_job.id, JobStatusEnum.ASSET_GENERATION
+                mock_db_session, mock_job.id, JobStatusEnum.FORMATTING
             )
 
 
@@ -210,7 +210,7 @@ class TestTransitionFormattingCarousel:
 
 @pytest.mark.integration
 class TestTransitionFormattingAll:
-    async def test_should_run_blog_and_carousel_in_parallel_then_asset_gen(
+    async def test_should_run_all_formatters_in_parallel_then_asset_gen(
         self, mock_db_session, mock_job
     ):
         mock_job.status = JobStatusEnum.FORMATTING
@@ -227,6 +227,9 @@ class TestTransitionFormattingAll:
         carousel_result = _harness_success(
             {"thread_title": "Thread", "_format": "carousel"}, "carousel"
         )
+        video_result = _harness_success(
+            {"visual_style": "Cinematic", "_format": "video"}, "video"
+        )
 
         call_count = 0
 
@@ -235,7 +238,9 @@ class TestTransitionFormattingAll:
             call_count += 1
             if call_count == 1:
                 return _mock_harness(blog_result)
-            return _mock_harness(carousel_result)
+            elif call_count == 2:
+                return _mock_harness(carousel_result)
+            return _mock_harness(video_result)
 
         with (
             patch(
@@ -269,6 +274,14 @@ class TestTransitionFormattingAll:
                 return_value=MagicMock(),
             ),
             patch(
+                "app.workers.orchestrator.VideoFormatterAgent",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "app.workers.orchestrator.VideoValidator",
+                return_value=MagicMock(),
+            ),
+            patch(
                 "app.workers.orchestrator.save_format_script",
                 new_callable=AsyncMock,
             ) as mock_save,
@@ -279,10 +292,11 @@ class TestTransitionFormattingAll:
         ):
             await execute_state_transition(mock_db_session, mock_job)
 
-            assert mock_save.call_count == 2
+            assert mock_save.call_count == 3
             fmt_types = [c.kwargs["format_type"] for c in mock_save.call_args_list]
             assert "BLOG" in fmt_types
             assert "CAROUSEL" in fmt_types
+            assert "VIDEO" in fmt_types
             mock_update.assert_awaited_once_with(
                 mock_db_session, mock_job.id, JobStatusEnum.ASSET_GENERATION
             )
@@ -376,19 +390,23 @@ class TestTransitionFormattingFailure:
 
 
 @pytest.mark.integration
-class TestTransitionFormattingNoFormatters:
-    async def test_should_skip_when_format_type_is_video_only(
+class TestTransitionFormattingVideoOnly:
+    async def test_should_run_video_formatter_and_go_to_asset_generation(
         self, mock_db_session, mock_job
     ):
         mock_job.status = JobStatusEnum.FORMATTING
         mock_job.format_type = "video"
-        mock_job.refined_context = ""
+        mock_job.refined_context = "BRICS GDP grew 3.2%"
         mock_job.platform = ""
 
         mock_script = MagicMock()
         mock_script.id = uuid4()
         mock_script.version = 1
-        mock_script.content = "Script"
+        mock_script.content = "Script content"
+
+        harness_result = _harness_success(
+            {"visual_style": "Cinematic", "_format": "video"}, "video"
+        )
 
         with (
             patch(
@@ -402,9 +420,21 @@ class TestTransitionFormattingNoFormatters:
                 return_value=[],
             ),
             patch(
+                "app.workers.orchestrator.FormatterHarness",
+                return_value=_mock_harness(harness_result),
+            ),
+            patch(
+                "app.workers.orchestrator.VideoFormatterAgent",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "app.workers.orchestrator.VideoValidator",
+                return_value=MagicMock(),
+            ),
+            patch(
                 "app.workers.orchestrator.save_format_script",
                 new_callable=AsyncMock,
-            ),
+            ) as mock_save,
             patch(
                 "app.workers.orchestrator.update_job_status",
                 new_callable=AsyncMock,
@@ -412,8 +442,12 @@ class TestTransitionFormattingNoFormatters:
         ):
             await execute_state_transition(mock_db_session, mock_job)
 
+            mock_save.assert_awaited_once()
+            save_call = mock_save.call_args
+            assert save_call.kwargs["format_type"] == "VIDEO"
+            assert save_call.kwargs["is_approved"] is True
             mock_update.assert_awaited_once_with(
-                mock_db_session, mock_job.id, JobStatusEnum.COMPLETED
+                mock_db_session, mock_job.id, JobStatusEnum.ASSET_GENERATION
             )
 
 
@@ -422,7 +456,7 @@ class TestNextStatusAfterFactCheck:
     @pytest.mark.parametrize(
         "format_type,expected",
         [
-            ("video", JobStatusEnum.ASSET_GENERATION),
+            ("video", JobStatusEnum.FORMATTING),
             ("blog", JobStatusEnum.FORMATTING),
             ("carousel", JobStatusEnum.FORMATTING),
             ("all", JobStatusEnum.FORMATTING),
@@ -442,6 +476,7 @@ class TestNextStatusAfterFormatting:
         [
             ("blog", JobStatusEnum.COMPLETED),
             ("carousel", JobStatusEnum.COMPLETED),
+            ("video", JobStatusEnum.ASSET_GENERATION),
             ("all", JobStatusEnum.ASSET_GENERATION),
         ],
     )

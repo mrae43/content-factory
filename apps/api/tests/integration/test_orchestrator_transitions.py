@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 from app.workers.agents import AgentActionStatus, AgentResult
+from app.workers.harness import HarnessResult
 from app.schemas.shorts import JobStatusEnum
 from app.workers.orchestrator import execute_state_transition
 from tests.integration.conftest import _mock_agent_class
@@ -442,7 +443,7 @@ class TestTransitionScripting:
     ):
         mock_job.status = JobStatusEnum.SCRIPTING
         result = agent_result_success(
-            payload={"script_content": "New script content", "storyboard": []}
+            payload={"script_content": "New script content"}
         )
 
         with (
@@ -486,7 +487,7 @@ class TestTransitionScripting:
         mock_job.status = JobStatusEnum.SCRIPTING
         mock_script.version = 2
         result = agent_result_success(
-            payload={"script_content": "Revised script", "storyboard": []}
+            payload={"script_content": "Revised script"}
         )
 
         with (
@@ -527,7 +528,7 @@ class TestTransitionScripting:
         mock_agent_instance = AsyncMock()
         mock_agent_instance.run = AsyncMock(
             return_value=agent_result_success(
-                payload={"script_content": "Fixed script", "storyboard": []}
+                payload={"script_content": "Fixed script"}
             )
         )
 
@@ -568,7 +569,7 @@ class TestTransitionScripting:
         mock_agent_instance = AsyncMock()
         mock_agent_instance.run = AsyncMock(
             return_value=agent_result_success(
-                payload={"script_content": "Toned down", "storyboard": []}
+                payload={"script_content": "Toned down"}
             )
         )
 
@@ -687,7 +688,7 @@ class TestTransitionFactCheckingScript:
             assert mock_script.is_approved is True
             mock_db_session.commit.assert_awaited()
             mock_update.assert_awaited_once_with(
-                mock_db_session, mock_job.id, JobStatusEnum.ASSET_GENERATION
+                mock_db_session, mock_job.id, JobStatusEnum.FORMATTING
             )
 
     async def test_should_approve_with_empty_claims(
@@ -728,7 +729,7 @@ class TestTransitionFactCheckingScript:
             mock_save_claims.assert_not_awaited()
             assert mock_script.is_approved is True
             mock_update.assert_awaited_once_with(
-                mock_db_session, mock_job.id, JobStatusEnum.ASSET_GENERATION
+                mock_db_session, mock_job.id, JobStatusEnum.FORMATTING
             )
 
     async def test_should_reject_and_loop_to_scripting(
@@ -1061,6 +1062,10 @@ class TestTransitionAssetGeneration:
             payload={"video_url": "s3://factory/renders/test_rendered.mp4"}
         )
 
+        mock_execute_result = MagicMock()
+        mock_execute_result.scalar_one_or_none.return_value = None
+        mock_db_session.execute = AsyncMock(return_value=mock_execute_result)
+
         with (
             patch(
                 "app.workers.orchestrator.AssetStudioAgent",
@@ -1090,6 +1095,10 @@ class TestTransitionAssetGeneration:
             reasoning="Asset generation failed",
             confidence_score=0.0,
         )
+
+        mock_execute_result = MagicMock()
+        mock_execute_result.scalar_one_or_none.return_value = None
+        mock_db_session.execute = AsyncMock(return_value=mock_execute_result)
 
         with (
             patch(
@@ -1194,7 +1203,7 @@ class TestOrchestratorMultiStep:
         )
         copy_result = AgentResult(
             status=AgentActionStatus.SUCCESS,
-            payload={"script_content": "Script v1", "storyboard": []},
+            payload={"script_content": "Script v1"},
             reasoning="Done",
             confidence_score=0.9,
         )
@@ -1239,6 +1248,27 @@ class TestOrchestratorMultiStep:
                 return_value=_mock_agent_class(asset_result).return_value,
             ),
             patch(
+                "app.workers.orchestrator.FormatterHarness",
+                return_value=MagicMock(
+                    run_with_harness=AsyncMock(
+                        return_value=HarnessResult(
+                            success=True,
+                            format_type="video",
+                            payload={"visual_style": "Cinematic", "_format": "video"},
+                            attempts=1,
+                        )
+                    )
+                ),
+            ),
+            patch(
+                "app.workers.orchestrator.VideoFormatterAgent",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "app.workers.orchestrator.VideoValidator",
+                return_value=MagicMock(),
+            ),
+            patch(
                 "app.workers.orchestrator.update_job_status", new_callable=AsyncMock
             ) as mock_update,
             patch(
@@ -1246,8 +1276,17 @@ class TestOrchestratorMultiStep:
             ) as mock_get_script,
             patch("app.workers.orchestrator.save_script", new_callable=AsyncMock),
             patch(
+                "app.workers.orchestrator.save_format_script",
+                new_callable=AsyncMock,
+            ),
+            patch(
                 "app.workers.orchestrator.save_fact_check_claims",
                 new_callable=AsyncMock,
+            ),
+            patch(
+                "app.workers.orchestrator.get_script_claims",
+                new_callable=AsyncMock,
+                return_value=[],
             ),
             patch(
                 "app.workers.orchestrator.cleanup_local_research_chunks",
@@ -1267,8 +1306,9 @@ class TestOrchestratorMultiStep:
                 (JobStatusEnum.SCRIPTING, JobStatusEnum.FACT_CHECKING_SCRIPT),
                 (
                     JobStatusEnum.FACT_CHECKING_SCRIPT,
-                    JobStatusEnum.ASSET_GENERATION,
+                    JobStatusEnum.FORMATTING,
                 ),
+                (JobStatusEnum.FORMATTING, JobStatusEnum.ASSET_GENERATION),
                 (JobStatusEnum.ASSET_GENERATION, JobStatusEnum.COMPLETED),
             ]
 
@@ -1309,7 +1349,7 @@ class TestOrchestratorMultiStep:
         )
         copy_result = AgentResult(
             status=AgentActionStatus.SUCCESS,
-            payload={"script_content": "Script", "storyboard": []},
+            payload={"script_content": "Script"},
             reasoning="Done",
             confidence_score=0.9,
         )
