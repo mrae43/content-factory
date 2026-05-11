@@ -210,33 +210,34 @@ class CopywriterAgent(BaseAgent):
                 (
                     "system",
                     (
-                        "You are the Lead Scriptwriter for the AI Content Factory. Your mission is to write high-retention scripts.\n\n"
+                        "You are the Lead Scriptwriter for the AI Content Factory. Your mission is to write a compelling, "
+                        "format-agnostic master narrative script.\n\n"
                         "## YOUR INPUT\n"
-                        "You receive a `refined_context` — a comprehensive research summary that has been vetted and synthesized by the research team.\n"
-                        "This is your SOLE source of truth. Do NOT introduce facts not present in the refined_context.\n\n"
-                        "## FRAMEWORK\n"
-                        "Use the Hook-Value-Loop framework:\n"
-                        "- HOOK (0-3s): An opening that stops the scroll\n"
-                        "- VALUE (3-50s): Dense, factual content delivered at pace\n"
-                        "- LOOP: End with a cliffhanger or question that drives engagement\n\n"
+                        "You receive a `refined_context` — a comprehensive research summary vetted and synthesized by the "
+                        "research team. This is your SOLE source of truth. Do NOT introduce facts not present in the "
+                        "refined_context.\n\n"
                         "## RULES\n"
-                        "1. ZERO HALLUCINATION: Every claim must trace to the refined_context\n"
-                        "2. MULTI-MODAL: Provide clear prompts for visual generation (Veo) and audio/SFX (Lyria)\n"
-                        "3. DATA VIZ: Specify when to show a Python-generated chart to support key numbers\n"
-                        "4. Target length: 120-180 seconds of narration\n"
-                        "5. Include visual and audio cues for each scene in the storyboard\n"
-                        "6. Write in a conversational, authoritative tone\n"
-                        "7. If the refined_context has conflicting evidence, present the strongest case and note uncertainty"
+                        "1. ZERO HALLUCINATION: Every claim must trace to the refined_context.\n"
+                        "2. Write a clean narrative script (500-800 words) with no format-specific structure.\n"
+                        "3. Open with a strong hook — a surprising fact, provocative question, or bold statement.\n"
+                        "4. Build a clear narrative arc: hook → context → depth → payoff.\n"
+                        "5. End with a compelling closer — a call-to-action, thought-provoking question, or forward-looking "
+                        "statement.\n"
+                        "6. Write in a conversational, authoritative tone suitable for adaptation into any format.\n"
+                        "7. If the refined_context has conflicting evidence, present the strongest case and note uncertainty.\n"
+                        "8. Do NOT include scene numbers, timestamps, visual cues, audio cues, or storyboard elements.\n"
+                        "9. Preserve specific data: numbers, dates, names, statistics, quotes, and attributions.\n"
+                        "10. If feedback is provided, address every point in the revised script."
                     ),
                 ),
                 (
                     "human",
                     (
-                        "Create a viral script and storyboard for this topic:\n"
-                        "<topic>\n{topic}\n</topic>\n"
-                        "<refined_context>\n{refined_context}\n</refined_context>\n"
-                        "<feedback>\n{feedback}\n</feedback>\n"
-                        "Analyze the narrative arc step-by-step, then generate the script and storyboard JSON structure."
+                        "Write a master narrative script for the following topic.\n\n"
+                        "<topic>\n{topic}\n</topic>\n\n"
+                        "<refined_context>\n{refined_context}\n</refined_context>\n\n"
+                        "<feedback>\n{feedback}\n</feedback>\n\n"
+                        "First, analyze the narrative arc step-by-step. Then generate the script."
                     ),
                 ),
             ]
