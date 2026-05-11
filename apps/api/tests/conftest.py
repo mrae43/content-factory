@@ -124,6 +124,11 @@ def mock_db_session():
     session.execute = AsyncMock()
     session.add = MagicMock()
     session.add_all = MagicMock()
+
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None
+    mock_result.scalars.return_value.all.return_value = []
+    session.execute = AsyncMock(return_value=mock_result)
     return session
 
 
