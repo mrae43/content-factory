@@ -339,7 +339,7 @@ async def _resolve_evidence_refs(
 
 def _next_status_after_formatting(format_type: str) -> JobStatusEnum:
     fmt = (format_type or "all").lower()
-    if fmt == "all":
+    if fmt in ("video", "all"):
         return JobStatusEnum.ASSET_GENERATION
     return JobStatusEnum.COMPLETED
 
