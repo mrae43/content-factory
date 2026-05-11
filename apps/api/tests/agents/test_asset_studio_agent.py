@@ -30,7 +30,7 @@ async def test_returns_success_with_prompts_and_mock_url(
 
 
 @pytest.mark.agent
-async def test_returns_success_with_empty_script_and_storyboard(
+async def test_returns_success_with_empty_script_and_scenes(
     job_id,
     studio_prompt_schema_output,
     chain_mock,
@@ -38,7 +38,8 @@ async def test_returns_success_with_empty_script_and_storyboard(
     agent = _make_agent()
     context = {
         "script_content": "",
-        "storyboard": [],
+        "scenes": [],
+        "visual_style": "",
         "job_id": job_id,
     }
 
@@ -58,7 +59,8 @@ async def test_mock_url_contains_job_id(
     context = {
         "job_id": job_id,
         "script_content": "test",
-        "storyboard": [],
+        "scenes": [],
+        "visual_style": "",
     }
 
     with chain_mock(studio_prompt_schema_output):
