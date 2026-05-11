@@ -1056,11 +1056,11 @@ class TestTransitionAssetGeneration:
             payload={"video_url": "s3://factory/renders/test_rendered.mp4"}
         )
 
-        mock_execute_result = MagicMock()
-        mock_execute_result.scalar_one_or_none.return_value = None
-        mock_db_session.execute = AsyncMock(return_value=mock_execute_result)
-
         with (
+            patch(
+                "app.workers.orchestrator.get_latest_format_script",
+                new_callable=AsyncMock,
+            ) as mock_get_format_script,
             patch(
                 "app.workers.orchestrator.AssetStudioAgent",
                 return_value=_mock_agent_class(result).return_value,
@@ -1069,6 +1069,7 @@ class TestTransitionAssetGeneration:
                 "app.workers.orchestrator.update_job_status", new_callable=AsyncMock
             ) as mock_update,
         ):
+            mock_get_format_script.return_value = None
             await execute_state_transition(mock_db_session, mock_job)
 
             assert mock_job.final_video_url == (
@@ -1090,11 +1091,11 @@ class TestTransitionAssetGeneration:
             confidence_score=0.0,
         )
 
-        mock_execute_result = MagicMock()
-        mock_execute_result.scalar_one_or_none.return_value = None
-        mock_db_session.execute = AsyncMock(return_value=mock_execute_result)
-
         with (
+            patch(
+                "app.workers.orchestrator.get_latest_format_script",
+                new_callable=AsyncMock,
+            ) as mock_get_format_script,
             patch(
                 "app.workers.orchestrator.AssetStudioAgent",
                 return_value=_mock_agent_class(error_result).return_value,
@@ -1103,6 +1104,7 @@ class TestTransitionAssetGeneration:
                 "app.workers.orchestrator.update_job_status", new_callable=AsyncMock
             ) as mock_update,
         ):
+            mock_get_format_script.return_value = None
             await execute_state_transition(mock_db_session, mock_job)
 
             assert mock_job.final_video_url is None
@@ -1263,11 +1265,18 @@ class TestOrchestratorMultiStep:
                 return_value=MagicMock(),
             ),
             patch(
+                "app.workers.orchestrator.log_error", new_callable=AsyncMock
+            ),
+            patch(
                 "app.workers.orchestrator.update_job_status", new_callable=AsyncMock
             ) as mock_update,
             patch(
                 "app.workers.orchestrator.get_latest_script", new_callable=AsyncMock
             ) as mock_get_script,
+            patch(
+                "app.workers.orchestrator.get_latest_format_script",
+                new_callable=AsyncMock,
+            ) as mock_get_format_script,
             patch("app.workers.orchestrator.save_script", new_callable=AsyncMock),
             patch(
                 "app.workers.orchestrator.save_format_script",
@@ -1289,6 +1298,8 @@ class TestOrchestratorMultiStep:
         ):
             mock_web.search = AsyncMock(return_value=[])
             mock_get_script.return_value = mock_script
+            mock_get_format_script.return_value = mock_script
+            mock_script.format_payload = {"scenes": [], "visual_style": "Cinematic"}
 
             transitions = [
                 (JobStatusEnum.PENDING, JobStatusEnum.RESEARCHING),

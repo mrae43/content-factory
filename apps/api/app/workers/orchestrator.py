@@ -5,7 +5,6 @@ from typing import Any, Dict
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 
 from app.db.crud import (
     update_job_status,
@@ -13,11 +12,11 @@ from app.db.crud import (
     save_script,
     save_format_script,
     get_latest_script,
+    get_latest_format_script,
     get_script_claims,
     append_script_feedback,
     save_fact_check_claims,
 )
-from app.db.models import Script
 from app.services.vector_store import ContentFactoryVectorStore
 from app.services.web_search import TavilySearchService
 from app.services.chunking import process_extraction_job
@@ -316,18 +315,7 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
 
 
 async def _transition_asset_generation(db: AsyncSession, job) -> None:
-    video_script_stmt = (
-        select(Script)
-        .where(
-            Script.job_id == job.id,
-            Script.format_type == "VIDEO",
-            Script.format_payload.isnot(None),
-        )
-        .order_by(Script.version.desc())
-        .limit(1)
-    )
-    video_script_result = await db.execute(video_script_stmt)
-    video_script = video_script_result.scalar_one_or_none()
+    video_script = await get_latest_format_script(db, job.id, "VIDEO")
 
     studio_context: Dict[str, Any] = {"job_id": job.id}
 
