@@ -30,17 +30,7 @@ def research_schema_output():
 def copywriter_schema_output():
     return CopywriterSchema(
         script_content="Did you know BRICS is reshaping global finance?",
-        storyboard=[
-            {
-                "visual_prompt": "World map with BRICS nations highlighted",
-                "audio_cue": "Tension build",
-            },
-            {
-                "visual_prompt": "Currency exchange graph",
-                "audio_cue": "Data reveal",
-            },
-        ],
-        reasoning="Hook-Value-Loop: opened with question, built through data.",
+        reasoning="Opened with question, built through data-driven narrative.",
         confidence=0.8,
     )
 
@@ -155,12 +145,6 @@ def studio_prompt_schema_output():
 def optimizer_schema_output():
     return OptimizerOutput(
         patched_script_content="BRICS GDP grew 3.2% in 2024. This is a significant shift.",
-        patched_storyboard=[
-            {
-                "visual_prompt": "GDP growth chart with corrected 3.2% figure",
-                "audio_cue": "Data correction reveal",
-            }
-        ],
         patch_summary="Replaced fabricated 15% GDP claim with verified 3.2% from IMF data.",
         reasoning="Claim 'BRICS GDP grew 15%' was UNSUPPORTED. Replaced with 3.2% from refined_context.",
         confidence=0.85,
@@ -198,7 +182,16 @@ def red_team_context(mock_vector_store, job_id):
 def asset_studio_context(job_id):
     return {
         "script_content": "Did you know BRICS is reshaping global finance?",
-        "storyboard": [{"visual_prompt": "World map", "audio_cue": "Tension"}],
+        "scenes": [
+            {
+                "scene_number": 1,
+                "narration_text": "Did you know BRICS is reshaping global finance?",
+                "visual_prompt": "World map with BRICS nations highlighted",
+                "audio_cue": "Tension build",
+                "duration_seconds": 15,
+            }
+        ],
+        "visual_style": "Cinematic documentary, golden hour lighting",
         "job_id": job_id,
     }
 

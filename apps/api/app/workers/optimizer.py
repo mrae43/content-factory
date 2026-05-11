@@ -13,9 +13,6 @@ class OptimizerOutput(BaseModel):
     patched_script_content: str = Field(
         description="The revised script with only broken claims patched"
     )
-    patched_storyboard: List[Dict[str, str]] = Field(
-        description="Updated storyboard if visual/audio cues changed due to patches"
-    )
     patch_summary: str = Field(description="What was changed and why, for audit trail")
     reasoning: str = Field(description="Step-by-step reasoning for each patch")
     confidence: float = Field(
@@ -33,14 +30,12 @@ OPTIMIZER_SYSTEM_PROMPT = (
     "   a. If the refined_context has correct information -> replace the claim with the correct version\n"
     "   b. If the refined_context lacks evidence -> remove or soften the claim\n"
     "   c. If the claim is a statistic -> find the correct number in refined_context\n"
-    "3. Preserve narrative flow, hook, and loop structure.\n"
+    "3. Preserve narrative flow, hook, and closer structure.\n"
     "4. Preserve all SUPPORTED claims exactly as they are.\n"
-    "5. Maintain the same tone, pacing, and scene structure.\n"
+    "5. Maintain the same tone and pacing.\n"
     "6. If patching creates a narrative gap, bridge it minimally.\n"
     "7. Return the FULL patched script (not just diffs).\n"
-    "8. Keep the same scene structure in the storyboard unless a visual/audio cue directly "
-    "contradicts a patched claim.\n"
-    "9. Every patched claim MUST be traceable to the refined_context — zero new hallucinations."
+    "8. Every patched claim MUST be traceable to the refined_context — zero new hallucinations."
 )
 
 OPTIMIZER_HUMAN_TEMPLATE = (
@@ -48,7 +43,7 @@ OPTIMIZER_HUMAN_TEMPLATE = (
     "<original_script>\n{original_script}\n</original_script>\n\n"
     "<failed_claims>\n{failed_claims}\n</failed_claims>\n\n"
     "<refined_context>\n{refined_context}\n</refined_context>\n\n"
-    "For each failed claim, explain your patch. Then provide the complete patched script and updated storyboard."
+    "For each failed claim, explain your patch. Then provide the complete patched script."
 )
 
 
@@ -106,7 +101,6 @@ class ScriptOptimizerAgent(BaseAgent):
             status=AgentActionStatus.SUCCESS,
             payload={
                 "script_content": result.patched_script_content,
-                "storyboard": result.patched_storyboard,
                 "patch_summary": result.patch_summary,
             },
             reasoning=result.reasoning,

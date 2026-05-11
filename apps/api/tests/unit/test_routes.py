@@ -205,7 +205,7 @@ class TestApproveScript:
         )
 
         assert resp.status_code == 200
-        assert resp.json()["status"] == "ASSET_GENERATION"
+        assert resp.json()["status"] == "FORMATTING"
         assert script.is_approved is True
         mock_db.commit.assert_awaited()
 

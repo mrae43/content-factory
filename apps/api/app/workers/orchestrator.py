@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import traceback
+from typing import Any, Dict
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +12,7 @@ from app.db.crud import (
     save_script,
     save_format_script,
     get_latest_script,
+    get_latest_format_script,
     get_script_claims,
     append_script_feedback,
     save_fact_check_claims,
@@ -18,7 +20,11 @@ from app.db.crud import (
 from app.services.vector_store import ContentFactoryVectorStore
 from app.services.web_search import TavilySearchService
 from app.services.chunking import process_extraction_job
-from app.services.format_validator import BlogValidator, CarouselValidator
+from app.services.format_validator import (
+    BlogValidator,
+    CarouselValidator,
+    VideoValidator,
+)
 from app.workers.tasks import cleanup_local_research_chunks
 from app.workers.agents import (
     ResearchAgent,
@@ -28,7 +34,11 @@ from app.workers.agents import (
     AgentActionStatus,
 )
 from app.workers.optimizer import ScriptOptimizerAgent
-from app.workers.formatters import BlogFormatterAgent, CarouselFormatterAgent
+from app.workers.formatters import (
+    BlogFormatterAgent,
+    CarouselFormatterAgent,
+    VideoFormatterAgent,
+)
 from app.workers.harness import FormatterHarness
 from app.schemas.shorts import JobStatusEnum, next_status_after_fact_check
 from app.core.config import settings
@@ -305,11 +315,21 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
 
 
 async def _transition_asset_generation(db: AsyncSession, job) -> None:
+    video_script = await get_latest_format_script(db, job.id, "VIDEO")
+
+    studio_context: Dict[str, Any] = {"job_id": job.id}
+
+    if video_script and video_script.format_payload:
+        format_payload = video_script.format_payload
+        studio_context["scenes"] = format_payload.get("scenes", [])
+        studio_context["visual_style"] = format_payload.get("visual_style", "")
+        studio_context["script_content"] = video_script.content
+
     studio = AssetStudioAgent(
         model_name=settings.asset_model,
         temperature=settings.asset_temperature,
     )
-    result = await studio.run(context={"job_id": job.id})
+    result = await studio.run(context=studio_context)
 
     if result.status == AgentActionStatus.SUCCESS:
         job.final_video_url = result.payload["video_url"]
@@ -339,7 +359,7 @@ async def _resolve_evidence_refs(
 
 def _next_status_after_formatting(format_type: str) -> JobStatusEnum:
     fmt = (format_type or "all").lower()
-    if fmt == "all":
+    if fmt in ("video", "all"):
         return JobStatusEnum.ASSET_GENERATION
     return JobStatusEnum.COMPLETED
 
@@ -388,6 +408,18 @@ async def _transition_formatting(db: AsyncSession, job) -> None:
             max_retries=2,
         )
         formatter_specs.append(("CAROUSEL", carousel_harness, carousel_ctx))
+
+    if format_type in ("video", "all"):
+        video_ctx = {**base_context, "format_type": "video"}
+        video_harness = FormatterHarness(
+            formatter=VideoFormatterAgent(
+                model_name=settings.formatter_model,
+                temperature=settings.formatter_temperature,
+            ),
+            validator=VideoValidator(),
+            max_retries=2,
+        )
+        formatter_specs.append(("VIDEO", video_harness, video_ctx))
 
     if not formatter_specs:
         logger.warning(

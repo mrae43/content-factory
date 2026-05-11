@@ -183,9 +183,6 @@ class ResearchAgent(BaseAgent):
 
 class CopywriterSchema(BaseModel):
     script_content: str = Field(description="The final narrated script text.")
-    storyboard: List[Dict[str, str]] = Field(
-        description="Sequence of scenes [ {visual_prompt: '...', audio_cue: '...'} ]"
-    )
     reasoning: str = Field(
         description="The retention-first psychology used to draft this."
     )
@@ -213,33 +210,34 @@ class CopywriterAgent(BaseAgent):
                 (
                     "system",
                     (
-                        "You are the Lead Scriptwriter for the AI Content Factory. Your mission is to write high-retention scripts.\n\n"
+                        "You are the Lead Scriptwriter for the AI Content Factory. Your mission is to write a compelling, "
+                        "format-agnostic master narrative script.\n\n"
                         "## YOUR INPUT\n"
-                        "You receive a `refined_context` — a comprehensive research summary that has been vetted and synthesized by the research team.\n"
-                        "This is your SOLE source of truth. Do NOT introduce facts not present in the refined_context.\n\n"
-                        "## FRAMEWORK\n"
-                        "Use the Hook-Value-Loop framework:\n"
-                        "- HOOK (0-3s): An opening that stops the scroll\n"
-                        "- VALUE (3-50s): Dense, factual content delivered at pace\n"
-                        "- LOOP: End with a cliffhanger or question that drives engagement\n\n"
+                        "You receive a `refined_context` — a comprehensive research summary vetted and synthesized by the "
+                        "research team. This is your SOLE source of truth. Do NOT introduce facts not present in the "
+                        "refined_context.\n\n"
                         "## RULES\n"
-                        "1. ZERO HALLUCINATION: Every claim must trace to the refined_context\n"
-                        "2. MULTI-MODAL: Provide clear prompts for visual generation (Veo) and audio/SFX (Lyria)\n"
-                        "3. DATA VIZ: Specify when to show a Python-generated chart to support key numbers\n"
-                        "4. Target length: 120-180 seconds of narration\n"
-                        "5. Include visual and audio cues for each scene in the storyboard\n"
-                        "6. Write in a conversational, authoritative tone\n"
-                        "7. If the refined_context has conflicting evidence, present the strongest case and note uncertainty"
+                        "1. ZERO HALLUCINATION: Every claim must trace to the refined_context.\n"
+                        "2. Write a clean narrative script (500-800 words) with no format-specific structure.\n"
+                        "3. Open with a strong hook — a surprising fact, provocative question, or bold statement.\n"
+                        "4. Build a clear narrative arc: hook → context → depth → payoff.\n"
+                        "5. End with a compelling closer — a call-to-action, thought-provoking question, or forward-looking "
+                        "statement.\n"
+                        "6. Write in a conversational, authoritative tone suitable for adaptation into any format.\n"
+                        "7. If the refined_context has conflicting evidence, present the strongest case and note uncertainty.\n"
+                        "8. Do NOT include scene numbers, timestamps, visual cues, audio cues, or storyboard elements.\n"
+                        "9. Preserve specific data: numbers, dates, names, statistics, quotes, and attributions.\n"
+                        "10. If feedback is provided, address every point in the revised script."
                     ),
                 ),
                 (
                     "human",
                     (
-                        "Create a viral script and storyboard for this topic:\n"
-                        "<topic>\n{topic}\n</topic>\n"
-                        "<refined_context>\n{refined_context}\n</refined_context>\n"
-                        "<feedback>\n{feedback}\n</feedback>\n"
-                        "Analyze the narrative arc step-by-step, then generate the script and storyboard JSON structure."
+                        "Write a master narrative script for the following topic.\n\n"
+                        "<topic>\n{topic}\n</topic>\n\n"
+                        "<refined_context>\n{refined_context}\n</refined_context>\n\n"
+                        "<feedback>\n{feedback}\n</feedback>\n\n"
+                        "First, analyze the narrative arc step-by-step. Then generate the script."
                     ),
                 ),
             ]
@@ -258,7 +256,6 @@ class CopywriterAgent(BaseAgent):
             status=AgentActionStatus.SUCCESS,
             payload={
                 "script_content": result.script_content,
-                "storyboard": result.storyboard,
             },
             reasoning=result.reasoning,
             confidence_score=result.confidence,
@@ -524,10 +521,9 @@ class StudioPromptSchema(BaseModel):
 
 class AssetStudioAgent(BaseAgent):
     async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
-        # In V1, we use Gemini Multi-modal to generate the PROMPTS for Veo/Lyria,
-        # rather than fully generating the video in python yet.
         script = context.get("script_content", "")
-        storyboard = context.get("storyboard", [])
+        scenes = context.get("scenes", [])
+        visual_style = context.get("visual_style", "")
 
         prompt = ChatPromptTemplate.from_messages(
             [
@@ -535,20 +531,25 @@ class AssetStudioAgent(BaseAgent):
                     "system",
                     (
                         "You are the Multi-Modal Art Director for the AI Content Factory.\n"
-                        "Your mission: Translate creative storyboards into technical directives for production-grade AI models.\n"
+                        "Your mission: Translate video scenes and visual style into technical directives for production-grade AI models.\n\n"
                         "TECHNICAL SPECS:\n"
                         "1. VEO (Video): Create cinematic 4K prompts. Define camera style (drone, close-up) and lighting (golden hour, high-contrast).\n"
                         "2. LYRIA (Audio): Define orchestral/electronic scoring themes and precise voiceover pacing directives.\n"
-                        "3. PYTHON (Data Viz): For charts, specify titles, axis labels, and chart types (e.g., 'Moving average line chart of BRICS GDP')."
+                        "3. PYTHON (Data Viz): For charts, specify titles, axis labels, and chart types (e.g., 'Moving average line chart of BRICS GDP').\n\n"
+                        "INPUT FORMAT:\n"
+                        "- scenes: list of {scene_number, narration_text, visual_prompt, audio_cue, duration_seconds}\n"
+                        "- visual_style: overall visual direction for the video\n"
+                        "- script: the narrative text for reference"
                     ),
                 ),
                 (
                     "human",
                     (
-                        "Refine the technical assets for the following script and storyboard:\n"
-                        "<script>\n{script}\n</script>\n"
-                        "<storyboard>\n{storyboard}\n</storyboard>\n"
-                        "Analyze the scene transitions first, then generate the final prompt set."
+                        "Generate visual and audio production prompts for the following video:\n\n"
+                        "<visual_style>\n{visual_style}\n</visual_style>\n\n"
+                        "<scenes>\n{scenes}\n</scenes>\n\n"
+                        "<script>\n{script}\n</script>\n\n"
+                        "Analyze the scene transitions and visual style first, then generate the final prompt set."
                     ),
                 ),
             ]
@@ -556,10 +557,13 @@ class AssetStudioAgent(BaseAgent):
 
         chain = prompt | self.llm.with_structured_output(StudioPromptSchema)
         result: StudioPromptSchema = await chain.ainvoke(
-            {"script": script, "storyboard": storyboard}
+            {
+                "visual_style": visual_style,
+                "scenes": scenes,
+                "script": script,
+            }
         )
 
-        # Mocking the actual generation URL return for MVP
         video_url = f"s3://factory/renders/{context.get('job_id', 'mock')}_rendered.mp4"
 
         return AgentResult(

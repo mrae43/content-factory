@@ -3,7 +3,11 @@ from typing import Optional
 
 from pydantic import BaseModel, ValidationError
 
-from app.schemas.formats import BlogFormatPayload, CarouselFormatPayload
+from app.schemas.formats import (
+    BlogFormatPayload,
+    CarouselFormatPayload,
+    VideoFormatPayload,
+)
 
 
 class FormatValidationResult(BaseModel):
@@ -73,4 +77,40 @@ class CarouselValidator(FormatValidator):
         return FormatValidationResult(
             valid=True,
             validated_payload=dump,
+        )
+
+
+class VideoValidator(FormatValidator):
+    def validate(self, payload: dict) -> FormatValidationResult:
+        try:
+            validated = VideoFormatPayload.model_validate(payload)
+        except ValidationError as e:
+            return FormatValidationResult(
+                valid=False,
+                error_message=str(e),
+            )
+
+        if len(validated.scenes) < 3:
+            return FormatValidationResult(
+                valid=False,
+                error_message=f"Video must have at least 3 scenes, got {len(validated.scenes)}.",
+            )
+
+        empty_scenes = [
+            s.scene_number
+            for s in validated.scenes
+            if not s.visual_prompt.strip() or not s.narration_text.strip()
+        ]
+        if empty_scenes:
+            return FormatValidationResult(
+                valid=False,
+                error_message=(
+                    f"Scenes {empty_scenes} have empty visual_prompt or narration_text. "
+                    "Every scene must have both fields populated."
+                ),
+            )
+
+        return FormatValidationResult(
+            valid=True,
+            validated_payload=validated.model_dump(by_alias=True),
         )

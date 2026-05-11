@@ -4,6 +4,7 @@ from uuid import uuid4
 from app.services.format_validator import (
     BlogValidator,
     CarouselValidator,
+    VideoValidator,
     FormatValidationResult,
 )
 
@@ -452,3 +453,199 @@ class TestFormatValidationResult:
         assert result.valid is False
         assert result.error_message == "Missing field"
         assert result.validated_payload is None
+
+
+def _valid_video_scene(n, **overrides):
+    base = {
+        "scene_number": n,
+        "narration_text": f"Narration text for scene {n} that is long enough.",
+        "visual_prompt": f"Visual prompt for scene {n} that is long enough.",
+        "audio_cue": "Tension build",
+        "duration_seconds": 30.0,
+    }
+    base.update(overrides)
+    return base
+
+
+def _valid_video_payload(**overrides):
+    base = {
+        "_format": "video",
+        "_version": 1,
+        "scenes": [
+            _valid_video_scene(1),
+            _valid_video_scene(2),
+            _valid_video_scene(3),
+        ],
+        "total_duration_seconds": 90.0,
+        "visual_style": "Cinematic documentary with golden hour lighting",
+        "audio_direction": "Orchestral with electronic undertones",
+    }
+    base.update(overrides)
+    return base
+
+
+@pytest.mark.unit
+class TestVideoValidator:
+    def test_should_validate_correct_payload(self):
+        validator = VideoValidator()
+        payload = _valid_video_payload()
+
+        result = validator.validate(payload)
+
+        assert result.valid is True
+        assert result.validated_payload is not None
+        assert result.validated_payload["_format"] == "video"
+        assert result.validated_payload["_version"] == 1
+        assert result.error_message is None
+
+    def test_should_reject_missing_scenes(self):
+        validator = VideoValidator()
+        payload = _valid_video_payload()
+        del payload["scenes"]
+
+        result = validator.validate(payload)
+
+        assert result.valid is False
+        assert result.error_message is not None
+        assert "scenes" in result.error_message.lower()
+
+    def test_should_reject_fewer_than_3_scenes(self):
+        validator = VideoValidator()
+        payload = _valid_video_payload(
+            scenes=[_valid_video_scene(1), _valid_video_scene(2)]
+        )
+
+        result = validator.validate(payload)
+
+        assert result.valid is False
+        assert "3" in result.error_message
+
+    def test_should_reject_scene_with_whitespace_only_visual_prompt(self):
+        validator = VideoValidator()
+        scene = _valid_video_scene(1, visual_prompt=" " * 15)
+        payload = _valid_video_payload(
+            scenes=[scene, _valid_video_scene(2), _valid_video_scene(3)]
+        )
+
+        result = validator.validate(payload)
+
+        assert result.valid is False
+        assert "empty visual_prompt" in result.error_message
+
+    def test_should_reject_scene_with_whitespace_only_narration_text(self):
+        validator = VideoValidator()
+        scene = _valid_video_scene(2, narration_text=" " * 15)
+        payload = _valid_video_payload(
+            scenes=[_valid_video_scene(1), scene, _valid_video_scene(3)]
+        )
+
+        result = validator.validate(payload)
+
+        assert result.valid is False
+        assert "empty" in result.error_message.lower()
+        assert "narration_text" in result.error_message.lower()
+
+    def test_should_report_multiple_empty_scenes(self):
+        validator = VideoValidator()
+        s1 = _valid_video_scene(1, visual_prompt=" " * 15)
+        s3 = _valid_video_scene(3, narration_text=" " * 15)
+        payload = _valid_video_payload(scenes=[s1, _valid_video_scene(2), s3])
+
+        result = validator.validate(payload)
+
+        assert result.valid is False
+        assert "1" in result.error_message
+        assert "3" in result.error_message
+
+    def test_should_reject_missing_visual_style(self):
+        validator = VideoValidator()
+        payload = _valid_video_payload()
+        del payload["visual_style"]
+
+        result = validator.validate(payload)
+
+        assert result.valid is False
+        assert "visual_style" in result.error_message.lower()
+
+    def test_should_reject_visual_style_too_short(self):
+        validator = VideoValidator()
+        payload = _valid_video_payload(visual_style="Hi")
+
+        result = validator.validate(payload)
+
+        assert result.valid is False
+
+    def test_should_reject_total_duration_below_60(self):
+        validator = VideoValidator()
+        payload = _valid_video_payload(total_duration_seconds=59.9)
+
+        result = validator.validate(payload)
+
+        assert result.valid is False
+
+    def test_should_reject_total_duration_above_300(self):
+        validator = VideoValidator()
+        payload = _valid_video_payload(total_duration_seconds=300.1)
+
+        result = validator.validate(payload)
+
+        assert result.valid is False
+
+    def test_should_reject_scene_duration_below_minimum(self):
+        validator = VideoValidator()
+        scene = _valid_video_scene(1, duration_seconds=2.5)
+        payload = _valid_video_payload(
+            scenes=[scene, _valid_video_scene(2), _valid_video_scene(3)]
+        )
+
+        result = validator.validate(payload)
+
+        assert result.valid is False
+
+    def test_should_reject_scene_duration_above_maximum(self):
+        validator = VideoValidator()
+        scene = _valid_video_scene(1, duration_seconds=61.0)
+        payload = _valid_video_payload(
+            scenes=[scene, _valid_video_scene(2), _valid_video_scene(3)]
+        )
+
+        result = validator.validate(payload)
+
+        assert result.valid is False
+
+    def test_should_reject_wrong_format_discriminator(self):
+        validator = VideoValidator()
+        payload = _valid_video_payload(**{"_format": "blog"})
+
+        result = validator.validate(payload)
+
+        assert result.valid is False
+
+    def test_should_handle_empty_dict(self):
+        validator = VideoValidator()
+
+        result = validator.validate({})
+
+        assert result.valid is False
+        assert result.error_message is not None
+
+    def test_should_use_alias_names_in_output(self):
+        validator = VideoValidator()
+        payload = _valid_video_payload()
+
+        result = validator.validate(payload)
+
+        assert result.valid is True
+        assert "_format" in result.validated_payload
+        assert "_version" in result.validated_payload
+
+    def test_should_validate_with_exactly_3_scenes(self):
+        validator = VideoValidator()
+        payload = _valid_video_payload(
+            scenes=[_valid_video_scene(1), _valid_video_scene(2), _valid_video_scene(3)]
+        )
+
+        result = validator.validate(payload)
+
+        assert result.valid is True
+        assert len(result.validated_payload["scenes"]) == 3

@@ -3,6 +3,25 @@ from typing import List, Optional, Literal
 from uuid import UUID
 
 
+class VideoScene(BaseModel):
+    scene_number: int = Field(ge=1)
+    narration_text: str = Field(min_length=10)
+    visual_prompt: str = Field(min_length=10)
+    audio_cue: str = ""
+    duration_seconds: float = Field(ge=3.0, le=60.0)
+
+
+class VideoFormatPayload(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    format: Literal["video"] = Field(alias="_format", default="video")
+    version: int = Field(alias="_version", default=1)
+    scenes: List[VideoScene] = Field(min_length=3)
+    total_duration_seconds: float = Field(ge=60.0, le=300.0)
+    visual_style: str = Field(min_length=5)
+    audio_direction: str = ""
+
+
 class BlogSection(BaseModel):
     heading: str
     body: str

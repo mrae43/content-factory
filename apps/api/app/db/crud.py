@@ -20,6 +20,27 @@ async def get_latest_script(db: AsyncSession, job_id: UUID) -> Optional[Script]:
     return result.scalar_one_or_none()
 
 
+async def get_latest_format_script(
+    db: AsyncSession, job_id: UUID, format_type: str
+) -> Optional[Script]:
+    """
+    Retrieves the latest script for a specific format type that has a payload.
+    Used during asset generation to find the video script.
+    """
+    stmt = (
+        select(Script)
+        .where(
+            Script.job_id == job_id,
+            Script.format_type == format_type,
+            Script.format_payload.isnot(None),
+        )
+        .order_by(Script.version.desc())
+        .limit(1)
+    )
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
+
+
 async def get_render_job(db: AsyncSession, job_id: UUID) -> Optional[RenderJob]:
     """
     Fetches a RenderJob with its associated scripts and assets eagerly loaded.
