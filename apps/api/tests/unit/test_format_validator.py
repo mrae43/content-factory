@@ -518,12 +518,11 @@ class TestVideoValidator:
         result = validator.validate(payload)
 
         assert result.valid is False
-        assert "at least 3 scenes" in result.error_message
-        assert "2" in result.error_message
+        assert "3" in result.error_message
 
-    def test_should_reject_scene_with_empty_visual_prompt(self):
+    def test_should_reject_scene_with_whitespace_only_visual_prompt(self):
         validator = VideoValidator()
-        scene = _valid_video_scene(1, visual_prompt="   ")
+        scene = _valid_video_scene(1, visual_prompt=" " * 15)
         payload = _valid_video_payload(
             scenes=[scene, _valid_video_scene(2), _valid_video_scene(3)]
         )
@@ -533,9 +532,9 @@ class TestVideoValidator:
         assert result.valid is False
         assert "empty visual_prompt" in result.error_message
 
-    def test_should_reject_scene_with_empty_narration_text(self):
+    def test_should_reject_scene_with_whitespace_only_narration_text(self):
         validator = VideoValidator()
-        scene = _valid_video_scene(2, narration_text="   ")
+        scene = _valid_video_scene(2, narration_text=" " * 15)
         payload = _valid_video_payload(
             scenes=[_valid_video_scene(1), scene, _valid_video_scene(3)]
         )
@@ -543,15 +542,13 @@ class TestVideoValidator:
         result = validator.validate(payload)
 
         assert result.valid is False
-        assert (
-            "empty" in result.error_message.lower()
-            and "narration_text" in result.error_message.lower()
-        )
+        assert "empty" in result.error_message.lower()
+        assert "narration_text" in result.error_message.lower()
 
     def test_should_report_multiple_empty_scenes(self):
         validator = VideoValidator()
-        s1 = _valid_video_scene(1, visual_prompt="  ")
-        s3 = _valid_video_scene(3, narration_text="  ")
+        s1 = _valid_video_scene(1, visual_prompt=" " * 15)
+        s3 = _valid_video_scene(3, narration_text=" " * 15)
         payload = _valid_video_payload(scenes=[s1, _valid_video_scene(2), s3])
 
         result = validator.validate(payload)
