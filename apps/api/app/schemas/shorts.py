@@ -51,9 +51,6 @@ class PlatformEnum(str, Enum):
 
 
 def next_status_after_fact_check(format_type: str) -> "JobStatusEnum":
-    fmt = (format_type or "all").lower()
-    if fmt == "video":
-        return JobStatusEnum.ASSET_GENERATION
     return JobStatusEnum.FORMATTING
 
 
