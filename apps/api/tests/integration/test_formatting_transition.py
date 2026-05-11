@@ -452,6 +452,40 @@ class TestTransitionFormattingVideoOnly:
 
 
 @pytest.mark.integration
+class TestTransitionAssetGenerationMissingVideoScript:
+    async def test_should_fail_when_no_video_script_with_payload(
+        self, mock_db_session, mock_job
+    ):
+        mock_job.status = JobStatusEnum.ASSET_GENERATION
+        mock_job.format_type = "video"
+
+        with (
+            patch(
+                "app.workers.orchestrator.get_latest_format_script",
+                new_callable=AsyncMock,
+                return_value=None,
+            ) as mock_get_script,
+            patch(
+                "app.workers.orchestrator.update_job_status",
+                new_callable=AsyncMock,
+            ) as mock_update,
+            patch(
+                "app.workers.orchestrator.log_error",
+                new_callable=AsyncMock,
+            ) as mock_log,
+        ):
+            await execute_state_transition(mock_db_session, mock_job)
+
+            mock_get_script.assert_awaited_once_with(
+                mock_db_session, mock_job.id, "VIDEO"
+            )
+            mock_log.assert_awaited_once()
+            mock_update.assert_awaited_once_with(
+                mock_db_session, mock_job.id, JobStatusEnum.FAILED
+            )
+
+
+@pytest.mark.integration
 class TestNextStatusAfterFactCheck:
     @pytest.mark.parametrize(
         "format_type,expected",

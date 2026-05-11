@@ -317,13 +317,17 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
 async def _transition_asset_generation(db: AsyncSession, job) -> None:
     video_script = await get_latest_format_script(db, job.id, "VIDEO")
 
-    studio_context: Dict[str, Any] = {"job_id": job.id}
+    if not video_script or not video_script.format_payload:
+        raise Exception(
+            f"Cannot proceed to ASSET_GENERATION for Job {job.id}: "
+            f"no approved VIDEO format script with payload found."
+        )
 
-    if video_script and video_script.format_payload:
-        format_payload = video_script.format_payload
-        studio_context["scenes"] = format_payload.get("scenes", [])
-        studio_context["visual_style"] = format_payload.get("visual_style", "")
-        studio_context["script_content"] = video_script.content
+    studio_context: Dict[str, Any] = {"job_id": job.id}
+    format_payload = video_script.format_payload
+    studio_context["scenes"] = format_payload.get("scenes", [])
+    studio_context["visual_style"] = format_payload.get("visual_style", "")
+    studio_context["script_content"] = video_script.content
 
     studio = AssetStudioAgent(
         model_name=settings.asset_model,

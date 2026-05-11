@@ -1,8 +1,30 @@
-from pydantic import BaseModel, Field, ConfigDict, HttpUrl
-from typing import List, Dict, Optional, Any, Union
+from pydantic import BaseModel, Field, ConfigDict, HttpUrl, Discriminator, Tag
+from typing import Annotated, List, Dict, Optional, Any, Union
 from uuid import UUID
 from datetime import datetime
 from enum import Enum
+
+from app.schemas.formats import (
+    VideoFormatPayload,
+    BlogFormatPayload,
+    CarouselFormatPayload,
+)
+
+
+def _discriminate_format(v: Any) -> str:
+    if isinstance(v, dict):
+        return v.get("_format") or v.get("format") or ""
+    return getattr(v, "format", "")
+
+
+FormatPayload = Annotated[
+    Union[
+        Annotated[VideoFormatPayload, Tag("video")],
+        Annotated[BlogFormatPayload, Tag("blog")],
+        Annotated[CarouselFormatPayload, Tag("carousel")],
+    ],
+    Discriminator(_discriminate_format),
+]
 
 
 # ==========================================
@@ -165,7 +187,7 @@ class ScriptResponse(BaseModel):
     feedback_history: List[Union[str, Dict[str, Any]]]
     claims: List[FactCheckClaimResponse] = Field(default_factory=list)
     format_type: Optional[str] = "VIDEO"
-    format_payload: Optional[Dict[str, Any]] = None
+    format_payload: Optional[FormatPayload] = None
     created_at: datetime
     updated_at: datetime
 
@@ -191,8 +213,8 @@ class RenderJobResponse(BaseModel):
     topic: str
     status: JobStatusEnum
     strict_compliance_mode: bool
-    format_type: Optional[str] = "all"
-    platform: Optional[str] = None
+    format_type: Optional[FormatTypeEnum] = FormatTypeEnum.ALL
+    platform: Optional[PlatformEnum] = None
     final_video_url: Optional[str]
     refined_context: Optional[str] = None
     error_log: Optional[Dict[str, Any]]

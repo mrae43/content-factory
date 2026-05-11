@@ -1,0 +1,1110 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Content Factory API (2026)",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/jobs/": {
+      "post": {
+        "tags": [
+          "Content Factory"
+        ],
+        "summary": "Create Render Job",
+        "operationId": "create_render_job_api_v1_jobs__post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RenderJobResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Content Factory"
+        ],
+        "summary": "List Jobs",
+        "operationId": "list_jobs_api_v1_jobs__get",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/JobStatusEnum"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RenderJobResponse"
+                  },
+                  "title": "Response List Jobs Api V1 Jobs  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "Content Factory"
+        ],
+        "summary": "Get Render Job",
+        "operationId": "get_render_job_api_v1_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RenderJobResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}/approve-script": {
+      "post": {
+        "tags": [
+          "Content Factory"
+        ],
+        "summary": "Approve Script",
+        "operationId": "approve_script_api_v1_jobs__job_id__approve_script_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScriptApprovalRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RenderJobResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "Health Check",
+        "operationId": "health_check__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AssetRenderMeta": {
+        "properties": {
+          "start_time_sec": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Time Sec"
+          },
+          "end_time_sec": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Time Sec"
+          },
+          "synthid_watermark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Synthid Watermark",
+            "description": "Google SynthID signature for compliance"
+          },
+          "prompt_used": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Used",
+            "description": "The exact Veo/Lyria prompt used"
+          }
+        },
+        "type": "object",
+        "title": "AssetRenderMeta",
+        "description": "Schema for the JSONB render_meta column in Assets."
+      },
+      "AssetResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "asset_type": {
+            "$ref": "#/components/schemas/AssetTypeEnum"
+          },
+          "url_or_path": {
+            "type": "string",
+            "title": "Url Or Path"
+          },
+          "render_meta": {
+            "$ref": "#/components/schemas/AssetRenderMeta"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "asset_type",
+          "url_or_path",
+          "render_meta",
+          "created_at"
+        ],
+        "title": "AssetResponse",
+        "description": "Outputs for Step 7: Multi-modal generated assets."
+      },
+      "AssetTypeEnum": {
+        "type": "string",
+        "enum": [
+          "VISUAL_VEO",
+          "AUDIO_LYRIA",
+          "VOICEOVER",
+          "SUBTITLE_JSON",
+          "DATA_CHART"
+        ],
+        "title": "AssetTypeEnum"
+      },
+      "BlogFormatPayload": {
+        "properties": {
+          "_format": {
+            "type": "string",
+            "const": "blog",
+            "title": "Format",
+            "default": "blog"
+          },
+          "_version": {
+            "type": "integer",
+            "title": "Version",
+            "default": 1
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "subtitle": {
+            "type": "string",
+            "title": "Subtitle"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/BlogSection"
+            },
+            "type": "array",
+            "title": "Sections"
+          },
+          "seo_meta": {
+            "$ref": "#/components/schemas/SeoMeta"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "call_to_action": {
+            "type": "string",
+            "title": "Call To Action"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "subtitle",
+          "sections",
+          "seo_meta",
+          "tags",
+          "call_to_action"
+        ],
+        "title": "BlogFormatPayload"
+      },
+      "BlogSection": {
+        "properties": {
+          "heading": {
+            "type": "string",
+            "title": "Heading"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          },
+          "key_takeaway": {
+            "type": "string",
+            "title": "Key Takeaway"
+          },
+          "sources_used": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Sources Used"
+          },
+          "word_count": {
+            "type": "integer",
+            "title": "Word Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "heading",
+          "body",
+          "key_takeaway",
+          "word_count"
+        ],
+        "title": "BlogSection"
+      },
+      "CarouselFormatPayload": {
+        "properties": {
+          "_format": {
+            "type": "string",
+            "const": "carousel",
+            "title": "Format",
+            "default": "carousel"
+          },
+          "_version": {
+            "type": "integer",
+            "title": "Version",
+            "default": 1
+          },
+          "slides": {
+            "items": {
+              "$ref": "#/components/schemas/CarouselSlide"
+            },
+            "type": "array",
+            "title": "Slides"
+          },
+          "thread_title": {
+            "type": "string",
+            "title": "Thread Title"
+          },
+          "hashtags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Hashtags"
+          },
+          "cta_slide": {
+            "type": "string",
+            "title": "Cta Slide"
+          },
+          "char_limit_violations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Char Limit Violations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slides",
+          "thread_title",
+          "hashtags",
+          "cta_slide"
+        ],
+        "title": "CarouselFormatPayload"
+      },
+      "CarouselSlide": {
+        "properties": {
+          "slide_number": {
+            "type": "integer",
+            "title": "Slide Number"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "visual_prompt": {
+            "type": "string",
+            "title": "Visual Prompt"
+          },
+          "hook_type": {
+            "type": "string",
+            "title": "Hook Type"
+          },
+          "sources_used": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Sources Used"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slide_number",
+          "text",
+          "visual_prompt",
+          "hook_type"
+        ],
+        "title": "CarouselSlide"
+      },
+      "FactCheckClaimResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "claim_text": {
+            "type": "string",
+            "title": "Claim Text"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/VerdictEnum"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          },
+          "evidence_references": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Evidence References",
+            "description": "IDs of ResearchChunks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "claim_text",
+          "verdict",
+          "confidence"
+        ],
+        "title": "FactCheckClaimResponse",
+        "description": "Outputs for Step 4 & 6: Red Team Evaluation Results."
+      },
+      "FormatTypeEnum": {
+        "type": "string",
+        "enum": [
+          "all",
+          "video",
+          "blog",
+          "carousel"
+        ],
+        "title": "FormatTypeEnum"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "JobCreateRequest": {
+        "properties": {
+          "topic": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 3,
+            "title": "Topic",
+            "example": "BRICS De-dollarization 2025"
+          },
+          "pre_context": {
+            "$ref": "#/components/schemas/PreContextPayload"
+          },
+          "strict_compliance_mode": {
+            "type": "boolean",
+            "title": "Strict Compliance Mode",
+            "description": "Enforce rigorous fact-checking",
+            "default": true
+          },
+          "format_type": {
+            "$ref": "#/components/schemas/FormatTypeEnum",
+            "description": "Output format: all, video, blog, or carousel",
+            "default": "all"
+          },
+          "platform": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlatformEnum"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Target platform: twitter, linkedin, instagram, youtube"
+          }
+        },
+        "type": "object",
+        "required": [
+          "topic",
+          "pre_context"
+        ],
+        "title": "JobCreateRequest",
+        "description": "Payload for Step 1: User inserts topic & context."
+      },
+      "JobStatusEnum": {
+        "type": "string",
+        "enum": [
+          "PENDING",
+          "RESEARCHING",
+          "FACT_CHECKING_RESEARCH",
+          "SCRIPTING",
+          "FACT_CHECKING_SCRIPT",
+          "FORMATTING",
+          "ASSET_GENERATION",
+          "COMPLETED",
+          "FAILED",
+          "HUMAN_REVIEW_NEEDED"
+        ],
+        "title": "JobStatusEnum"
+      },
+      "PlatformEnum": {
+        "type": "string",
+        "enum": [
+          "twitter",
+          "linkedin",
+          "instagram",
+          "youtube"
+        ],
+        "title": "PlatformEnum"
+      },
+      "PreContextPayload": {
+        "properties": {
+          "source_urls": {
+            "items": {
+              "type": "string",
+              "maxLength": 2083,
+              "minLength": 1,
+              "format": "uri"
+            },
+            "type": "array",
+            "title": "Source Urls",
+            "description": "URLs to scrape for research"
+          },
+          "raw_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Text",
+            "description": "Raw copied text or book excerpts"
+          },
+          "target_audience": {
+            "type": "string",
+            "title": "Target Audience",
+            "description": "e.g., Academics, TikTok, Investors",
+            "default": "General"
+          },
+          "guardrail_strictness": {
+            "type": "string",
+            "title": "Guardrail Strictness",
+            "description": "Defines how aggressively the Red Team operates",
+            "default": "High"
+          }
+        },
+        "type": "object",
+        "title": "PreContextPayload",
+        "description": "Schema for the JSONB pre_context column provided by the user."
+      },
+      "RenderJobResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "topic": {
+            "type": "string",
+            "title": "Topic"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatusEnum"
+          },
+          "strict_compliance_mode": {
+            "type": "boolean",
+            "title": "Strict Compliance Mode"
+          },
+          "format_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Format Type",
+            "default": "all"
+          },
+          "platform": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Platform"
+          },
+          "final_video_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Video Url"
+          },
+          "refined_context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refined Context"
+          },
+          "error_log": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Log"
+          },
+          "pre_context": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pre Context",
+            "description": "Original user-provided context"
+          },
+          "scripts": {
+            "items": {
+              "$ref": "#/components/schemas/ScriptResponse"
+            },
+            "type": "array",
+            "title": "Scripts"
+          },
+          "assets": {
+            "items": {
+              "$ref": "#/components/schemas/AssetResponse"
+            },
+            "type": "array",
+            "title": "Assets"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "topic",
+          "status",
+          "strict_compliance_mode",
+          "final_video_url",
+          "error_log",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "RenderJobResponse",
+        "description": "Outputs for Step 8: The Master Object State."
+      },
+      "ScriptApprovalRequest": {
+        "properties": {
+          "is_approved": {
+            "type": "boolean",
+            "title": "Is Approved",
+            "description": "Approve or reject the script"
+          },
+          "human_feedback": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Human Feedback",
+            "description": "Feedback to send back to the Script Agent"
+          }
+        },
+        "type": "object",
+        "required": [
+          "is_approved"
+        ],
+        "title": "ScriptApprovalRequest",
+        "description": "Payload for Human-in-the-loop overrides."
+      },
+      "ScriptResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          },
+          "is_approved": {
+            "type": "boolean",
+            "title": "Is Approved"
+          },
+          "feedback_history": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Feedback History"
+          },
+          "claims": {
+            "items": {
+              "$ref": "#/components/schemas/FactCheckClaimResponse"
+            },
+            "type": "array",
+            "title": "Claims"
+          },
+          "format_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Format Type",
+            "default": "VIDEO"
+          },
+          "format_payload": {
+            "anyOf": [
+              {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/VideoFormatPayload"
+                  },
+                  {
+                    "$ref": "#/components/schemas/BlogFormatPayload"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CarouselFormatPayload"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Format Payload"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "version",
+          "content",
+          "is_approved",
+          "feedback_history",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ScriptResponse",
+        "description": "Outputs for Step 5: The Agentic Script."
+      },
+      "SeoMeta": {
+        "properties": {
+          "meta_title": {
+            "type": "string",
+            "title": "Meta Title"
+          },
+          "meta_description": {
+            "type": "string",
+            "title": "Meta Description"
+          },
+          "keywords": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Keywords"
+          },
+          "canonical_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canonical Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "meta_title",
+          "meta_description",
+          "keywords"
+        ],
+        "title": "SeoMeta"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "VerdictEnum": {
+        "type": "string",
+        "enum": [
+          "SUPPORTED",
+          "CONTESTED",
+          "UNSUPPORTED",
+          "UNCERTAIN"
+        ],
+        "title": "VerdictEnum"
+      },
+      "VideoFormatPayload": {
+        "properties": {
+          "_format": {
+            "type": "string",
+            "const": "video",
+            "title": "Format",
+            "default": "video"
+          },
+          "_version": {
+            "type": "integer",
+            "title": "Version",
+            "default": 1
+          },
+          "scenes": {
+            "items": {
+              "$ref": "#/components/schemas/VideoScene"
+            },
+            "type": "array",
+            "minItems": 3,
+            "title": "Scenes"
+          },
+          "total_duration_seconds": {
+            "type": "number",
+            "maximum": 300.0,
+            "minimum": 60.0,
+            "title": "Total Duration Seconds"
+          },
+          "visual_style": {
+            "type": "string",
+            "minLength": 5,
+            "title": "Visual Style"
+          },
+          "audio_direction": {
+            "type": "string",
+            "title": "Audio Direction",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "scenes",
+          "total_duration_seconds",
+          "visual_style"
+        ],
+        "title": "VideoFormatPayload"
+      },
+      "VideoScene": {
+        "properties": {
+          "scene_number": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Scene Number"
+          },
+          "narration_text": {
+            "type": "string",
+            "minLength": 10,
+            "title": "Narration Text"
+          },
+          "visual_prompt": {
+            "type": "string",
+            "minLength": 10,
+            "title": "Visual Prompt"
+          },
+          "audio_cue": {
+            "type": "string",
+            "title": "Audio Cue",
+            "default": ""
+          },
+          "duration_seconds": {
+            "type": "number",
+            "maximum": 60.0,
+            "minimum": 3.0,
+            "title": "Duration Seconds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scene_number",
+          "narration_text",
+          "visual_prompt",
+          "duration_seconds"
+        ],
+        "title": "VideoScene"
+      }
+    }
+  }
+}
