@@ -8,6 +8,14 @@ TEST_DATABASE_URL = (
     "postgresql+asyncpg://postgres:postgres@localhost:5432/content_factory_test"
 )
 
+for _k, _v in {
+    "GEMINI_API_KEY": "test-gemini-key",
+    "TAVILY_API_KEY": "test-tavily-key",
+    "TOGETHER_API_KEY": "test-together-key",
+    "DATABASE_URL": "postgresql+asyncpg://test:test@localhost:5432/test",
+}.items():
+    os.environ.setdefault(_k, _v)
+
 
 @pytest.fixture(scope="session")
 def anyio_backend():
