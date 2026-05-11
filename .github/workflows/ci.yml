@@ -13,6 +13,7 @@ concurrency:
 env:
   PYTHON_VERSION: "3.11"
   NODE_VERSION: "22"
+  PNPM_VERSION: "11"
   GEMINI_API_KEY: "ci-dummy-key"
   TAVILY_API_KEY: "ci-dummy-key"
   TEST_DB_SYNC: postgresql+psycopg2://postgres:postgres@localhost:5432/content_factory_test
@@ -25,12 +26,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - run: pip install ruff
-      - run: ruff format apps/api --check
-      - run: ruff check apps/api
+      - run: uv run --project apps/api ruff format . --check
+      - run: uv run --project apps/api ruff check .
 
   unit-tests:
     name: Unit Tests
@@ -52,14 +52,14 @@ jobs:
           --health-retries 5
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - run: cd apps/api && pip install -e ".[test]"
-      - run: cd apps/api && alembic upgrade head
+      - run: uv sync --project apps/api --extra test
+      - run: uv run --project apps/api alembic upgrade head
         env:
           DATABASE_URL: ${{ env.TEST_DB_SYNC }}
-      - run: cd apps/api && pytest tests/ -v -m unit --tb=short -x || [ $? -eq 5 ]
+      - run: uv run --project apps/api pytest tests/ -v -m unit --tb=short -x || [ $? -eq 5 ]
         env:
           DATABASE_URL: ${{ env.TEST_DB_ASYNC }}
           GEMINI_API_KEY: ${{ env.GEMINI_API_KEY }}
@@ -71,11 +71,11 @@ jobs:
     needs: lint-python
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - run: cd apps/api && pip install -e ".[test]"
-      - run: cd apps/api && pytest tests/ -v -m agent --tb=short -x || [ $? -eq 5 ]
+      - run: uv sync --project apps/api --extra test
+      - run: uv run --project apps/api pytest tests/ -v -m agent --tb=short -x || [ $? -eq 5 ]
         env:
           DATABASE_URL: ${{ env.DUMMY_DB }}
           GEMINI_API_KEY: ${{ env.GEMINI_API_KEY }}
@@ -101,14 +101,14 @@ jobs:
           --health-retries 5
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - run: cd apps/api && pip install -e ".[test]"
-      - run: cd apps/api && alembic upgrade head
+      - run: uv sync --project apps/api --extra test
+      - run: uv run --project apps/api alembic upgrade head
         env:
           DATABASE_URL: ${{ env.TEST_DB_SYNC }}
-      - run: cd apps/api && pytest tests/ -v -m integration --tb=short -x
+      - run: uv run --project apps/api pytest tests/ -v -m integration --tb=short -x
         env:
           DATABASE_URL: ${{ env.TEST_DB_ASYNC }}
           GEMINI_API_KEY: ${{ env.GEMINI_API_KEY }}
@@ -121,7 +121,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
         with:
-          version: 10
+          version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -137,7 +137,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
         with:
-          version: 10
+          version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
