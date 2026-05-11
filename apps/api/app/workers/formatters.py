@@ -462,9 +462,7 @@ class VideoFormatterAgent(BaseAgent):
                 ("human", VIDEO_FORMATTER_HUMAN),
             ]
         )
-        exec_chain = exec_prompt | self.llm.with_structured_output(
-            VideoFormatterOutput
-        )
+        exec_chain = exec_prompt | self.llm.with_structured_output(VideoFormatterOutput)
         result: VideoFormatterOutput = await exec_chain.ainvoke(
             {
                 "plan": plan_text,

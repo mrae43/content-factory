@@ -21,7 +21,11 @@ from app.db.models import Script
 from app.services.vector_store import ContentFactoryVectorStore
 from app.services.web_search import TavilySearchService
 from app.services.chunking import process_extraction_job
-from app.services.format_validator import BlogValidator, CarouselValidator, VideoValidator
+from app.services.format_validator import (
+    BlogValidator,
+    CarouselValidator,
+    VideoValidator,
+)
 from app.workers.tasks import cleanup_local_research_chunks
 from app.workers.agents import (
     ResearchAgent,
@@ -31,7 +35,11 @@ from app.workers.agents import (
     AgentActionStatus,
 )
 from app.workers.optimizer import ScriptOptimizerAgent
-from app.workers.formatters import BlogFormatterAgent, CarouselFormatterAgent, VideoFormatterAgent
+from app.workers.formatters import (
+    BlogFormatterAgent,
+    CarouselFormatterAgent,
+    VideoFormatterAgent,
+)
 from app.workers.harness import FormatterHarness
 from app.schemas.shorts import JobStatusEnum, next_status_after_fact_check
 from app.core.config import settings

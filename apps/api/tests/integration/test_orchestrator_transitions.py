@@ -442,9 +442,7 @@ class TestTransitionScripting:
         agent_result_success,
     ):
         mock_job.status = JobStatusEnum.SCRIPTING
-        result = agent_result_success(
-            payload={"script_content": "New script content"}
-        )
+        result = agent_result_success(payload={"script_content": "New script content"})
 
         with (
             patch(
@@ -486,9 +484,7 @@ class TestTransitionScripting:
     ):
         mock_job.status = JobStatusEnum.SCRIPTING
         mock_script.version = 2
-        result = agent_result_success(
-            payload={"script_content": "Revised script"}
-        )
+        result = agent_result_success(payload={"script_content": "Revised script"})
 
         with (
             patch(
@@ -568,9 +564,7 @@ class TestTransitionScripting:
         ]
         mock_agent_instance = AsyncMock()
         mock_agent_instance.run = AsyncMock(
-            return_value=agent_result_success(
-                payload={"script_content": "Toned down"}
-            )
+            return_value=agent_result_success(payload={"script_content": "Toned down"})
         )
 
         with (

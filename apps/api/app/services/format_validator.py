@@ -3,7 +3,11 @@ from typing import Optional
 
 from pydantic import BaseModel, ValidationError
 
-from app.schemas.formats import BlogFormatPayload, CarouselFormatPayload, VideoFormatPayload
+from app.schemas.formats import (
+    BlogFormatPayload,
+    CarouselFormatPayload,
+    VideoFormatPayload,
+)
 
 
 class FormatValidationResult(BaseModel):
