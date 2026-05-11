@@ -521,10 +521,9 @@ class StudioPromptSchema(BaseModel):
 
 class AssetStudioAgent(BaseAgent):
     async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
-        # In V1, we use Gemini Multi-modal to generate the PROMPTS for Veo/Lyria,
-        # rather than fully generating the video in python yet.
         script = context.get("script_content", "")
-        storyboard = context.get("storyboard", [])
+        scenes = context.get("scenes", [])
+        visual_style = context.get("visual_style", "")
 
         prompt = ChatPromptTemplate.from_messages(
             [
@@ -532,20 +531,25 @@ class AssetStudioAgent(BaseAgent):
                     "system",
                     (
                         "You are the Multi-Modal Art Director for the AI Content Factory.\n"
-                        "Your mission: Translate creative storyboards into technical directives for production-grade AI models.\n"
+                        "Your mission: Translate video scenes and visual style into technical directives for production-grade AI models.\n\n"
                         "TECHNICAL SPECS:\n"
                         "1. VEO (Video): Create cinematic 4K prompts. Define camera style (drone, close-up) and lighting (golden hour, high-contrast).\n"
                         "2. LYRIA (Audio): Define orchestral/electronic scoring themes and precise voiceover pacing directives.\n"
-                        "3. PYTHON (Data Viz): For charts, specify titles, axis labels, and chart types (e.g., 'Moving average line chart of BRICS GDP')."
+                        "3. PYTHON (Data Viz): For charts, specify titles, axis labels, and chart types (e.g., 'Moving average line chart of BRICS GDP').\n\n"
+                        "INPUT FORMAT:\n"
+                        "- scenes: list of {scene_number, narration_text, visual_prompt, audio_cue, duration_seconds}\n"
+                        "- visual_style: overall visual direction for the video\n"
+                        "- script: the narrative text for reference"
                     ),
                 ),
                 (
                     "human",
                     (
-                        "Refine the technical assets for the following script and storyboard:\n"
-                        "<script>\n{script}\n</script>\n"
-                        "<storyboard>\n{storyboard}\n</storyboard>\n"
-                        "Analyze the scene transitions first, then generate the final prompt set."
+                        "Generate visual and audio production prompts for the following video:\n\n"
+                        "<visual_style>\n{visual_style}\n</visual_style>\n\n"
+                        "<scenes>\n{scenes}\n</scenes>\n\n"
+                        "<script>\n{script}\n</script>\n\n"
+                        "Analyze the scene transitions and visual style first, then generate the final prompt set."
                     ),
                 ),
             ]
@@ -553,10 +557,13 @@ class AssetStudioAgent(BaseAgent):
 
         chain = prompt | self.llm.with_structured_output(StudioPromptSchema)
         result: StudioPromptSchema = await chain.ainvoke(
-            {"script": script, "storyboard": storyboard}
+            {
+                "visual_style": visual_style,
+                "scenes": scenes,
+                "script": script,
+            }
         )
 
-        # Mocking the actual generation URL return for MVP
         video_url = f"s3://factory/renders/{context.get('job_id', 'mock')}_rendered.mp4"
 
         return AgentResult(
