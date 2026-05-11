@@ -18,7 +18,7 @@ from app.db.crud import (
 from app.services.vector_store import ContentFactoryVectorStore
 from app.services.web_search import TavilySearchService
 from app.services.chunking import process_extraction_job
-from app.services.format_validator import BlogValidator, CarouselValidator
+from app.services.format_validator import BlogValidator, CarouselValidator, VideoValidator
 from app.workers.tasks import cleanup_local_research_chunks
 from app.workers.agents import (
     ResearchAgent,
@@ -28,7 +28,7 @@ from app.workers.agents import (
     AgentActionStatus,
 )
 from app.workers.optimizer import ScriptOptimizerAgent
-from app.workers.formatters import BlogFormatterAgent, CarouselFormatterAgent
+from app.workers.formatters import BlogFormatterAgent, CarouselFormatterAgent, VideoFormatterAgent
 from app.workers.harness import FormatterHarness
 from app.schemas.shorts import JobStatusEnum, next_status_after_fact_check
 from app.core.config import settings
@@ -388,6 +388,18 @@ async def _transition_formatting(db: AsyncSession, job) -> None:
             max_retries=2,
         )
         formatter_specs.append(("CAROUSEL", carousel_harness, carousel_ctx))
+
+    if format_type in ("video", "all"):
+        video_ctx = {**base_context, "format_type": "video"}
+        video_harness = FormatterHarness(
+            formatter=VideoFormatterAgent(
+                model_name=settings.formatter_model,
+                temperature=settings.formatter_temperature,
+            ),
+            validator=VideoValidator(),
+            max_retries=2,
+        )
+        formatter_specs.append(("VIDEO", video_harness, video_ctx))
 
     if not formatter_specs:
         logger.warning(
