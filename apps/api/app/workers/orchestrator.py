@@ -335,6 +335,10 @@ async def _transition_asset_generation(db: AsyncSession, job) -> None:
     )
     result = await studio.run(context=studio_context)
 
+    if result.status == AgentActionStatus.ERROR:
+        await log_error(db, job.id, result.reasoning, phase="ASSET_GENERATION")
+        return
+
     if result.status == AgentActionStatus.SUCCESS:
         job.final_video_url = result.payload["video_url"]
         await db.commit()
