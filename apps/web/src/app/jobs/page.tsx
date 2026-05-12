@@ -2,6 +2,7 @@
 
 import { useJobs } from "@/hooks/use-jobs";
 import { JobStatusBadge } from "@/components/jobs/job-status-badge";
+import { FormatBadge } from "@/components/jobs/format-badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { useUIStore } from "@/stores/ui-store";
 import Link from "next/link";
@@ -13,6 +14,7 @@ const statusFilters = [
   "FACT_CHECKING_RESEARCH",
   "SCRIPTING",
   "FACT_CHECKING_SCRIPT",
+  "FORMATTING",
   "ASSET_GENERATION",
   "COMPLETED",
   "HUMAN_REVIEW_NEEDED",
@@ -68,11 +70,14 @@ export default function JobsPage() {
             <Link key={job.id} href={`/jobs/${job.id}`}>
               <Card className="mb-2 hover:bg-accent transition-colors">
                 <CardContent className="flex items-center justify-between p-4">
-                  <div>
-                    <p className="font-medium">{job.topic}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(job.created_at).toLocaleDateString()}
-                    </p>
+                  <div className="flex items-center gap-3">
+                    <div>
+                      <p className="font-medium">{job.topic}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(job.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <FormatBadge formatType={job.format_type} />
                   </div>
                   <JobStatusBadge status={job.status} />
                 </CardContent>
