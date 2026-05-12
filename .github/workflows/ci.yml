@@ -13,7 +13,6 @@ concurrency:
 env:
   PYTHON_VERSION: "3.11"
   NODE_VERSION: "22"
-  PNPM_VERSION: "11"
   GEMINI_API_KEY: "ci-dummy-key"
   TAVILY_API_KEY: "ci-dummy-key"
   TEST_DB_SYNC: postgresql+psycopg2://postgres:postgres@localhost:5432/content_factory_test
@@ -120,8 +119,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -136,8 +133,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
