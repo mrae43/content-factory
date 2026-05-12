@@ -27,7 +27,7 @@ class BlogValidator(FormatValidator):
             validated = BlogFormatPayload.model_validate(payload)
             return FormatValidationResult(
                 valid=True,
-                validated_payload=validated.model_dump(by_alias=True),
+                validated_payload=validated.model_dump(by_alias=True, mode="json"),
             )
         except ValidationError as e:
             return FormatValidationResult(
@@ -72,7 +72,7 @@ class CarouselValidator(FormatValidator):
                 ),
             )
 
-        dump = validated.model_dump(by_alias=True)
+        dump = validated.model_dump(by_alias=True, mode="json")
         dump["char_limit_violations"] = []
         return FormatValidationResult(
             valid=True,
@@ -112,5 +112,5 @@ class VideoValidator(FormatValidator):
 
         return FormatValidationResult(
             valid=True,
-            validated_payload=validated.model_dump(by_alias=True),
+            validated_payload=validated.model_dump(by_alias=True, mode="json"),
         )
