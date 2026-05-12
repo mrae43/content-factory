@@ -3,6 +3,7 @@
 import { useJobs } from "@/hooks/use-jobs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { JobStatusBadge } from "@/components/jobs/job-status-badge";
+import { FormatBadge } from "@/components/jobs/format-badge";
 import Link from "next/link";
 
 export default function HomePage() {
@@ -54,7 +55,9 @@ export default function HomePage() {
             <CardTitle className="text-sm font-medium">Active</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{activeJobs?.length || 0}</div>
+            <div className="text-2xl font-bold">
+              {activeJobs?.length || 0}
+            </div>
           </CardContent>
         </Card>
         <Card>
@@ -75,11 +78,14 @@ export default function HomePage() {
           <Link key={job.id} href={`/jobs/${job.id}`}>
             <Card className="mb-2 hover:bg-accent transition-colors">
               <CardContent className="flex items-center justify-between p-4">
-                <div>
-                  <p className="font-medium">{job.topic}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {new Date(job.created_at).toLocaleDateString()}
-                  </p>
+                <div className="flex items-center gap-3">
+                  <div>
+                    <p className="font-medium">{job.topic}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(job.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <FormatBadge formatType={job.format_type} />
                 </div>
                 <JobStatusBadge status={job.status} />
               </CardContent>
