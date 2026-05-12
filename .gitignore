@@ -187,3 +187,6 @@ graphify-out/
 # Agent/tool config (not project code)
 .opencode/
 opencode.jsonc
+
+# TypeScript
+*.tsbuildinfo

@@ -4,11 +4,13 @@ WORKDIR /app
 ARG NEXT_PUBLIC_API_URL=http://localhost:8000
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
+RUN corepack enable
+
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/package.json ./apps/web/package.json
 COPY libs/shared-types/package.json ./libs/shared-types/package.json
 
-RUN corepack enable && pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile
 
 COPY apps/web ./apps/web
 COPY libs/shared-types ./libs/shared-types
