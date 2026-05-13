@@ -2,6 +2,7 @@
 
 import { useJobDetail, useApproveScript } from "@/hooks/use-jobs";
 import { use, useState, type ChangeEvent } from "react";
+import { toast } from "sonner";
 import type {
   ScriptResponse,
   FactCheckClaimResponse,
@@ -19,6 +20,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from "@/components/ui/collapsible";
 import { BlogViewer } from "@/components/viewers/blog-viewer";
 import { CarouselViewer } from "@/components/viewers/carousel-viewer";
 import { VideoScriptViewer } from "@/components/viewers/video-script-viewer";
@@ -51,6 +58,25 @@ type FeedbackEntry =
       [key: string]: unknown;
     };
 
+function parseErrorLog(errorLog: unknown): {
+  stage?: string;
+  message: string;
+  raw: unknown;
+} {
+  if (typeof errorLog === "object" && errorLog !== null) {
+    const obj = errorLog as Record<string, unknown>;
+    return {
+      stage: typeof obj.stage === "string" ? obj.stage : undefined,
+      message:
+        typeof obj.message === "string"
+          ? obj.message
+          : Object.keys(obj)[0] || "Unknown error",
+      raw: errorLog,
+    };
+  }
+  return { message: String(errorLog), raw: errorLog };
+}
+
 export default function JobDetailPage({
   params,
 }: {
@@ -64,7 +90,42 @@ export default function JobDetailPage({
   const [showFullRawText, setShowFullRawText] = useState(false);
 
   if (isLoading || !job) {
-    return <div className="text-muted-foreground">Loading job...</div>;
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-64" />
+            <Skeleton className="h-4 w-48" />
+          </div>
+          <div className="flex gap-2">
+            <Skeleton className="h-5 w-16 rounded-full" />
+            <Skeleton className="h-5 w-24 rounded-full" />
+          </div>
+        </div>
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-4 w-32" />
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-1">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton key={i} className="h-2 w-8 rounded-full" />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-4 w-40" />
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-4 w-1/2" />
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   const scripts = job.scripts ?? [];
@@ -82,6 +143,11 @@ export default function JobDetailPage({
 
   const latestScript = masterScript ?? scripts[scripts.length - 1];
 
+  const isPolling =
+    job.status !== "COMPLETED" &&
+    job.status !== "HUMAN_REVIEW_NEEDED" &&
+    job.status !== "FAILED";
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -95,6 +161,23 @@ export default function JobDetailPage({
         <div className="flex items-center gap-2">
           <FormatBadge formatType={job.format_type} />
           <JobStatusBadge status={job.status} />
+          {isPolling && (
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+              Live
+            </span>
+          )}
+          {!isPolling &&
+            (job.status === "COMPLETED" || job.status === "FAILED") && (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <span
+                  className={`h-2 w-2 rounded-full ${
+                    job.status === "COMPLETED" ? "bg-green-500" : "bg-red-500"
+                  }`}
+                />
+                {job.status === "COMPLETED" ? "Completed" : "Stopped"}
+              </span>
+            )}
         </div>
       </div>
 
@@ -110,18 +193,56 @@ export default function JobDetailPage({
         </CardContent>
       </Card>
 
-      {job.status === "FAILED" && job.error_log && (
-        <Card className="border-red-300 bg-red-50">
-          <CardHeader>
-            <CardTitle className="text-sm text-red-800">Error Log</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <pre className="whitespace-pre-wrap text-sm text-red-900">
-              {JSON.stringify(job.error_log, null, 2)}
-            </pre>
-          </CardContent>
-        </Card>
-      )}
+      {job.status === "FAILED" && job.error_log && (() => {
+        const { stage, message, raw } = parseErrorLog(job.error_log);
+        return (
+          <Card className="border-red-300 bg-red-50">
+            <CardHeader>
+              <CardTitle className="text-sm text-red-800">
+                Job Failed
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {stage && (
+                <p className="text-sm">
+                  <span className="font-medium">Stage:</span>{" "}
+                  {stage.replace(/_/g, " ")}
+                </p>
+              )}
+              <p className="text-sm">
+                <span className="font-medium">Reason:</span> {message}
+              </p>
+              <Collapsible>
+                <CollapsibleTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    Show technical details
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <pre className="mt-2 whitespace-pre-wrap text-xs text-red-900 bg-red-100 p-3 rounded">
+                    {JSON.stringify(raw, null, 2)}
+                  </pre>
+                </CollapsibleContent>
+              </Collapsible>
+              <p className="text-xs text-muted-foreground">
+                This job won&apos;t retry automatically. You can create a new
+                job with the same inputs.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const rawText =
+                    (job.pre_context as Record<string, unknown>)?.raw_text ?? "";
+                  window.location.href = `/jobs/new?topic=${encodeURIComponent(job.topic)}&raw_text=${encodeURIComponent(typeof rawText === "string" ? rawText : "")}`;
+                }}
+              >
+                Duplicate Job
+              </Button>
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {job.refined_context && (
         <Card>
@@ -417,6 +538,10 @@ export default function JobDetailPage({
                             setShowRejectForm(false);
                             setFeedbackText("");
                           },
+                          onSuccess: () =>
+                            toast.info("Revision requested. Polling resumed."),
+                          onError: () =>
+                            toast.error("Action failed. Please try again."),
                         }
                       );
                     }}
@@ -439,7 +564,15 @@ export default function JobDetailPage({
                 <Button
                   disabled={approvalMutation.isPending}
                   onClick={() =>
-                    approvalMutation.mutate({ isApproved: true })
+                    approvalMutation.mutate(
+                      { isApproved: true },
+                      {
+                        onSuccess: () =>
+                          toast.success("Script approved. Pipeline resuming."),
+                        onError: () =>
+                          toast.error("Action failed. Please try again."),
+                      }
+                    )
                   }
                 >
                   {approvalMutation.isPending
