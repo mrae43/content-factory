@@ -124,7 +124,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: npx nx lint web
+      - run: npx nx affected -t lint --base=origin/main
 
   build-frontend:
     name: Build Frontend
@@ -138,7 +138,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: npx nx build web
+      - run: npx nx affected -t build --base=origin/main
 
   docker-build-api:
     name: Docker Build API

@@ -84,5 +84,5 @@
       "outputs": ["{workspaceRoot}/libs/shared-types/src"]
     }
   },
-  "tags": ["scope:backend", "lang:python"]
+  "tags": ["type:app", "scope:backend", "lang:python"]
 }
