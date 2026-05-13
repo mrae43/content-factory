@@ -26,8 +26,8 @@ dependencies = [
     "langchain-openai>=1.2.0",
 ]
 
-[tool.setuptools.packages.find]
-include = ["app*"]
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
 
 [project.optional-dependencies]
 test = [
