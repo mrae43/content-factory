@@ -20,12 +20,24 @@ importers:
       '@nx/next':
         specifier: ^22.6.5
         version: 22.7.1(b897ef641e96f90a77fd462443e54134)
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.14)
       nx:
         specifier: ^22.6.5
         version: 22.7.1
       openapi-typescript:
         specifier: ^7.13.0
         version: 7.13.0(typescript@5.9.3)
+      react:
+        specifier: 19.2.4
+        version: 19.2.4
+      react-dom:
+        specifier: 19.2.4
+        version: 19.2.4(react@19.2.4)
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
