@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import {
   Select,
   SelectContent,
@@ -38,25 +39,33 @@ export default function NewJobPage() {
   const [rawText, setRawText] = useState("");
   const [formatType, setFormatType] = useState("all");
   const [platform, setPlatform] = useState("_none");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const result = await createJob.mutateAsync({
-      topic,
-      pre_context: {
-        raw_text: rawText,
-        source_urls: [],
-        target_audience: "General",
-        guardrail_strictness: "High",
-      },
-      strict_compliance_mode: true,
-      format_type: formatType as "all" | "video" | "blog" | "carousel",
-      platform:
-        platform === "_none"
-          ? undefined
-          : (platform as "twitter" | "linkedin" | "instagram" | "youtube"),
-    });
-    router.push(`/jobs/${result.id}`);
+    try {
+      setErrorMessage(null);
+      const result = await createJob.mutateAsync({
+        topic,
+        pre_context: {
+          raw_text: rawText,
+          source_urls: [],
+          target_audience: "General",
+          guardrail_strictness: "High",
+        },
+        strict_compliance_mode: true,
+        format_type: formatType as "all" | "video" | "blog" | "carousel",
+        platform:
+          platform === "_none"
+            ? undefined
+            : (platform as "twitter" | "linkedin" | "instagram" | "youtube"),
+      });
+      router.push(`/jobs/${result.id}`);
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error ? err.message : "Please try again."
+      );
+    }
   };
 
   return (
@@ -126,6 +135,12 @@ export default function NewJobPage() {
                 </Select>
               </div>
             </div>
+            {errorMessage && (
+              <Alert variant="destructive">
+                <AlertTitle>Couldn't create job</AlertTitle>
+                <AlertDescription>{errorMessage}</AlertDescription>
+              </Alert>
+            )}
             <Button type="submit" disabled={createJob.isPending}>
               {createJob.isPending ? "Creating..." : "Create Job"}
             </Button>
