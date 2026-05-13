@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient, type Query } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, type Query, keepPreviousData } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import type {
   RenderJobResponse,
@@ -12,6 +12,7 @@ export function useJobs() {
     queryKey: ["jobs"],
     queryFn: () => apiClient<RenderJobResponse[]>("/api/v1/jobs/"),
     refetchInterval: 5000,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -26,6 +27,7 @@ export function useJobDetail(jobId: string) {
         : 3000;
     },
     enabled: !!jobId,
+    placeholderData: keepPreviousData,
   });
 }
 
