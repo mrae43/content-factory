@@ -34,6 +34,6 @@
       }
     }
   },
-  "tags": ["scope:frontend", "lang:typescript"],
+  "tags": ["type:app", "scope:frontend", "lang:typescript"],
   "implicitDependencies": ["shared-types"]
 }

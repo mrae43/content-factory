@@ -19,7 +19,7 @@
     },
     "dev": {
       "cache": false,
-      "persistent": true
+      "continuous": true
     },
     "generate-types": {
       "cache": true
@@ -35,7 +35,10 @@
       "!{projectRoot}/**/*.spec.ts",
       "!{projectRoot}/**/*.test.ts"
     ],
-    "sharedGlobals": []
+    "sharedGlobals": [
+      "{workspaceRoot}/tsconfig.base.json",
+      "{workspaceRoot}/.eslintrc.json"
+    ]
   },
   "analytics": false
 }

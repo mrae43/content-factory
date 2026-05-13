@@ -19,5 +19,5 @@
       }
     }
   },
-  "tags": ["scope:shared", "lang:typescript"]
+  "tags": ["type:util", "scope:shared", "lang:typescript"]
 }
