@@ -1,0 +1,11 @@
+[project]
+name = "content-factory-monorepo"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.uv]
+managed = true
+
+[tool.uv.workspace]
+members = ["apps/api"]
