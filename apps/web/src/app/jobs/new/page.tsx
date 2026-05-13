@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useCreateJob } from "@/hooks/use-jobs";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from "@/components/ui/collapsible";
 
 const FORMAT_OPTIONS = [
   { value: "all", label: "All Formats" },
@@ -35,15 +40,18 @@ const PLATFORM_OPTIONS = [
 
 export default function NewJobPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const createJob = useCreateJob();
-  const [topic, setTopic] = useState("");
-  const [rawText, setRawText] = useState("");
+  const [topic, setTopic] = useState(searchParams.get("topic") ?? "");
+  const [rawText, setRawText] = useState(searchParams.get("raw_text") ?? "");
   const [formatType, setFormatType] = useState("all");
   const [platform, setPlatform] = useState("_none");
+  const [targetAudience, setTargetAudience] = useState("General");
+  const [guardrailStrictness, setGuardrailStrictness] = useState("High");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showConfirmation, setShowConfirmation] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
     try {
       setErrorMessage(null);
       const result = await createJob.mutateAsync({
@@ -51,8 +59,8 @@ export default function NewJobPage() {
         pre_context: {
           raw_text: rawText,
           source_urls: [],
-          target_audience: "General",
-          guardrail_strictness: "High",
+          target_audience: targetAudience,
+          guardrail_strictness: guardrailStrictness,
         },
         strict_compliance_mode: true,
         format_type: formatType as "all" | "video" | "blog" | "carousel",
@@ -67,7 +75,13 @@ export default function NewJobPage() {
       setErrorMessage(
         err instanceof Error ? err.message : "Please try again."
       );
+      setShowConfirmation(false);
     }
+  };
+
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setShowConfirmation(true);
   };
 
   return (
@@ -77,7 +91,7 @@ export default function NewJobPage() {
           <CardTitle>Create New Job</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleFormSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="topic">Topic</Label>
               <Input
@@ -137,15 +151,89 @@ export default function NewJobPage() {
                 </Select>
               </div>
             </div>
+
+            <Collapsible>
+              <CollapsibleTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground"
+                  />
+                }
+              >
+                Advanced options
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-4 pt-2">
+                <div className="space-y-2">
+                  <Label>Target Audience</Label>
+                  <Input
+                    value={targetAudience}
+                    onChange={(e) => setTargetAudience(e.target.value)}
+                    placeholder="e.g., Marketing professionals"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Guardrail Strictness</Label>
+                  <Select
+                    value={guardrailStrictness}
+                    onValueChange={(v) =>
+                      v !== null && setGuardrailStrictness(v)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Low">Low</SelectItem>
+                      <SelectItem value="Medium">Medium</SelectItem>
+                      <SelectItem value="High">High</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+
             {errorMessage && (
               <Alert variant="destructive">
                 <AlertTitle>Couldn&apos;t create job</AlertTitle>
                 <AlertDescription>{errorMessage}</AlertDescription>
               </Alert>
             )}
-            <Button type="submit" disabled={createJob.isPending}>
-              {createJob.isPending ? "Creating..." : "Create Job"}
-            </Button>
+
+            {showConfirmation ? (
+              <div className="bg-muted p-4 rounded-lg space-y-2">
+                <p className="text-sm font-medium">Confirm your job:</p>
+                <p className="text-sm">Topic: &ldquo;{topic}&rdquo;</p>
+                <p className="text-sm text-muted-foreground">
+                  Format:{" "}
+                  {FORMAT_OPTIONS.find((o) => o.value === formatType)?.label}
+                  {platform !== "_none" &&
+                    ` | Platform: ${PLATFORM_OPTIONS.find((o) => o.value === platform)?.label}`}
+                </p>
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    type="button"
+                    disabled={createJob.isPending}
+                    onClick={handleSubmit}
+                  >
+                    {createJob.isPending ? "Creating..." : "Confirm & Create"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowConfirmation(false)}
+                    disabled={createJob.isPending}
+                  >
+                    Edit
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <Button type="submit" disabled={createJob.isPending}>
+                {createJob.isPending ? "Creating..." : "Create Job"}
+              </Button>
+            )}
           </form>
         </CardContent>
       </Card>
