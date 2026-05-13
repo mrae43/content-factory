@@ -28,8 +28,9 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - run: cd apps/api && uv run --group dev ruff format . --check
-      - run: cd apps/api && uv run --group dev ruff check .
+      - run: uv run --frozen --project apps/api --group dev ruff format . --check
+      - run: uv run --frozen --project apps/api --group dev ruff check .
+
 
   unit-tests:
     name: Unit Tests
