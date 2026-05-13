@@ -1,16 +1,16 @@
 import { Badge } from "@/components/ui/badge";
 
-const statusColors: Record<string, string> = {
-  PENDING: "bg-yellow-100 text-amber-900",
-  RESEARCHING: "bg-blue-100 text-blue-800",
-  FACT_CHECKING_RESEARCH: "bg-blue-100 text-blue-800",
-  SCRIPTING: "bg-purple-100 text-purple-800",
-  FACT_CHECKING_SCRIPT: "bg-orange-100 text-orange-800",
-  FORMATTING: "bg-teal-100 text-teal-800",
-  ASSET_GENERATION: "bg-indigo-100 text-indigo-800",
-  COMPLETED: "bg-green-100 text-green-800",
-  HUMAN_REVIEW_NEEDED: "bg-amber-100 text-amber-800",
-  FAILED: "bg-red-100 text-red-800",
+const statusStyles: Record<string, string> = {
+  PENDING: "bg-warning/15 text-warning",
+  RESEARCHING: "bg-info/15 text-info",
+  FACT_CHECKING_RESEARCH: "bg-info/15 text-info",
+  SCRIPTING: "bg-accent-purple/15 text-accent-purple",
+  FACT_CHECKING_SCRIPT: "bg-accent-orange/15 text-accent-orange",
+  FORMATTING: "bg-accent-teal/15 text-accent-teal",
+  ASSET_GENERATION: "bg-accent-indigo/15 text-accent-indigo",
+  COMPLETED: "bg-success/15 text-success",
+  HUMAN_REVIEW_NEEDED: "bg-warning/15 text-warning",
+  FAILED: "bg-destructive/15 text-destructive",
 };
 
 const statusLabels: Record<string, string> = {
@@ -33,7 +33,7 @@ interface JobStatusBadgeProps {
 export function JobStatusBadge({ status }: JobStatusBadgeProps) {
   return (
     <Badge
-      className={statusColors[status] || "bg-gray-100 text-gray-800"}
+      className={statusStyles[status] || "bg-muted text-muted-foreground"}
       aria-label={`Status: ${statusLabels[status] || status}`}
     >
       {statusLabels[status] || status.replace(/_/g, " ")}

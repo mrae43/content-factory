@@ -2,11 +2,11 @@
 
 import { Badge } from "@/components/ui/badge";
 
-const verdictColors: Record<string, string> = {
-  SUPPORTED: "bg-green-100 text-green-800",
-  UNSUPPORTED: "bg-red-100 text-red-800",
-  CONTESTED: "bg-yellow-100 text-yellow-800",
-  UNCERTAIN: "bg-gray-100 text-gray-800",
+const verdictStyles: Record<string, string> = {
+  SUPPORTED: "bg-success/15 text-success",
+  UNSUPPORTED: "bg-destructive/15 text-destructive",
+  CONTESTED: "bg-warning/15 text-warning",
+  UNCERTAIN: "bg-muted text-muted-foreground",
 };
 
 interface ClaimCardProps {
@@ -27,7 +27,7 @@ export function ClaimCard({
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm">{claim_text}</p>
         <div className="flex items-center gap-2 shrink-0">
-          <Badge className={verdictColors[verdict] || "bg-gray-100 text-gray-800"}>
+          <Badge className={verdictStyles[verdict] || "bg-muted text-muted-foreground"}>
             {verdict}
           </Badge>
           <span className="text-xs text-muted-foreground">
