@@ -21,7 +21,7 @@ export function useJobDetail(jobId: string) {
     queryFn: () => apiClient<RenderJobResponse>(`/api/v1/jobs/${jobId}`),
     refetchInterval: (query: Query<RenderJobResponse, Error>) => {
       const status = query.state.data?.status;
-      return status === "COMPLETED" || status === "HUMAN_REVIEW_NEEDED"
+      return status === "COMPLETED" || status === "HUMAN_REVIEW_NEEDED" || status === "FAILED"
         ? false
         : 3000;
     },
