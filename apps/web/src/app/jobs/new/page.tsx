@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useCreateJob } from "@/hooks/use-jobs";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -31,7 +31,7 @@ const FORMAT_OPTIONS = [
 ] as const;
 
 const PLATFORM_OPTIONS = [
-  { value: "_none", label: "None" },
+  { value: "none", label: "None" },
   { value: "twitter", label: "Twitter / X" },
   { value: "linkedin", label: "LinkedIn" },
   { value: "instagram", label: "Instagram" },
@@ -39,13 +39,21 @@ const PLATFORM_OPTIONS = [
 ] as const;
 
 export default function NewJobPage() {
+  return (
+    <Suspense>
+      <NewJobForm />
+    </Suspense>
+  );
+}
+
+function NewJobForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const createJob = useCreateJob();
   const [topic, setTopic] = useState(searchParams.get("topic") ?? "");
   const [rawText, setRawText] = useState(searchParams.get("raw_text") ?? "");
   const [formatType, setFormatType] = useState("all");
-  const [platform, setPlatform] = useState("_none");
+  const [platform, setPlatform] = useState("none");
   const [targetAudience, setTargetAudience] = useState("General");
   const [guardrailStrictness, setGuardrailStrictness] = useState("High");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -65,7 +73,7 @@ export default function NewJobPage() {
         strict_compliance_mode: true,
         format_type: formatType as "all" | "video" | "blog" | "carousel",
         platform:
-          platform === "_none"
+          platform === "none"
             ? undefined
             : (platform as "twitter" | "linkedin" | "instagram" | "youtube"),
       });
