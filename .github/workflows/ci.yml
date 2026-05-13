@@ -55,7 +55,7 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - run: uv sync --frozen --extra test
+      - run: uv sync --frozen --project apps/api --extra test
       - run: cd apps/api && uv run alembic upgrade head
         env:
           DATABASE_URL: ${{ env.TEST_DB_SYNC }}
@@ -74,7 +74,7 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - run: uv sync --frozen --extra test
+      - run: uv sync --frozen --project apps/api --extra test
       - run: cd apps/api && uv run pytest tests/ -v -m agent --tb=short -x || [ $? -eq 5 ]
         env:
           DATABASE_URL: ${{ env.DUMMY_DB }}
@@ -104,7 +104,7 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - run: uv sync --frozen --extra test
+      - run: uv sync --frozen --project apps/api --extra test
       - run: cd apps/api && uv run alembic upgrade head
         env:
           DATABASE_URL: ${{ env.TEST_DB_SYNC }}
