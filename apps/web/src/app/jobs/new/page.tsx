@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useCreateJob } from "@/hooks/use-jobs";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -61,6 +62,7 @@ export default function NewJobPage() {
             : (platform as "twitter" | "linkedin" | "instagram" | "youtube"),
       });
       router.push(`/jobs/${result.id}`);
+      toast.success("Job created — watching pipeline...");
     } catch (err) {
       setErrorMessage(
         err instanceof Error ? err.message : "Please try again."
