@@ -50,8 +50,10 @@ function NewJobForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const createJob = useCreateJob();
-  const [topic, setTopic] = useState(searchParams.get("topic") ?? "");
-  const [rawText, setRawText] = useState(searchParams.get("raw_text") ?? "");
+  const [topic, setTopic] = useState(() => searchParams.get("topic") ?? "");
+  const [rawText, setRawText] = useState(
+    () => searchParams.get("raw_text") ?? ""
+  );
   const [formatType, setFormatType] = useState("all");
   const [platform, setPlatform] = useState("none");
   const [targetAudience, setTargetAudience] = useState("General");
@@ -216,7 +218,7 @@ function NewJobForm() {
                 <p className="text-sm text-muted-foreground">
                   Format:{" "}
                   {FORMAT_OPTIONS.find((o) => o.value === formatType)?.label}
-                  {platform !== "_none" &&
+                  {platform !== "none" &&
                     ` | Platform: ${PLATFORM_OPTIONS.find((o) => o.value === platform)?.label}`}
                 </p>
                 <div className="flex gap-2 pt-2">
