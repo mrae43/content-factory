@@ -8,7 +8,7 @@
       "executor": "nx:run-commands",
       "options": {
         "cwd": "apps/api",
-        "command": "uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
+        "command": "uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
       }
     },
     "build": {
@@ -23,63 +23,63 @@
       "executor": "nx:run-commands",
       "options": {
         "cwd": "apps/api",
-        "command": "ruff format . --check && ruff check ."
+        "command": "uv run ruff format . --check && uv run ruff check ."
       }
     },
     "lint:fix": {
       "executor": "nx:run-commands",
       "options": {
         "cwd": "apps/api",
-        "command": "ruff format . && ruff check . --fix"
+        "command": "uv run ruff format . && uv run ruff check . --fix"
       }
     },
     "test": {
       "executor": "nx:run-commands",
       "options": {
         "cwd": "apps/api",
-        "command": "pytest tests/ -v"
+        "command": "uv run pytest tests/ -v"
       }
     },
     "test:unit": {
       "executor": "nx:run-commands",
       "options": {
         "cwd": "apps/api",
-        "command": "pytest tests/ -v -m unit"
+        "command": "uv run pytest tests/ -v -m unit"
       }
     },
     "test:agent": {
       "executor": "nx:run-commands",
       "options": {
         "cwd": "apps/api",
-        "command": "pytest tests/ -v -m agent"
+        "command": "uv run pytest tests/ -v -m agent"
       }
     },
     "test:integration": {
       "executor": "nx:run-commands",
       "options": {
         "cwd": "apps/api",
-        "command": "pytest tests/ -v -m integration"
+        "command": "uv run pytest tests/ -v -m integration"
       }
     },
     "migrate": {
       "executor": "nx:run-commands",
       "options": {
         "cwd": "apps/api",
-        "command": "alembic upgrade head"
+        "command": "uv run alembic upgrade head"
       }
     },
     "migrate:create": {
       "executor": "nx:run-commands",
       "options": {
         "cwd": "apps/api",
-        "command": "alembic revision --autogenerate -m"
+        "command": "uv run alembic revision --autogenerate -m"
       }
     },
     "generate-types": {
       "executor": "nx:run-commands",
       "options": {
         "cwd": "apps/api",
-        "command": "python scripts/generate_ts_types.py"
+        "command": "uv run python scripts/generate_ts_types.py"
       },
       "outputs": ["{workspaceRoot}/libs/shared-types/src"]
     }
