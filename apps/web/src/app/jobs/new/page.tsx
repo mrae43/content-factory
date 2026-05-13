@@ -137,7 +137,7 @@ export default function NewJobPage() {
             </div>
             {errorMessage && (
               <Alert variant="destructive">
-                <AlertTitle>Couldn't create job</AlertTitle>
+                <AlertTitle>Couldn&apos;t create job</AlertTitle>
                 <AlertDescription>{errorMessage}</AlertDescription>
               </Alert>
             )}
