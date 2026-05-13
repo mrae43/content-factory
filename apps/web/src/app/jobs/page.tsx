@@ -27,6 +27,15 @@ export default function JobsPage() {
   const { data: jobs, isLoading, isError, error } = useJobs();
   const { selectedJobFilter, setJobFilter } = useUIStore();
 
+  const statusCounts = jobs?.reduce(
+    (acc, j) => {
+      acc[j.status] = (acc[j.status] || 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>
+  );
+  const allCount = jobs?.length ?? 0;
+
   const filtered =
     selectedJobFilter === "all"
       ? jobs
@@ -60,7 +69,9 @@ export default function JobsPage() {
                 : "bg-muted text-muted-foreground hover:bg-accent"
             }`}
           >
-            {status.replace(/_/g, " ")}
+            {status === "all"
+              ? `All (${allCount})`
+              : `${status.replace(/_/g, " ")} (${statusCounts?.[status] ?? 0})`}
           </button>
         ))}
       </div>
