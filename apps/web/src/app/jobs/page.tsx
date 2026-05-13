@@ -4,6 +4,8 @@ import { useJobs } from "@/hooks/use-jobs";
 import { JobStatusBadge } from "@/components/jobs/job-status-badge";
 import { FormatBadge } from "@/components/jobs/format-badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { JobCardSkeleton } from "@/components/jobs/job-card-skeleton";
 import { useUIStore } from "@/stores/ui-store";
 import Link from "next/link";
 
@@ -42,11 +44,16 @@ export default function JobsPage() {
         </Link>
       </div>
 
-      <div className="flex gap-2 flex-wrap">
+      <div
+        className="flex gap-2 flex-wrap"
+        role="group"
+        aria-label="Filter by status"
+      >
         {statusFilters.map((status) => (
           <button
             key={status}
             onClick={() => setJobFilter(status)}
+            aria-pressed={selectedJobFilter === status}
             className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
               selectedJobFilter === status
                 ? "bg-primary text-primary-foreground"
@@ -59,7 +66,11 @@ export default function JobsPage() {
       </div>
 
       {isLoading ? (
-        <div className="text-muted-foreground">Loading...</div>
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <JobCardSkeleton key={i} />
+          ))}
+        </div>
       ) : isError ? (
         <p className="text-sm text-red-600">
           Failed to load jobs: {error?.message}
@@ -85,7 +96,21 @@ export default function JobsPage() {
             </Link>
           ))}
           {filtered?.length === 0 && (
-            <p className="text-muted-foreground text-sm">No jobs found.</p>
+            <div className="text-center py-8">
+              <p className="text-sm text-muted-foreground">
+                {selectedJobFilter === "all"
+                  ? "No jobs found."
+                  : `No ${selectedJobFilter.replace(/_/g, " ")} jobs found.`}
+              </p>
+              {selectedJobFilter !== "all" && (
+                <Button
+                  variant="link"
+                  onClick={() => setJobFilter("all")}
+                >
+                  Clear filter
+                </Button>
+              )}
+            </div>
           )}
         </div>
       )}
