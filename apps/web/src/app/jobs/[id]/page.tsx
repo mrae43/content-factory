@@ -213,10 +213,8 @@ export default function JobDetailPage({
                 <span className="font-medium">Reason:</span> {message}
               </p>
               <Collapsible>
-                <CollapsibleTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    Show technical details
-                  </Button>
+                <CollapsibleTrigger render={<Button variant="outline" size="sm" />}>
+                  Show technical details
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <pre className="mt-2 whitespace-pre-wrap text-xs text-red-900 bg-red-100 p-3 rounded">
