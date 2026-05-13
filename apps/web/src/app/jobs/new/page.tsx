@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useCreateJob } from "@/hooks/use-jobs";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -50,8 +50,15 @@ function NewJobForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const createJob = useCreateJob();
-  const [topic, setTopic] = useState(searchParams.get("topic") ?? "");
-  const [rawText, setRawText] = useState(searchParams.get("raw_text") ?? "");
+  const [topic, setTopic] = useState("");
+  const [rawText, setRawText] = useState("");
+
+  useEffect(() => {
+    const topicParam = searchParams.get("topic");
+    const rawTextParam = searchParams.get("raw_text");
+    if (topicParam) setTopic(topicParam);
+    if (rawTextParam) setRawText(rawTextParam);
+  }, [searchParams]);
   const [formatType, setFormatType] = useState("all");
   const [platform, setPlatform] = useState("none");
   const [targetAudience, setTargetAudience] = useState("General");
@@ -216,7 +223,7 @@ function NewJobForm() {
                 <p className="text-sm text-muted-foreground">
                   Format:{" "}
                   {FORMAT_OPTIONS.find((o) => o.value === formatType)?.label}
-                  {platform !== "_none" &&
+                  {platform !== "none" &&
                     ` | Platform: ${PLATFORM_OPTIONS.find((o) => o.value === platform)?.label}`}
                 </p>
                 <div className="flex gap-2 pt-2">
