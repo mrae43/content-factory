@@ -31,24 +31,24 @@ import {
 } from "@/components/ui/dialog";
 
 const FORMAT_OPTIONS = [
-  { value: "All", label: "All Formats" },
-  { value: "Video", label: "Video" },
-  { value: "Blog", label: "Blog" },
-  { value: "Carousel", label: "Carousel" },
+  { value: "all", label: "All Formats" },
+  { value: "video", label: "Video" },
+  { value: "blog", label: "Blog" },
+  { value: "carousel", label: "Carousel" },
 ] as const;
 
 const PLATFORM_OPTIONS = [
-  { value: "None", label: "None" },
-  { value: "Twitter", label: "Twitter / X" },
-  { value: "LinkedIn", label: "LinkedIn" },
-  { value: "Instagram", label: "Instagram" },
-  { value: "Youtube", label: "YouTube" },
+  { value: "none", label: "None" },
+  { value: "twitter", label: "Twitter / X" },
+  { value: "linkedin", label: "LinkedIn" },
+  { value: "instagram", label: "Instagram" },
+  { value: "youtube", label: "YouTube" },
 ] as const;
 
 const STRICTNESS_OPTIONS = [
-  { value: "Low", label: "Low" },
-  { value: "Medium", label: "Medium" },
-  { value: "High", label: "High" },
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
 ] as const;
 
 export default function NewJobPage() {
@@ -68,10 +68,10 @@ function NewJobForm() {
     () => searchParams.get("raw_text") ?? ""
   );
   const [sourceUrls, setSourceUrls] = useState("");
-  const [formatType, setFormatType] = useState("All");
-  const [platform, setPlatform] = useState("None");
-  const [targetAudience, setTargetAudience] = useState("General");
-  const [guardrailStrictness, setGuardrailStrictness] = useState("High");
+  const [formatType, setFormatType] = useState("all");
+  const [platform, setPlatform] = useState("none");
+  const [targetAudience, setTargetAudience] = useState("general");
+  const [guardrailStrictness, setGuardrailStrictness] = useState("high");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [researchOpen, setResearchOpen] = useState(false);
