@@ -1,127 +1,246 @@
 "use client";
 
 import { useJobs } from "@/hooks/use-jobs";
-import { JobStatusBadge } from "@/components/jobs/job-status-badge";
 import { FormatBadge } from "@/components/jobs/format-badge";
+import { StatusDot } from "@/components/jobs/status-dot";
+import { MiniPipeline } from "@/components/jobs/mini-pipeline";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { JobCardSkeleton } from "@/components/jobs/job-card-skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useUIStore } from "@/stores/ui-store";
 import Link from "next/link";
 
-const statusFilters = [
-  "all",
-  "PENDING",
-  "RESEARCHING",
-  "FACT_CHECKING_RESEARCH",
-  "SCRIPTING",
-  "FACT_CHECKING_SCRIPT",
-  "FORMATTING",
-  "ASSET_GENERATION",
-  "COMPLETED",
-  "HUMAN_REVIEW_NEEDED",
-  "FAILED",
+type EditorialFilter = "all" | "active" | "published" | "review" | "killed";
+
+const editorialFilters: {
+  key: EditorialFilter;
+  label: string;
+  statuses: string[];
+}[] = [
+  {
+    key: "all",
+    label: "All",
+    statuses: [],
+  },
+  {
+    key: "active",
+    label: "Active",
+    statuses: [
+      "PENDING",
+      "RESEARCHING",
+      "FACT_CHECKING_RESEARCH",
+      "SCRIPTING",
+      "FACT_CHECKING_SCRIPT",
+      "FORMATTING",
+      "ASSET_GENERATION",
+    ],
+  },
+  {
+    key: "published",
+    label: "Published",
+    statuses: ["COMPLETED"],
+  },
+  {
+    key: "review",
+    label: "Review",
+    statuses: ["HUMAN_REVIEW_NEEDED"],
+  },
+  {
+    key: "killed",
+    label: "Killed",
+    statuses: ["FAILED"],
+  },
 ];
+
+function relativeTime(dateStr: string): string {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diff = now - then;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} hour${hours > 1 ? "s" : ""} ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} day${days > 1 ? "s" : ""} ago`;
+  return new Date(dateStr).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function StoryListSkeleton() {
+  return (
+    <div className="space-y-2">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div
+          key={i}
+          className="rounded-lg border border-border bg-card p-4"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <Skeleton className="h-5 w-56" />
+              <div className="mt-2 flex items-center gap-2">
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-3 w-16" />
+              </div>
+              <div className="mt-2.5 flex gap-1.5">
+                {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+                  <Skeleton key={d} className="h-2 w-2 rounded-full" />
+                ))}
+              </div>
+            </div>
+            <Skeleton className="h-4 w-14 rounded-[4px]" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function JobsPage() {
   const { data: jobs, isLoading, isError, error } = useJobs();
   const { selectedJobFilter, setJobFilter } = useUIStore();
 
-  const statusCounts = jobs?.reduce(
-    (acc, j) => {
-      acc[j.status] = (acc[j.status] || 0) + 1;
-      return acc;
-    },
-    {} as Record<string, number>
-  );
-  const allCount = jobs?.length ?? 0;
+  const filterKey = (selectedJobFilter === "all"
+    ? "all"
+    : editorialFilters.find((f) => f.statuses.includes(selectedJobFilter))?.key ?? "all") as EditorialFilter;
+
+  const setEditorialFilter = (key: EditorialFilter) => {
+    const filter = editorialFilters.find((f) => f.key === key);
+    if (!filter) return;
+    setJobFilter(filter.key === "all" ? "all" : filter.statuses[0]);
+  };
 
   const filtered =
-    selectedJobFilter === "all"
+    filterKey === "all"
       ? jobs
-      : jobs?.filter((j) => j.status === selectedJobFilter);
+      : jobs?.filter((j) => {
+          const filter = editorialFilters.find((f) => f.key === filterKey);
+          return filter ? filter.statuses.includes(j.status) : true;
+        });
+
+  const counts: Record<EditorialFilter, number> = {
+    all: jobs?.length ?? 0,
+    active:
+      jobs?.filter((j) =>
+        [
+          "PENDING",
+          "RESEARCHING",
+          "FACT_CHECKING_RESEARCH",
+          "SCRIPTING",
+          "FACT_CHECKING_SCRIPT",
+          "FORMATTING",
+          "ASSET_GENERATION",
+        ].includes(j.status)
+      ).length ?? 0,
+    published:
+      jobs?.filter((j) => j.status === "COMPLETED").length ?? 0,
+    review:
+      jobs?.filter((j) => j.status === "HUMAN_REVIEW_NEEDED").length ?? 0,
+    killed: jobs?.filter((j) => j.status === "FAILED").length ?? 0,
+  };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Jobs</h2>
-        <Link
-          href="/jobs/new"
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
-        >
-          New Job
-        </Link>
-      </div>
-
       <div
         className="flex gap-2 flex-wrap"
         role="group"
-        aria-label="Filter by status"
+        aria-label="Filter stories"
       >
-        {statusFilters.map((status) => (
+        {editorialFilters.map((filter) => (
           <button
-            key={status}
-            onClick={() => setJobFilter(status)}
-            aria-pressed={selectedJobFilter === status}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              selectedJobFilter === status
+            key={filter.key}
+            onClick={() => setEditorialFilter(filter.key)}
+            aria-pressed={filterKey === filter.key}
+            className={`rounded-[4px] px-3 py-1.5 text-[0.8125rem] font-medium transition-colors ${
+              filterKey === filter.key
                 ? "bg-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground hover:bg-accent"
+                : "bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground"
             }`}
           >
-            {status === "all"
-              ? `All (${allCount})`
-              : `${status.replace(/_/g, " ")} (${statusCounts?.[status] ?? 0})`}
+            {filter.label}{" "}
+            <span className="ml-0.5 text-[0.6875rem] opacity-70">
+              {counts[filter.key]}
+            </span>
           </button>
         ))}
       </div>
 
       {isLoading ? (
-        <div className="space-y-2">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <JobCardSkeleton key={i} />
-          ))}
-        </div>
+        <StoryListSkeleton />
       ) : isError ? (
-        <p className="text-sm text-red-600">
+        <p className="text-sm text-destructive">
           Failed to load jobs: {error?.message}
         </p>
       ) : (
         <div className="space-y-2">
-          {filtered?.map((job) => (
-            <Link key={job.id} href={`/jobs/${job.id}`}>
-              <Card className="mb-2 hover:bg-accent transition-colors">
-                <CardContent className="flex items-center justify-between p-4">
-                  <div className="flex items-center gap-3">
-                    <div>
-                      <p className="font-medium">{job.topic}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(job.created_at).toLocaleDateString()}
-                      </p>
+          {filtered?.map((job) => {
+            const isActive = ![
+              "COMPLETED",
+              "FAILED",
+              "HUMAN_REVIEW_NEEDED",
+            ].includes(job.status);
+
+            return (
+              <Link key={job.id} href={`/jobs/${job.id}`}>
+                <Card className="border border-border bg-card shadow-[0_1px_2px_rgba(31,28,24,0.04)] transition-colors hover:bg-accent">
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-heading text-[1.0625rem] font-semibold leading-snug text-foreground">
+                          {job.topic}
+                        </p>
+                        <div className="mt-1.5 flex items-center gap-2">
+                          <StatusDot status={job.status} />
+                          <span className="text-[0.75rem] text-muted-foreground">
+                            {relativeTime(job.updated_at)}
+                          </span>
+                        </div>
+                        {isActive && (
+                          <div className="mt-2.5">
+                            <MiniPipeline
+                              currentStatus={job.status}
+                              formatType={job.format_type}
+                            />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-1.5">
+                        <FormatBadge formatType={job.format_type} />
+                        {job.platform && (
+                          <span className="text-[0.625rem] font-medium uppercase tracking-[0.05em] text-muted-foreground">
+                            {job.platform}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <FormatBadge formatType={job.format_type} />
-                  </div>
-                  <JobStatusBadge status={job.status} />
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
+                  </CardContent>
+                </Card>
+              </Link>
+            );
+          })}
           {filtered?.length === 0 && (
-            <div className="text-center py-8">
-              <p className="text-sm text-muted-foreground">
-                {selectedJobFilter === "all"
-                  ? "No jobs found."
-                  : `No ${selectedJobFilter.replace(/_/g, " ")} jobs found.`}
-              </p>
-              {selectedJobFilter !== "all" && (
-                <Button
-                  variant="link"
-                  onClick={() => setJobFilter("all")}
-                >
-                  Clear filter
-                </Button>
-              )}
-            </div>
+            <Card className="border border-border bg-card shadow-[0_1px_2px_rgba(31,28,24,0.04)]">
+              <CardContent className="flex flex-col items-center py-12 text-center">
+                <p className="font-heading text-[1rem] font-semibold text-foreground">
+                  No stories match this filter.
+                </p>
+                <p className="mt-1 text-[0.8125rem] text-muted-foreground">
+                  Try a different filter or commission a new story.
+                </p>
+                {filterKey !== "all" && (
+                  <Button
+                    variant="link"
+                    onClick={() => setEditorialFilter("all")}
+                    className="mt-3 text-primary"
+                  >
+                    Clear filter
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
           )}
         </div>
       )}
