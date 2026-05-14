@@ -39,7 +39,7 @@ export function MiniPipeline({ currentStatus, formatType }: MiniPipelineProps) {
 
   return (
     <div
-      className="flex items-center gap-1.5"
+      className="flex items-center gap-1 sm:gap-1.5"
       role="progressbar"
       aria-valuenow={currentIndex + 1}
       aria-valuemin={1}
@@ -59,7 +59,7 @@ export function MiniPipeline({ currentStatus, formatType }: MiniPipelineProps) {
           return (
             <span
               key={stage}
-              className="inline-block h-1.5 w-1.5 rounded-full bg-muted"
+              className="inline-block h-1.5 w-1.5 rounded-full bg-muted sm:h-1.5 sm:w-1.5"
               title={`${deskLabels[stage]} (skipped)`}
             />
           );
@@ -68,12 +68,12 @@ export function MiniPipeline({ currentStatus, formatType }: MiniPipelineProps) {
         return (
           <span
             key={stage}
-            className={`inline-block rounded-full ${
+            className={`inline-block rounded-full transition-[width,height] ${
               isDone
                 ? "h-2 w-2 bg-success"
                 : isActive
                   ? "h-2 w-2 bg-primary animate-pulse"
-                  : "h-2 w-2 bg-border"
+                  : "h-1.5 w-1.5 bg-border sm:h-2 sm:w-2"
             }`}
             title={deskLabels[stage]}
           />
