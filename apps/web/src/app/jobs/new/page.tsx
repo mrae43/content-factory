@@ -19,6 +19,16 @@ import {
   CollapsibleTrigger,
   CollapsibleContent,
 } from "@/components/ui/collapsible";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogOverlay,
+  DialogPortal,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const FORMAT_OPTIONS = [
   { value: "All", label: "All Formats" },
@@ -286,61 +296,76 @@ function NewJobForm() {
                 </div>
               )}
 
-              {showConfirmation ? (
-                <div className="rounded-lg bg-muted p-4 sm:p-5 space-y-3">
-                  <p className="font-heading text-[0.875rem] font-semibold text-foreground sm:text-[0.9375rem]">
-                    Confirm your assignment
-                  </p>
-                  <div className="space-y-1.5">
-                    <p className="text-sm text-foreground">
-                      &ldquo;{topic}&rdquo;
-                    </p>
-                    <p className="text-[0.75rem] font-medium tracking-[0.02em] text-muted-foreground">
-                      {formatLabel}
-                      {platformLabel ? ` · ${platformLabel}` : ""}
-                      {" · "}{guardrailStrictness} strictness
-                      {rawText ? " · Brief provided" : ""}
-                      {parsedSourceUrls.length > 0
-                        ? ` · ${parsedSourceUrls.length} source${parsedSourceUrls.length > 1 ? "s" : ""}`
-                        : ""}
-                    </p>
-                  </div>
-                  <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row">
-                    <Button
-                      type="button"
-                      disabled={createJob.isPending}
-                      onClick={handleSubmit}
-                      className="font-heading font-semibold h-11 sm:h-auto"
-                    >
-                      {createJob.isPending
-                        ? "Commissioning..."
-                        : "Confirm & Commission"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setShowConfirmation(false)}
-                      disabled={createJob.isPending}
-                      className="h-11 sm:h-auto"
-                    >
-                      Edit
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <Button
-                  type="submit"
-                  disabled={createJob.isPending}
-                  className="w-full font-heading text-[0.9375rem] font-semibold h-11 sm:h-10"
-                >
-                  {createJob.isPending
-                    ? "Commissioning..."
-                    : "Commission This Story"}
-                </Button>
-              )}
+              <Button
+                type="submit"
+                disabled={createJob.isPending}
+                className="w-full font-heading text-[0.9375rem] font-semibold h-11 sm:h-10"
+              >
+                {createJob.isPending
+                  ? "Commissioning..."
+                  : "Commission This Story"}
+              </Button>
             </div>
           </div>
         </form>
+
+        <Dialog open={showConfirmation} onOpenChange={setShowConfirmation}>
+          <DialogPortal>
+            <DialogOverlay className="bg-foreground/30 backdrop-blur-sm" />
+            <DialogContent
+              showCloseButton={false}
+              className="sm:max-w-md rounded-lg border-border bg-card p-0 ring-0 shadow-[0_4px_24px_rgba(31,28,24,0.12)]"
+            >
+              <DialogHeader className="px-5 pt-5 pb-0">
+                <DialogTitle className="font-heading text-[1.125rem] font-semibold text-foreground">
+                  Confirm your assignment
+                </DialogTitle>
+                <DialogDescription className="text-[0.75rem] font-medium tracking-[0.02em] text-muted-foreground">
+                  Review before sending to the newsroom.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="px-5 py-4">
+                <div className="rounded-lg bg-muted p-4 space-y-2">
+                  <p className="font-heading text-[0.9375rem] font-semibold text-foreground leading-snug">
+                    &ldquo;{topic}&rdquo;
+                  </p>
+                  <p className="text-[0.75rem] font-medium tracking-[0.02em] text-muted-foreground">
+                    {formatLabel}
+                    {platformLabel ? ` · ${platformLabel}` : ""}
+                    {" · "}{guardrailStrictness} strictness
+                    {rawText ? " · Brief provided" : ""}
+                    {parsedSourceUrls.length > 0
+                      ? ` · ${parsedSourceUrls.length} source${parsedSourceUrls.length > 1 ? "s" : ""}`
+                      : ""}
+                  </p>
+                </div>
+              </div>
+
+              <DialogFooter className="border-t border-border bg-transparent px-5 py-4 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowConfirmation(false)}
+                  disabled={createJob.isPending}
+                  className="h-11 sm:h-9"
+                >
+                  Edit
+                </Button>
+                <Button
+                  type="button"
+                  disabled={createJob.isPending}
+                  onClick={handleSubmit}
+                  className="font-heading font-semibold h-11 sm:h-9"
+                >
+                  {createJob.isPending
+                    ? "Commissioning..."
+                    : "Confirm & Commission"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </DialogPortal>
+        </Dialog>
       </div>
     </div>
   );
