@@ -1,21 +1,28 @@
-import { Badge } from "@/components/ui/badge";
+interface FormatBadgeProps {
+  formatType: string | null;
+}
 
-const formatBadgeStyles: Record<string, string> = {
-  all: "bg-muted text-muted-foreground",
-  video: "bg-destructive/15 text-destructive",
-  blog: "bg-info/15 text-info",
-  carousel: "bg-accent-purple/15 text-accent-purple",
-};
-
-export { formatBadgeStyles };
-
-export function FormatBadge({ formatType }: { formatType: string | null }) {
+export function FormatBadge({ formatType }: FormatBadgeProps) {
   if (!formatType) return null;
-  const color =
-    formatBadgeStyles[formatType.toLowerCase()] || "bg-muted text-muted-foreground";
+
+  const label = formatType.charAt(0).toUpperCase() + formatType.slice(1).toLowerCase();
+
   return (
-    <Badge className={color}>
-      {formatType.charAt(0).toUpperCase() + formatType.slice(1).toLowerCase()}
-    </Badge>
+    <span className="inline-flex shrink-0 items-center rounded-[4px] bg-primary/10 px-1.5 py-0.5 text-fluid-xs font-semibold uppercase tracking-[0.05em] text-primary">
+      {label}
+    </span>
+  );
+}
+
+export function FormatBadges({ formatType, platform }: { formatType: string | null; platform?: string | null }) {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1">
+      <FormatBadge formatType={formatType} />
+      {platform && (
+        <span className="inline-flex shrink-0 items-center rounded-[4px] bg-muted px-1.5 py-0.5 text-fluid-xs font-medium uppercase tracking-[0.05em] text-muted-foreground">
+          {platform}
+        </span>
+      )}
+    </span>
   );
 }

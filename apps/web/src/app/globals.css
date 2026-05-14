@@ -150,6 +150,39 @@
   }
 }
 
+@layer utilities {
+  .text-fluid-xs {
+    font-size: clamp(0.6875rem, 0.65rem + 0.1875vw, 0.75rem);
+  }
+  .text-fluid-sm {
+    font-size: clamp(0.8125rem, 0.775rem + 0.1875vw, 0.875rem);
+  }
+  .text-fluid-base {
+    font-size: clamp(1rem, 0.95rem + 0.25vw, 1.0625rem);
+  }
+  .text-fluid-lg {
+    font-size: clamp(1.0625rem, 1rem + 0.3125vw, 1.1875rem);
+  }
+  .text-fluid-xl {
+    font-size: clamp(1.25rem, 1.125rem + 0.625vw, 1.5rem);
+  }
+  .text-fluid-2xl {
+    font-size: clamp(1.5rem, 1.3rem + 1vw, 2rem);
+  }
+  .text-fluid-hero {
+    font-size: clamp(2rem, 1.6rem + 2vw, 3rem);
+  }
+  .space-fluid {
+    gap: clamp(0.375rem, 0.3rem + 0.375vw, 0.75rem);
+  }
+  .space-fluid-lg {
+    gap: clamp(1rem, 0.8rem + 1vw, 1.5rem);
+  }
+  .space-fluid-xl {
+    gap: clamp(1.5rem, 1.2rem + 1.5vw, 2.5rem);
+  }
+}
+
 @layer components {
   .editorial-rule {
     border-bottom: 1px solid rgba(oklch(0.558 0.130 38), 0.3);
