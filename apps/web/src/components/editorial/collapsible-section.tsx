@@ -20,7 +20,7 @@ export function CollapsibleSection({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="inline-flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted-foreground hover:text-primary transition-colors cursor-pointer"
+        className="inline-flex items-center gap-1.5 py-2 text-xs font-medium tracking-wide text-muted-foreground hover:text-primary transition-colors cursor-pointer"
         aria-expanded={open}
       >
         <span className="text-[10px] leading-none">
