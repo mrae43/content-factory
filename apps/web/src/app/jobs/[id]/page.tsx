@@ -4,77 +4,72 @@ import { useJobDetail, useApproveScript } from "@/hooks/use-jobs";
 import { use, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
 import type {
+  RenderJobResponse,
   ScriptResponse,
   FactCheckClaimResponse,
   AssetResponse,
   BlogFormatPayload,
   CarouselFormatPayload,
   VideoFormatPayload,
+  PlatformEnum,
 } from "@content-factory/shared-types";
-import { JobStatusBadge } from "@/components/jobs/job-status-badge";
 import { FormatBadge } from "@/components/jobs/format-badge";
-import { StateMachineProgress } from "@/components/jobs/state-machine-progress";
-import { ClaimCard } from "@/components/script/claim-card";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Collapsible,
-  CollapsibleTrigger,
-  CollapsibleContent,
-} from "@/components/ui/collapsible";
+import { StatusDot } from "@/components/jobs/status-dot";
+import { EditorialTimeline } from "@/components/editorial/editorial-timeline";
+import { CollapsibleSection } from "@/components/editorial/collapsible-section";
 import { BlogViewer } from "@/components/viewers/blog-viewer";
 import { CarouselViewer } from "@/components/viewers/carousel-viewer";
 import { VideoScriptViewer } from "@/components/viewers/video-script-viewer";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
 
 function renderFormatViewer(
   formatType: string,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  platform?: string | null
 ) {
   switch (formatType) {
     case "BLOG":
       return <BlogViewer payload={payload as BlogFormatPayload} />;
     case "CAROUSEL":
-      return <CarouselViewer payload={payload as CarouselFormatPayload} />;
+      return (
+        <CarouselViewer
+          payload={payload as CarouselFormatPayload}
+          platform={platform as PlatformEnum | null}
+        />
+      );
     case "VIDEO":
       return <VideoScriptViewer payload={payload as VideoFormatPayload} />;
     default:
       return (
-        <pre className="whitespace-pre-wrap text-sm bg-muted p-4 rounded">
+        <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-muted-foreground bg-muted p-4 rounded-md">
           {JSON.stringify(payload, null, 2)}
         </pre>
       );
   }
 }
 
-type FeedbackEntry =
-  | string
-  | {
-      overall_reasoning?: string;
-      failed_claims?: Array<{ verdict?: string; claim_text?: string }>;
-      [key: string]: unknown;
-    };
+function SectionHeader({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-3">
+      <h3 className="font-heading text-lg font-semibold tracking-tight text-foreground">
+        {label}
+      </h3>
+      <div className="flex-1 h-px bg-border" />
+    </div>
+  );
+}
 
-function parseErrorLog(errorLog: unknown): {
-  stage?: string;
-  message: string;
-  raw: unknown;
-} {
-  if (typeof errorLog === "object" && errorLog !== null) {
-    const obj = errorLog as Record<string, unknown>;
-    return {
-      stage: typeof obj.stage === "string" ? obj.stage : undefined,
-      message:
-        typeof obj.message === "string"
-          ? obj.message
-          : Object.keys(obj)[0] || "Unknown error",
-      raw: errorLog,
-    };
-  }
-  return { message: String(errorLog), raw: errorLog };
+function SkeletonBlock({ lines = 3 }: { lines?: number }) {
+  return (
+    <div className="space-y-2">
+      {Array.from({ length: lines }).map((_, i) => (
+        <Skeleton key={i} className="h-4 w-full" />
+      ))}
+    </div>
+  );
 }
 
 export default function JobDetailPage({
@@ -84,55 +79,72 @@ export default function JobDetailPage({
 }) {
   const { id } = use(params);
   const { data: job, isLoading } = useJobDetail(id);
-  const approvalMutation = useApproveScript(id);
-  const [feedbackText, setFeedbackText] = useState("");
-  const [showRejectForm, setShowRejectForm] = useState(false);
-  const [showFullRawText, setShowFullRawText] = useState(false);
 
   if (isLoading || !job) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="space-y-2">
-            <Skeleton className="h-8 w-64" />
-            <Skeleton className="h-4 w-48" />
+    return <LoadingSkeleton />;
+  }
+
+  return <JobDetailContent job={job} jobId={id} />;
+}
+
+function LoadingSkeleton() {
+  return (
+    <div className="max-w-6xl mx-auto space-y-8">
+      <div className="space-y-3">
+        <Skeleton className="h-9 w-96" />
+        <Skeleton className="h-4 w-64" />
+        <div className="flex gap-2">
+          <Skeleton className="h-5 w-12 rounded-[4px]" />
+          <Skeleton className="h-5 w-20" />
+        </div>
+      </div>
+      <div className="space-y-2">
+        <Skeleton className="h-5 w-48" />
+        <div className="rounded-lg border border-border p-6">
+          <SkeletonBlock lines={5} />
+        </div>
+      </div>
+      <div className="space-y-2">
+        <Skeleton className="h-5 w-48" />
+        <div className="rounded-lg border border-border p-6 space-y-4">
+          <div className="flex gap-4">
+            <Skeleton className="h-3 w-3 rounded-full" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-5 w-32" />
+              <SkeletonBlock lines={2} />
+            </div>
           </div>
-          <div className="flex gap-2">
-            <Skeleton className="h-5 w-16 rounded-full" />
-            <Skeleton className="h-5 w-24 rounded-full" />
+          <div className="flex gap-4">
+            <Skeleton className="h-3 w-3 rounded-full" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-5 w-32" />
+              <SkeletonBlock lines={2} />
+            </div>
           </div>
         </div>
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-4 w-32" />
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-1">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <Skeleton key={i} className="h-2 w-8 rounded-full" />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-4 w-40" />
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-3/4" />
-            <Skeleton className="h-4 w-1/2" />
-          </CardContent>
-        </Card>
       </div>
-    );
-  }
+    </div>
+  );
+}
+
+function JobDetailContent({
+  job,
+  jobId,
+}: {
+  job: RenderJobResponse;
+  jobId: string;
+}) {
+  const approvalMutation = useApproveScript(jobId);
+  const [feedbackText, setFeedbackText] = useState("");
+  const [showRejectForm, setShowRejectForm] = useState(false);
 
   const scripts = job.scripts ?? [];
   const assets = job.assets ?? [];
-  const allClaims = scripts.flatMap(
-    (s: ScriptResponse) => s.claims ?? []
-  );
+  const isTerminal: boolean =
+    job.status === "COMPLETED" ||
+    job.status === "FAILED" ||
+    job.status === "HUMAN_REVIEW_NEEDED";
+  const isActive = !isTerminal;
 
   const masterScript = scripts.find(
     (s: ScriptResponse) => !s.format_payload
@@ -141,481 +153,517 @@ export default function JobDetailPage({
     (s: ScriptResponse) => s.format_payload
   );
 
-  const latestScript = masterScript ?? scripts[scripts.length - 1];
-
-  const isPolling =
-    job.status !== "COMPLETED" &&
-    job.status !== "HUMAN_REVIEW_NEEDED" &&
-    job.status !== "FAILED";
+  function renderSection1() {
+    if (job.status === "FAILED") {
+      return <FailedSection job={job} />;
+    }
+    if (job.status === "COMPLETED") {
+      return <FormatTabs formatScripts={formatScripts} platform={job.platform} />;
+    }
+    return <ActiveOutput job={job} />;
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">{job.topic}</h2>
-          <p className="text-sm text-muted-foreground">
-            Job ID: {job.id} &middot; Created:{" "}
-            {new Date(job.created_at).toLocaleString()}
-          </p>
-        </div>
+    <div className="max-w-6xl mx-auto space-y-10">
+      <div className="space-y-2">
+        <h1 className="font-heading text-3xl font-bold tracking-tight">
+          {job.topic}
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Job{" "}
+          <span className="font-mono text-xs">
+            #{job.id.slice(0, 6)}
+          </span>
+          {" \u00B7 "}
+          Commissioned{" "}
+          {new Date(job.created_at).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          })}
+        </p>
         <div className="flex items-center gap-2">
           <FormatBadge formatType={job.format_type} />
-          <JobStatusBadge status={job.status} />
-          {isPolling && (
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-              <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+          <StatusDot status={job.status} />
+          {isActive && (
+            <span className="inline-flex items-center gap-1 text-xs text-primary">
+              <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
               Live
             </span>
           )}
-          {!isPolling &&
-            (job.status === "COMPLETED" || job.status === "FAILED") && (
-              <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <span
-                  className={`h-2 w-2 rounded-full ${
-                    job.status === "COMPLETED" ? "bg-green-500" : "bg-red-500"
-                  }`}
-                />
-                {job.status === "COMPLETED" ? "Completed" : "Stopped"}
-              </span>
-            )}
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">Pipeline Progress</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <StateMachineProgress
-            currentStatus={job.status}
-            formatType={job.format_type}
-          />
-        </CardContent>
-      </Card>
+      <div className="space-y-4">
+        <SectionHeader label="THE PUBLISHED PIECE" />
+        {renderSection1()}
+      </div>
 
-      {job.status === "FAILED" && job.error_log && (() => {
-        const { stage, message, raw } = parseErrorLog(job.error_log);
-        return (
-          <Card className="border-red-300 bg-red-50">
-            <CardHeader>
-              <CardTitle className="text-sm text-red-800">
-                Job Failed
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {stage && (
-                <p className="text-sm">
-                  <span className="font-medium">Stage:</span>{" "}
-                  {stage.replace(/_/g, " ")}
-                </p>
-              )}
-              <p className="text-sm">
-                <span className="font-medium">Reason:</span> {message}
-              </p>
-              <Collapsible>
-                <CollapsibleTrigger render={<Button variant="outline" size="sm" />}>
-                  Show technical details
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <pre className="mt-2 whitespace-pre-wrap text-xs text-red-900 bg-red-100 p-3 rounded">
-                    {JSON.stringify(raw, null, 2)}
-                  </pre>
-                </CollapsibleContent>
-              </Collapsible>
-              <p className="text-xs text-muted-foreground">
-                This job won&apos;t retry automatically. You can create a new
-                job with the same inputs.
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const rawText =
-                    (job.pre_context as Record<string, unknown>)?.raw_text ?? "";
-                  window.location.href = `/jobs/new?topic=${encodeURIComponent(job.topic)}&raw_text=${encodeURIComponent(typeof rawText === "string" ? rawText : "")}`;
-                }}
-              >
-                Duplicate Job
-              </Button>
-            </CardContent>
-          </Card>
-        );
-      })()}
-
-      {job.refined_context && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">
-              Research Summary (refined_context)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <pre className="whitespace-pre-wrap text-sm">
-              {job.refined_context}
-            </pre>
-          </CardContent>
-        </Card>
-      )}
-
-      {job.pre_context && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Input Context (pre_context)</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <div>
-              <span className="font-medium">Source URLs:</span>{" "}
-              {Array.isArray(job.pre_context.source_urls) &&
-              job.pre_context.source_urls.length > 0
-                ? (job.pre_context.source_urls as string[]).map(
-                    (url, i) => (
-                      <a
-                        key={i}
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 underline mr-2"
-                      >
-                        {url}
-                      </a>
-                    )
-                  )
-                : "None provided"}
-            </div>
-            {typeof job.pre_context.raw_text === "string" && (
-              <div>
-                <span className="font-medium">Raw Text:</span>
-                <pre className="mt-1 whitespace-pre-wrap text-xs bg-muted p-2 rounded">
-                  {showFullRawText
-                    ? job.pre_context.raw_text
-                    : job.pre_context.raw_text.slice(0, 500) +
-                      (job.pre_context.raw_text.length > 500
-                        ? "..."
-                        : "")}
-                </pre>
-                {job.pre_context.raw_text.length > 500 && (
-                  <Button
-                    variant="link"
-                    className="p-0 h-auto text-xs"
-                    onClick={() =>
-                      setShowFullRawText(!showFullRawText)
-                    }
-                  >
-                    {showFullRawText ? "Show less" : "Show more"}
-                  </Button>
-                )}
-              </div>
-            )}
-            <div>
-              <span className="font-medium">Target Audience:</span>{" "}
-              {typeof job.pre_context.target_audience === "string"
-                ? job.pre_context.target_audience
-                : "General"}
-            </div>
-            <div>
-              <span className="font-medium">Guardrail Strictness:</span>{" "}
-              {typeof job.pre_context.guardrail_strictness === "string"
-                ? job.pre_context.guardrail_strictness
-                : "High"}
-            </div>
-            {job.platform && (
-              <div>
-                <span className="font-medium">Platform:</span>{" "}
-                {job.platform}
-              </div>
-            )}
-            <div>
-              <span className="font-medium">Strict Compliance:</span>{" "}
-              <Badge
-                variant={
-                  job.strict_compliance_mode ? "default" : "secondary"
-                }
-              >
-                {job.strict_compliance_mode ? "Enabled" : "Disabled"}
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {latestScript && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">
-              Script (v{latestScript.version})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <pre className="whitespace-pre-wrap text-sm">
-              {latestScript.content}
-            </pre>
-            {latestScript.feedback_history.length > 0 && (
-              <div className="mt-4 space-y-2 border-t pt-3">
-                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Feedback History (
-                  {latestScript.feedback_history.length} revision
-                  {latestScript.feedback_history.length !== 1
-                    ? "s"
-                    : ""}
-                  )
-                </h4>
-                {latestScript.feedback_history.map(
-                  (entry: FeedbackEntry, i: number) => {
-                    if (typeof entry === "string") {
-                      return (
-                        <div
-                          key={i}
-                          className="text-xs text-muted-foreground bg-muted p-2 rounded"
-                        >
-                          <span className="font-medium">
-                            Feedback #{i + 1}:
-                          </span>{" "}
-                          {entry}
-                        </div>
-                      );
-                    }
-                    return (
-                      <div
-                        key={i}
-                        className="text-xs bg-muted p-2 rounded space-y-1"
-                      >
-                        <span className="font-medium">
-                          Revision #{i + 1}
-                        </span>
-                        {typeof entry.overall_reasoning ===
-                          "string" && (
-                          <p className="text-muted-foreground">
-                            {entry.overall_reasoning}
-                          </p>
-                        )}
-                        {Array.isArray(entry.failed_claims) && (
-                          <ul className="list-disc pl-4 space-y-0.5">
-                            {entry.failed_claims.map((fc, j) => (
-                              <li key={j}>
-                                <Badge
-                                  className="text-[10px] px-1 py-0"
-                                  variant={
-                                    typeof fc.verdict === "string" &&
-                                    fc.verdict === "UNSUPPORTED"
-                                      ? "destructive"
-                                      : "secondary"
-                                  }
-                                >
-                                  {typeof fc.verdict === "string"
-                                    ? fc.verdict
-                                    : "UNKNOWN"}
-                                </Badge>{" "}
-                                {typeof fc.claim_text === "string"
-                                  ? fc.claim_text
-                                  : ""}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    );
-                  }
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {formatScripts.length === 1 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">
-              {formatScripts[0].format_type
-                ? formatScripts[0].format_type!.charAt(0).toUpperCase() +
-                  formatScripts[0].format_type!.slice(1).toLowerCase() +
-                  " Output"
-                : "Format Output"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {renderFormatViewer(
-              formatScripts[0].format_type ?? "",
-              formatScripts[0].format_payload as Record<string, unknown>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {formatScripts.length > 1 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Format Outputs</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Tabs defaultValue={formatScripts[0].format_type ?? `fmt-${formatScripts[0].id}`}>
-              <TabsList>
-                {formatScripts.map((s: ScriptResponse) => (
-                  <TabsTrigger
-                    key={s.id}
-                    value={s.format_type ?? `fmt-${s.id}`}
-                  >
-                    {s.format_type
-                      ? s.format_type.charAt(0).toUpperCase() +
-                        s.format_type.slice(1).toLowerCase()
-                      : "Unknown"}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-              {formatScripts.map((s: ScriptResponse) => (
-                <TabsContent
-                  key={s.id}
-                  value={s.format_type ?? `fmt-${s.id}`}
-                >
-                  {renderFormatViewer(
-                    s.format_type ?? "",
-                    s.format_payload as Record<string, unknown>
-                  )}
-                </TabsContent>
-              ))}
-            </Tabs>
-          </CardContent>
-        </Card>
-      )}
-
-      {allClaims.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="text-lg font-semibold">
-            Fact Check Claims ({allClaims.length})
-          </h3>
-          {allClaims.map((claim: FactCheckClaimResponse) => (
-            <ClaimCard
-              key={claim.id}
-              claim_text={claim.claim_text}
-              verdict={claim.verdict}
-              confidence={claim.confidence}
-              evidence_references={claim.evidence_references ?? []}
-            />
-          ))}
+      <div className="space-y-4">
+        <SectionHeader label="THE EDITORIAL TRAIL" />
+        <div className="rounded-lg border border-border p-6">
+          <EditorialTimeline job={job} />
         </div>
-      )}
+      </div>
 
       {job.status === "HUMAN_REVIEW_NEEDED" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Script Review</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Review the script and claims above, then approve or request
-              a revision.
-            </p>
-            {approvalMutation.isError && (
-              <p className="text-sm text-red-600">
-                Error:{" "}
-                {(approvalMutation.error as Error)?.message ||
-                  "Failed to submit"}
-              </p>
-            )}
-            {showRejectForm ? (
-              <div className="space-y-3">
-                <Textarea
-                  placeholder="Optional feedback for the script agent..."
-                  value={feedbackText}
-                  onChange={(
-                    e: ChangeEvent<HTMLTextAreaElement>
-                  ) => setFeedbackText(e.target.value)}
-                />
-                <div className="flex gap-2">
-                  <Button
-                    variant="destructive"
-                    disabled={approvalMutation.isPending}
-                    onClick={() => {
-                      approvalMutation.mutate(
-                        {
-                          isApproved: false,
-                          feedback: feedbackText || undefined,
-                        },
-                        {
-                          onSettled: () => {
-                            setShowRejectForm(false);
-                            setFeedbackText("");
-                          },
-                          onSuccess: () =>
-                            toast.info("Revision requested. Polling resumed."),
-                          onError: () =>
-                            toast.error("Action failed. Please try again."),
-                        }
-                      );
-                    }}
-                  >
-                    {approvalMutation.isPending
-                      ? "Submitting..."
-                      : "Confirm Revision"}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowRejectForm(false)}
-                    disabled={approvalMutation.isPending}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex gap-2">
-                <Button
-                  disabled={approvalMutation.isPending}
-                  onClick={() =>
-                    approvalMutation.mutate(
-                      { isApproved: true },
-                      {
-                        onSuccess: () =>
-                          toast.success("Script approved. Pipeline resuming."),
-                        onError: () =>
-                          toast.error("Action failed. Please try again."),
-                      }
-                    )
-                  }
-                >
-                  {approvalMutation.isPending
-                    ? "Approving..."
-                    : "Approve Script"}
-                </Button>
-                <Button
-                  variant="destructive"
-                  disabled={approvalMutation.isPending}
-                  onClick={() => setShowRejectForm(true)}
-                >
-                  Request Revision
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <ReviewSection
+          job={job}
+          approvalMutation={approvalMutation}
+          feedbackText={feedbackText}
+          setFeedbackText={setFeedbackText}
+          showRejectForm={showRejectForm}
+          setShowRejectForm={setShowRejectForm}
+        />
       )}
+    </div>
+  );
+}
 
-      {assets.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">
-              Assets ({assets.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-2 md:grid-cols-2">
-              {assets.map((asset: AssetResponse) => (
-                <div key={asset.id} className="rounded-lg border p-3">
-                  <Badge className="mb-2">{asset.asset_type}</Badge>
-                  <p className="text-xs text-muted-foreground break-all">
-                    {asset.url_or_path}
+function FailedSection({ job }: { job: RenderJobResponse }) {
+  const errorLog = job.error_log as Record<string, unknown> | null;
+  const stage = typeof errorLog?.stage === "string" ? errorLog.stage : "";
+  const message =
+    typeof errorLog?.message === "string"
+      ? errorLog.message
+      : typeof errorLog?.error === "string"
+        ? errorLog.error
+        : "An unknown error occurred during processing.";
+  const agent = typeof errorLog?.agent === "string" ? errorLog.agent : "";
+
+  return (
+    <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-6 space-y-4">
+      <div className="flex items-start gap-3">
+        <span className="text-lg leading-none mt-0.5 text-destructive">&#9888;</span>
+        <div>
+          <h4 className="font-heading text-lg font-semibold text-destructive">
+            Story Killed
+          </h4>
+          <p className="text-sm text-muted-foreground mt-1">{message}</p>
+        </div>
+      </div>
+      <div className="grid gap-x-6 gap-y-1 text-xs text-muted-foreground">
+        {stage && <p>Phase: {stage}</p>}
+        {agent && <p>Agent: {agent}</p>}
+        <p>
+          Time:{" "}
+          {new Date(job.updated_at).toLocaleString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          })}
+        </p>
+      </div>
+      {errorLog && (
+        <CollapsibleSection label="Technical Details">
+          {JSON.stringify(errorLog, null, 2)}
+        </CollapsibleSection>
+      )}
+      <p className="text-xs text-muted-foreground">
+        This story won&apos;t retry automatically.{" "}
+        <button
+          type="button"
+          className="text-primary hover:underline cursor-pointer"
+          onClick={() => {
+            const rawText =
+              (job.pre_context as Record<string, unknown>)?.raw_text ?? "";
+            window.location.href = `/jobs/new?topic=${encodeURIComponent(job.topic)}&raw_text=${encodeURIComponent(typeof rawText === "string" ? rawText : "")}`;
+          }}
+        >
+          Commission it again
+        </button>
+      </p>
+    </div>
+  );
+}
+
+function FormatTabs({
+  formatScripts,
+  platform,
+}: {
+  formatScripts: ScriptResponse[];
+  platform: string | null | undefined;
+}) {
+  if (formatScripts.length === 0) {
+    return (
+      <div className="rounded-lg border border-border p-6 text-center">
+        <p className="text-sm text-muted-foreground">
+          No format outputs generated.
+        </p>
+      </div>
+    );
+  }
+
+  if (formatScripts.length === 1) {
+    const s = formatScripts[0];
+    return (
+      <div className="rounded-lg border border-border">
+        <div className="border-b border-border bg-muted/30 px-4 py-2">
+          <span className="font-heading text-sm font-semibold">
+            {(s.format_type ?? "").charAt(0).toUpperCase() +
+              (s.format_type ?? "").slice(1).toLowerCase()}
+          </span>
+        </div>
+        <div className="p-5">
+          {renderFormatViewer(
+            s.format_type ?? "",
+            s.format_payload as Record<string, unknown>,
+            platform
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Tabs defaultValue={formatScripts[0].format_type ?? `fmt-${formatScripts[0].id}`}>
+      <TabsList variant="line" className="mb-0">
+        {formatScripts.map((s: ScriptResponse) => (
+          <TabsTrigger
+            key={s.id}
+            value={s.format_type ?? `fmt-${s.id}`}
+          >
+            {s.format_type
+              ? s.format_type.charAt(0).toUpperCase() +
+                s.format_type.slice(1).toLowerCase()
+              : "Unknown"}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+      {formatScripts.map((s: ScriptResponse) => (
+        <TabsContent
+          key={s.id}
+          value={s.format_type ?? `fmt-${s.id}`}
+        >
+          <div className="rounded-lg border border-border p-5">
+            {renderFormatViewer(
+              s.format_type ?? "",
+              s.format_payload as Record<string, unknown>,
+              platform
+            )}
+          </div>
+        </TabsContent>
+      ))}
+    </Tabs>
+  );
+}
+
+function ActiveOutput({ job }: { job: RenderJobResponse }) {
+  const status = job.status;
+  const scripts = job.scripts ?? [];
+  const assets = job.assets ?? [];
+  const masterScript = scripts.find(
+    (s: ScriptResponse) => !s.format_payload
+  );
+  const formatScripts = scripts.filter(
+    (s: ScriptResponse) => s.format_payload
+  );
+  const allClaims = scripts.flatMap(
+    (s: ScriptResponse) => s.claims ?? []
+  );
+
+  if (status === "PENDING") {
+    return (
+      <div className="rounded-lg border border-border p-6 space-y-3">
+        <h4 className="font-heading text-base font-semibold">{job.topic}</h4>
+        <div className="flex flex-wrap gap-2">
+          <FormatBadge formatType={job.format_type} />
+          {job.platform && (
+            <span className="inline-flex items-center rounded-[4px] bg-muted px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.05em] text-muted-foreground">
+              {job.platform}
+            </span>
+          )}
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Awaiting assignment&hellip;
+        </p>
+      </div>
+    );
+  }
+
+  if (
+    (status === "RESEARCHING" || status === "FACT_CHECKING_RESEARCH") &&
+    job.refined_context
+  ) {
+    return (
+      <div className="rounded-lg border border-border p-5 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 text-xs text-primary">
+            <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+            Research in progress
+          </span>
+        </div>
+        <p className="text-sm leading-relaxed whitespace-pre-wrap">
+          {job.refined_context}
+        </p>
+      </div>
+    );
+  }
+
+  if (status === "RESEARCHING" || status === "FACT_CHECKING_RESEARCH") {
+    return (
+      <div className="rounded-lg border border-border p-6 text-center space-y-2">
+        <p className="font-heading text-base font-semibold text-muted-foreground">
+          Researching&hellip;
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Gathering and analyzing sources.
+        </p>
+      </div>
+    );
+  }
+
+  if (status === "SCRIPTING" || status === "FACT_CHECKING_SCRIPT") {
+    if (masterScript) {
+      const hasRevisions = masterScript.feedback_history.length > 0;
+      return (
+        <div className="rounded-lg border border-border p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 text-xs text-primary">
+              <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+              Draft v{masterScript.version}
+              {hasRevisions ? " (revised)" : ""}
+            </span>
+          </div>
+          <p className="text-sm leading-relaxed whitespace-pre-wrap">
+            {masterScript.content}
+          </p>
+          {status === "FACT_CHECKING_SCRIPT" && allClaims.length > 0 && (
+            <div className="space-y-2 pt-2 border-t border-border">
+              {allClaims.map((claim: FactCheckClaimResponse) => (
+                <div
+                  key={claim.id}
+                  className="rounded-md border border-border p-3 text-sm space-y-1"
+                >
+                  <p className="italic text-muted-foreground">
+                    &ldquo;{claim.claim_text}&rdquo;
                   </p>
-                  {asset.render_meta?.prompt_used && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {asset.render_meta.prompt_used}
-                    </p>
-                  )}
+                  <div className="flex items-center gap-2 text-xs">
+                    <span
+                      className={`inline-flex items-center gap-1 font-semibold ${
+                        claim.verdict === "SUPPORTED"
+                          ? "text-success"
+                          : claim.verdict === "CONTESTED"
+                            ? "text-info"
+                            : claim.verdict === "UNSUPPORTED"
+                              ? "text-destructive"
+                              : "text-warning"
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-1.5 w-1.5 rounded-full ${
+                          claim.verdict === "SUPPORTED"
+                            ? "bg-success"
+                            : claim.verdict === "CONTESTED"
+                              ? "bg-info"
+                              : claim.verdict === "UNSUPPORTED"
+                                ? "bg-destructive"
+                                : "bg-warning"
+                        }`}
+                      />
+                      {claim.verdict}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {(claim.confidence * 100).toFixed(0)}%
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </div>
+      );
+    }
+    return (
+      <div className="rounded-lg border border-border p-6 text-center">
+        <p className="font-heading text-base font-semibold text-muted-foreground">
+          {status === "SCRIPTING" ? "Writing&hellip;" : "Evaluating&hellip;"}
+        </p>
+      </div>
+    );
+  }
+
+  if (status === "FORMATTING") {
+    if (formatScripts.length > 0) {
+      return <FormatTabs formatScripts={formatScripts} platform={job.platform} />;
+    }
+    return (
+      <div className="rounded-lg border border-border p-6 text-center">
+        <p className="font-heading text-base font-semibold text-muted-foreground">
+          Typesetting&hellip;
+        </p>
+        <p className="text-sm text-muted-foreground mt-1">
+          Generating format outputs.
+        </p>
+      </div>
+    );
+  }
+
+  if (status === "ASSET_GENERATION") {
+    const videoScript = formatScripts.find(
+      (s: ScriptResponse) => s.format_type === "VIDEO"
+    );
+    return (
+      <div className="space-y-4">
+        {videoScript && videoScript.format_payload && (
+          <div className="rounded-lg border border-border p-5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+              Video Script
+            </p>
+            {renderFormatViewer(
+              "VIDEO",
+              videoScript.format_payload as Record<string, unknown>
+            )}
+          </div>
+        )}
+        {assets.length > 0 && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {assets.map((asset: AssetResponse) => (
+              <div
+                key={asset.id}
+                className="rounded-lg border border-border p-4 space-y-2"
+              >
+                <span className="inline-flex items-center rounded-[4px] bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-primary">
+                  {asset.asset_type.replace(/_/g, " ")}
+                </span>
+                <p className="font-mono text-xs text-muted-foreground break-all">
+                  {asset.url_or_path || "Pending render\u2026"}
+                </p>
+                {asset.render_meta?.prompt_used && (
+                  <CollapsibleSection label="Generation Prompt">
+                    {asset.render_meta.prompt_used}
+                  </CollapsibleSection>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function ReviewSection({
+  job,
+  approvalMutation,
+  feedbackText,
+  setFeedbackText,
+  showRejectForm,
+  setShowRejectForm,
+}: {
+  job: RenderJobResponse;
+  approvalMutation: ReturnType<typeof useApproveScript>;
+  feedbackText: string;
+  setFeedbackText: (v: string) => void;
+  showRejectForm: boolean;
+  setShowRejectForm: (v: boolean) => void;
+}) {
+  const scripts = job.scripts ?? [];
+  const masterScript = scripts.find(
+    (s: ScriptResponse) => !s.format_payload
+  );
+
+  return (
+    <div className="space-y-4">
+      <SectionHeader label="EDITORIAL REVIEW" />
+      <div className="rounded-lg border border-primary/30 bg-primary/5 p-6 space-y-4">
+        <div>
+          <h4 className="font-heading text-base font-semibold">
+            This story needs your review
+          </h4>
+          <p className="text-sm text-muted-foreground mt-1">
+            {masterScript && masterScript.feedback_history.length > 0
+              ? `${masterScript.feedback_history.length} revision cycle${masterScript.feedback_history.length !== 1 ? "s" : ""} exhausted.`
+              : "The script requires your approval before proceeding."}
+          </p>
+        </div>
+        {approvalMutation.isError && (
+          <p className="text-sm text-destructive">
+            Error:{" "}
+            {(approvalMutation.error as Error)?.message || "Failed to submit"}
+          </p>
+        )}
+        {showRejectForm ? (
+          <div className="space-y-3">
+            <Textarea
+              placeholder="Optional feedback for the script agent\u2026"
+              value={feedbackText}
+              onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
+                setFeedbackText(e.target.value)
+              }
+            />
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="border-destructive text-destructive hover:bg-destructive/10"
+                disabled={approvalMutation.isPending}
+                onClick={() => {
+                  approvalMutation.mutate(
+                    {
+                      isApproved: false,
+                      feedback: feedbackText || undefined,
+                    },
+                    {
+                      onSettled: () => {
+                        setShowRejectForm(false);
+                        setFeedbackText("");
+                      },
+                      onSuccess: () =>
+                        toast.info("Revision requested. Polling resumed."),
+                      onError: () =>
+                        toast.error("Action failed. Please try again."),
+                    }
+                  );
+                }}
+              >
+                {approvalMutation.isPending
+                  ? "Submitting\u2026"
+                  : "Confirm Revision"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowRejectForm(false)}
+                disabled={approvalMutation.isPending}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex gap-3">
+            <Button
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+              disabled={approvalMutation.isPending}
+              onClick={() =>
+                approvalMutation.mutate(
+                  { isApproved: true },
+                  {
+                    onSuccess: () =>
+                      toast.success("Script approved. Pipeline resuming."),
+                    onError: () =>
+                      toast.error("Action failed. Please try again."),
+                  }
+                )
+              }
+            >
+              {approvalMutation.isPending
+                ? "Approving\u2026"
+                : "Approve & Publish"}
+            </Button>
+            <Button
+              variant="outline"
+              disabled={approvalMutation.isPending}
+              onClick={() => setShowRejectForm(true)}
+            >
+              Request Revision
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
