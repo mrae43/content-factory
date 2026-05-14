@@ -276,7 +276,7 @@ function TimelineNode({ stage, state, isLast, job }: TimelineNodeProps) {
         )}
       </div>
       <div className={`flex-1 pb-8 ${isLast ? "pb-0" : ""}`}>
-        <div className="flex items-baseline gap-2">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
           <h4 className="font-heading text-base font-semibold leading-tight">
             {config.name}
           </h4>
@@ -318,7 +318,7 @@ function TimelineNode({ stage, state, isLast, job }: TimelineNodeProps) {
                 {preCtx.raw_text.length > 3000 ? "\n\u2026 (truncated)" : ""}
               </CollapsibleSection>
             )}
-            <div className="flex gap-3 text-muted-foreground">
+            <div className="flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground">
               {typeof preCtx.target_audience === "string" && preCtx.target_audience !== "General" && (
                 <span>Audience: {preCtx.target_audience}</span>
               )}
