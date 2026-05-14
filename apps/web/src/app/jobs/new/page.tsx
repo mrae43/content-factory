@@ -311,26 +311,26 @@ function NewJobForm() {
 
         <Dialog open={showConfirmation} onOpenChange={setShowConfirmation}>
           <DialogPortal>
-            <DialogOverlay className="bg-foreground/30 backdrop-blur-sm" />
+            <DialogOverlay className="bg-foreground/50 sm:bg-foreground/30 sm:backdrop-blur-sm" />
             <DialogContent
               showCloseButton={false}
-              className="sm:max-w-md rounded-lg border-border bg-card p-0 ring-0 shadow-[0_4px_24px_rgba(31,28,24,0.12)]"
+              className="max-w-[calc(100%-1.5rem)] sm:max-w-md rounded-xl sm:rounded-lg border-border bg-card p-0 ring-0 shadow-[0_8px_32px_rgba(31,28,24,0.18)] sm:shadow-[0_4px_24px_rgba(31,28,24,0.12)]"
             >
-              <DialogHeader className="px-5 pt-5 pb-0">
-                <DialogTitle className="font-heading text-[1.125rem] font-semibold text-foreground">
+              <DialogHeader className="gap-1.5 sm:gap-2 px-5 pt-5 pb-0 sm:px-6 sm:pt-6">
+                <DialogTitle className="font-heading text-[1.125rem] sm:text-[1.25rem] font-semibold tracking-[-0.01em] text-foreground">
                   Confirm your assignment
                 </DialogTitle>
-                <DialogDescription className="text-[0.75rem] font-medium tracking-[0.02em] text-muted-foreground">
+                <DialogDescription className="text-[0.8125rem] sm:text-[0.75rem] font-medium tracking-[0.02em] text-muted-foreground">
                   Review before sending to the newsroom.
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="px-5 py-4">
-                <div className="rounded-lg bg-muted p-4 space-y-2">
-                  <p className="font-heading text-[0.9375rem] font-semibold text-foreground leading-snug">
+              <div className="px-5 py-4 sm:px-6 sm:py-5">
+                <div className="rounded-lg bg-muted p-4 sm:p-4 space-y-2.5 sm:space-y-2">
+                  <p className="font-heading text-[1rem] sm:text-[0.9375rem] font-semibold text-foreground leading-snug">
                     &ldquo;{topic}&rdquo;
                   </p>
-                  <p className="text-[0.75rem] font-medium tracking-[0.02em] text-muted-foreground">
+                  <p className="text-[0.8125rem] sm:text-[0.75rem] font-medium tracking-[0.02em] text-muted-foreground">
                     {formatLabel}
                     {platformLabel ? ` · ${platformLabel}` : ""}
                     {" · "}{guardrailStrictness} strictness
@@ -342,13 +342,13 @@ function NewJobForm() {
                 </div>
               </div>
 
-              <DialogFooter className="border-t border-border bg-transparent px-5 py-4 sm:flex-row sm:justify-end">
+              <DialogFooter className="mx-0 mb-0 border-t border-border bg-transparent px-5 py-4 sm:px-6 sm:py-4 gap-3">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => setShowConfirmation(false)}
                   disabled={createJob.isPending}
-                  className="h-11 sm:h-9"
+                  className="h-11 sm:h-9 flex-1 sm:flex-none sm:min-w-[100px]"
                 >
                   Edit
                 </Button>
@@ -356,7 +356,7 @@ function NewJobForm() {
                   type="button"
                   disabled={createJob.isPending}
                   onClick={handleSubmit}
-                  className="font-heading font-semibold h-11 sm:h-9"
+                  className="font-heading font-semibold h-11 sm:h-9 flex-1 sm:flex-none sm:min-w-[180px]"
                 >
                   {createJob.isPending
                     ? "Commissioning..."
