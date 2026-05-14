@@ -149,3 +149,30 @@
     @apply font-sans;
   }
 }
+
+@layer components {
+  .editorial-rule {
+    border-bottom: 1px solid rgba(oklch(0.558 0.130 38), 0.3);
+  }
+
+  .drop-cap::first-letter {
+    font-family: var(--font-heading), Georgia, serif;
+    float: left;
+    font-size: 3.5rem;
+    line-height: 0.8;
+    padding-right: 0.1em;
+    margin-top: 0.05em;
+    color: var(--primary);
+    font-weight: 700;
+  }
+
+  .pull-quote {
+    border-left: 3px solid var(--primary);
+    padding-left: 16px;
+    font-family: var(--font-heading), Georgia, serif;
+    font-style: italic;
+    font-size: 1rem;
+    color: var(--muted-foreground);
+    line-height: 1.6;
+  }
+}
