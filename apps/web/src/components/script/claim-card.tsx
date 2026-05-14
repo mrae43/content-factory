@@ -1,12 +1,12 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
+import { CollapsibleSection } from "@/components/editorial/collapsible-section";
 
-const verdictStyles: Record<string, string> = {
-  SUPPORTED: "bg-success/15 text-success",
-  UNSUPPORTED: "bg-destructive/15 text-destructive",
-  CONTESTED: "bg-warning/15 text-warning",
-  UNCERTAIN: "bg-muted text-muted-foreground",
+const verdictConfig: Record<string, { dot: string; label: string }> = {
+  SUPPORTED: { dot: "bg-success", label: "SUPPORTED" },
+  CONTESTED: { dot: "bg-info", label: "CONTESTED" },
+  UNSUPPORTED: { dot: "bg-destructive", label: "UNSUPPORTED" },
+  UNCERTAIN: { dot: "bg-warning", label: "UNCERTAIN" },
 };
 
 interface ClaimCardProps {
@@ -22,23 +22,49 @@ export function ClaimCard({
   confidence,
   evidence_references,
 }: ClaimCardProps) {
+  const config = verdictConfig[verdict] ?? { dot: "bg-muted-foreground", label: verdict };
+  const pct = Math.round(confidence * 100);
+
   return (
-    <div className="rounded-lg border p-4 space-y-2">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-sm">{claim_text}</p>
-        <div className="flex items-center gap-2 shrink-0">
-          <Badge className={verdictStyles[verdict] || "bg-muted text-muted-foreground"}>
-            {verdict}
-          </Badge>
-          <span className="text-xs text-muted-foreground">
-            {(confidence * 100).toFixed(0)}%
-          </span>
+    <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+      <p className="text-sm leading-relaxed italic text-foreground">
+        &ldquo;{claim_text}&rdquo;
+      </p>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${config.dot === "bg-success" ? "text-success" : config.dot === "bg-info" ? "text-info" : config.dot === "bg-destructive" ? "text-destructive" : "text-warning"}`}>
+          <span className={`inline-block h-2 w-2 rounded-full ${config.dot}`} />
+          {config.label}
+        </span>
+        <div className="flex-1 h-1.5 rounded-full bg-muted max-w-32 overflow-hidden">
+          <div
+            className="h-full rounded-full bg-primary transition-all"
+            style={{ width: `${Math.min(pct, 100)}%` }}
+          />
         </div>
+        <span className="text-xs tabular-nums text-muted-foreground">
+          {pct}%
+        </span>
       </div>
+
+      <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.05em] text-muted-foreground">
+        <span className="font-medium">{config.label}</span>
+        {evidence_references.length > 0 && (
+          <span>
+            &middot; sources: {evidence_references.length} chunk
+            {evidence_references.length !== 1 ? "s" : ""}
+          </span>
+        )}
+      </div>
+
       {evidence_references.length > 0 && (
-        <p className="text-xs text-muted-foreground">
-          {evidence_references.length} evidence reference(s)
-        </p>
+        <CollapsibleSection label="Evidence">
+          <div className="space-y-1 text-muted-foreground">
+            {evidence_references.map((ref, i) => (
+              <p key={i}>Chunk: {ref}</p>
+            ))}
+          </div>
+        </CollapsibleSection>
       )}
     </div>
   );
