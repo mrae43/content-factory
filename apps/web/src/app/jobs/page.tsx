@@ -72,15 +72,15 @@ function relativeTime(dateStr: string): string {
 
 function StoryListSkeleton() {
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5 sm:space-y-2">
       {Array.from({ length: 5 }).map((_, i) => (
         <div
           key={i}
-          className="rounded-lg border border-border bg-card p-4"
+          className="rounded-lg border border-border bg-card p-3 sm:p-4"
         >
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
             <div className="min-w-0 flex-1">
-              <Skeleton className="h-5 w-56" />
+              <Skeleton className="h-5 w-40 sm:w-56" />
               <div className="mt-2 flex items-center gap-2">
                 <Skeleton className="h-3 w-20" />
                 <Skeleton className="h-3 w-16" />
@@ -91,7 +91,7 @@ function StoryListSkeleton() {
                 ))}
               </div>
             </div>
-            <Skeleton className="h-4 w-14 rounded-[4px]" />
+            <Skeleton className="h-4 w-14 shrink-0 rounded-[4px]" />
           </div>
         </div>
       ))}
@@ -143,9 +143,9 @@ export default function JobsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div
-        className="flex gap-2 flex-wrap"
+        className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0"
         role="group"
         aria-label="Filter stories"
       >
@@ -154,14 +154,14 @@ export default function JobsPage() {
             key={filter.key}
             onClick={() => setEditorialFilter(filter.key)}
             aria-pressed={filterKey === filter.key}
-            className={`rounded-[4px] px-3 py-1.5 text-[0.8125rem] font-medium transition-colors ${
+            className={`shrink-0 rounded-[4px] px-3 py-2 text-fluid-xs font-medium transition-colors sm:py-1.5 ${
               filterKey === filter.key
                 ? "bg-primary text-primary-foreground"
                 : "bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground"
             }`}
           >
             {filter.label}{" "}
-            <span className="ml-0.5 text-[0.6875rem] opacity-70">
+            <span className="ml-0.5 opacity-70">
               {counts[filter.key]}
             </span>
           </button>
@@ -171,11 +171,11 @@ export default function JobsPage() {
       {isLoading ? (
         <StoryListSkeleton />
       ) : isError ? (
-        <p className="text-sm text-destructive">
+        <p className="text-fluid-sm text-destructive">
           Failed to load jobs: {error?.message}
         </p>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-1.5 sm:space-y-2">
           {filtered?.map((job) => {
             const isActive = ![
               "COMPLETED",
@@ -184,22 +184,22 @@ export default function JobsPage() {
             ].includes(job.status);
 
             return (
-              <Link key={job.id} href={`/jobs/${job.id}`}>
+              <Link key={job.id} href={`/jobs/${job.id}`} className="block min-h-[44px]">
                 <Card className="border border-border bg-card shadow-[0_1px_2px_rgba(31,28,24,0.04)] transition-colors hover:bg-accent">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-3">
+                  <CardContent className="p-3 sm:p-4">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                       <div className="min-w-0 flex-1">
-                        <p className="font-heading text-[1.0625rem] font-semibold leading-snug text-foreground">
+                        <p className="font-heading text-fluid-base font-semibold leading-snug text-foreground">
                           {job.topic}
                         </p>
-                        <div className="mt-1.5 flex items-center gap-2">
+                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                           <StatusDot status={job.status} />
-                          <span className="text-[0.75rem] text-muted-foreground">
+                          <span className="text-fluid-xs text-muted-foreground">
                             {relativeTime(job.updated_at)}
                           </span>
                         </div>
                         {isActive && (
-                          <div className="mt-2.5">
+                          <div className="mt-2.5 sm:mt-3">
                             <MiniPipeline
                               currentStatus={job.status}
                               formatType={job.format_type}
@@ -207,10 +207,10 @@ export default function JobsPage() {
                           </div>
                         )}
                       </div>
-                      <div className="flex shrink-0 flex-col items-end gap-1.5">
+                      <div className="flex items-center gap-2 sm:flex-col sm:items-end sm:gap-1.5">
                         <FormatBadge formatType={job.format_type} />
                         {job.platform && (
-                          <span className="text-[0.625rem] font-medium uppercase tracking-[0.05em] text-muted-foreground">
+                          <span className="text-fluid-xs font-medium uppercase tracking-[0.05em] text-muted-foreground">
                             {job.platform}
                           </span>
                         )}
@@ -223,18 +223,18 @@ export default function JobsPage() {
           })}
           {filtered?.length === 0 && (
             <Card className="border border-border bg-card shadow-[0_1px_2px_rgba(31,28,24,0.04)]">
-              <CardContent className="flex flex-col items-center py-12 text-center">
-                <p className="font-heading text-[1rem] font-semibold text-foreground">
+              <CardContent className="flex flex-col items-center px-6 py-10 text-center sm:py-12">
+                <p className="font-heading text-fluid-sm font-semibold text-foreground">
                   No stories match this filter.
                 </p>
-                <p className="mt-1 text-[0.8125rem] text-muted-foreground">
+                <p className="mt-1 text-fluid-xs text-muted-foreground">
                   Try a different filter or commission a new story.
                 </p>
                 {filterKey !== "all" && (
                   <Button
                     variant="link"
                     onClick={() => setEditorialFilter("all")}
-                    className="mt-3 text-primary"
+                    className="mt-3 min-h-[44px] text-primary"
                   >
                     Clear filter
                   </Button>

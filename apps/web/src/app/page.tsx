@@ -37,11 +37,11 @@ function SectionHeading({
 }) {
   return (
     <div className="flex items-baseline gap-2">
-      <h3 className="font-heading text-[1.5rem] font-semibold text-foreground">
+      <h3 className="font-heading text-fluid-xl font-semibold text-foreground">
         {children}
       </h3>
       {count !== undefined && (
-        <span className="text-[0.8125rem] font-medium text-muted-foreground">
+        <span className="text-fluid-xs font-medium text-muted-foreground">
           ({count})
         </span>
       )}
@@ -63,35 +63,35 @@ function StoryCard({
   };
 }) {
   return (
-    <Link href={`/jobs/${job.id}`}>
+    <Link href={`/jobs/${job.id}`} className="block min-h-[44px]">
       <Card className="border border-border bg-card shadow-[0_1px_2px_rgba(31,28,24,0.04)] transition-colors hover:bg-accent">
-        <CardContent className="p-4">
-          <div className="flex items-start justify-between gap-3">
+        <CardContent className="p-3 sm:p-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
             <div className="min-w-0 flex-1">
-              <p className="font-heading text-[1.0625rem] font-semibold leading-snug text-foreground">
+              <p className="font-heading text-fluid-base font-semibold leading-snug text-foreground">
                 {job.topic}
               </p>
-              <div className="mt-1.5 flex items-center gap-2">
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                 <StatusDot status={job.status} />
-                <span className="text-[0.75rem] text-muted-foreground">
+                <span className="text-fluid-xs text-muted-foreground">
                   {relativeTime(job.updated_at)}
                 </span>
               </div>
-              <div className="mt-2.5">
-                <MiniPipeline
-                  currentStatus={job.status}
-                  formatType={job.format_type}
-                />
-              </div>
             </div>
-            <div className="flex shrink-0 flex-col items-end gap-1.5">
+            <div className="flex items-center gap-2 sm:flex-col sm:items-end sm:gap-1.5">
               <FormatBadge formatType={job.format_type} />
               {job.platform && (
-                <span className="text-[0.625rem] font-medium uppercase tracking-[0.05em] text-muted-foreground">
+                <span className="text-fluid-xs font-medium uppercase tracking-[0.05em] text-muted-foreground">
                   {job.platform}
                 </span>
               )}
             </div>
+          </div>
+          <div className="mt-2.5 sm:mt-3">
+            <MiniPipeline
+              currentStatus={job.status}
+              formatType={job.format_type}
+            />
           </div>
         </CardContent>
       </Card>
@@ -113,17 +113,17 @@ function PublishedCard({
   };
 }) {
   return (
-    <Link href={`/jobs/${job.id}`}>
+    <Link href={`/jobs/${job.id}`} className="block min-h-[44px]">
       <Card className="border border-border bg-card shadow-[0_1px_2px_rgba(31,28,24,0.04)] transition-colors hover:bg-accent">
-        <CardContent className="p-4">
-          <div className="flex items-start justify-between gap-3">
+        <CardContent className="p-3 sm:p-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
             <div className="min-w-0 flex-1">
-              <p className="font-heading text-[1.0625rem] font-semibold leading-snug text-foreground">
+              <p className="font-heading text-fluid-base font-semibold leading-snug text-foreground">
                 {job.topic}
               </p>
-              <div className="mt-1.5 flex items-center gap-2">
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                 <StatusDot status={job.status} />
-                <span className="text-[0.75rem] text-muted-foreground">
+                <span className="text-fluid-xs text-muted-foreground">
                   {relativeTime(job.updated_at)}
                 </span>
               </div>
@@ -159,16 +159,16 @@ function KilledCard({
 
   return (
     <Card className="border border-border bg-card shadow-[0_1px_2px_rgba(31,28,24,0.04)]">
-      <CardContent className="p-4">
-        <Link href={`/jobs/${job.id}`}>
-          <div className="flex items-start justify-between gap-3">
+      <CardContent className="p-3 sm:p-4">
+        <Link href={`/jobs/${job.id}`} className="block min-h-[44px]">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
             <div className="min-w-0 flex-1">
-              <p className="font-heading text-[1.0625rem] font-semibold leading-snug text-foreground">
+              <p className="font-heading text-fluid-base font-semibold leading-snug text-foreground">
                 {job.topic}
               </p>
-              <div className="mt-1.5 flex items-center gap-2">
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                 <StatusDot status={job.status} />
-                <span className="text-[0.75rem] text-muted-foreground">
+                <span className="text-fluid-xs text-muted-foreground">
                   {relativeTime(job.updated_at)}
                 </span>
               </div>
@@ -180,12 +180,12 @@ function KilledCard({
           <div className="mt-2">
             <button
               onClick={() => setExpanded(!expanded)}
-              className="text-[0.75rem] font-medium text-primary transition-colors hover:text-primary/80"
+              className="min-h-[44px] text-fluid-xs font-medium text-primary transition-colors hover:text-primary/80"
             >
               {expanded ? "Hide details" : "Show details"}
             </button>
             {expanded && (
-              <p className="mt-1.5 rounded-md bg-muted p-2.5 font-mono text-[0.8125rem] text-destructive">
+              <p className="mt-1.5 break-words rounded-md bg-muted p-2.5 font-mono text-fluid-sm text-destructive">
                 {errorMsg}
               </p>
             )}
@@ -198,17 +198,17 @@ function KilledCard({
 
 function DashboardSkeleton() {
   return (
-    <div className="space-y-10">
-      <div className="space-y-3">
+    <div className="space-y-8 sm:space-y-10">
+      <div className="space-y-2 sm:space-y-3">
         <Skeleton className="h-6 w-36" />
         {[1, 2].map((i) => (
           <div
             key={i}
-            className="rounded-lg border border-border bg-card p-4"
+            className="rounded-lg border border-border bg-card p-3 sm:p-4"
           >
-            <Skeleton className="h-5 w-64" />
+            <Skeleton className="h-5 w-48 sm:w-64" />
             <div className="mt-2 flex items-center gap-2">
-              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-3 w-20" />
               <Skeleton className="h-3 w-16" />
             </div>
             <div className="mt-3 flex gap-1.5">
@@ -219,14 +219,14 @@ function DashboardSkeleton() {
           </div>
         ))}
       </div>
-      <div className="space-y-3">
+      <div className="space-y-2 sm:space-y-3">
         <Skeleton className="h-6 w-48" />
         {[1, 2, 3].map((i) => (
           <div
             key={i}
-            className="rounded-lg border border-border bg-card p-4"
+            className="rounded-lg border border-border bg-card p-3 sm:p-4"
           >
-            <Skeleton className="h-5 w-56" />
+            <Skeleton className="h-5 w-40 sm:w-56" />
             <div className="mt-2 flex items-center gap-2">
               <Skeleton className="h-3 w-20" />
               <Skeleton className="h-3 w-24" />
@@ -248,11 +248,11 @@ export default function HomePage() {
 
   if (isError) {
     return (
-      <div className="space-y-6">
-        <h2 className="font-heading text-[2rem] font-bold text-foreground">
+      <div className="space-y-4 sm:space-y-6">
+        <h2 className="font-heading text-fluid-2xl font-bold text-foreground">
           Overview
         </h2>
-        <p className="text-sm text-destructive">
+        <p className="text-fluid-sm text-destructive">
           Failed to load jobs: {error?.message}
         </p>
       </div>
@@ -272,20 +272,19 @@ export default function HomePage() {
 
   const killedJobs = jobs?.filter((j) => j.status === "FAILED") ?? [];
 
-
   if (!jobs || jobs.length === 0) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <Card className="max-w-sm border border-border bg-card shadow-[0_1px_2px_rgba(31,28,24,0.04)]">
-          <CardContent className="flex flex-col items-center py-12 text-center">
-            <p className="font-heading text-[1.125rem] font-semibold text-foreground">
+      <div className="flex items-center justify-center px-4 py-16 sm:py-24">
+        <Card className="w-full max-w-sm border border-border bg-card shadow-[0_1px_2px_rgba(31,28,24,0.04)]">
+          <CardContent className="flex flex-col items-center px-6 py-10 text-center sm:py-12">
+            <p className="font-heading text-fluid-lg font-semibold text-foreground">
               No stories yet.
             </p>
-            <p className="mt-1.5 text-[0.875rem] text-muted-foreground">
+            <p className="mt-1.5 text-fluid-sm text-muted-foreground">
               Commission your first piece.
             </p>
             <Link href="/jobs/new" className="mt-6">
-              <Button className="bg-primary font-heading font-semibold text-primary-foreground hover:bg-primary/90">
+              <Button className="min-h-[44px] bg-primary font-heading font-semibold text-primary-foreground hover:bg-primary/90">
                 Commission
               </Button>
             </Link>
@@ -296,13 +295,13 @@ export default function HomePage() {
   }
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8 sm:space-y-10">
       {(activeJobs.length > 0 || reviewJobs.length > 0) && (
-        <section className="space-y-3">
+        <section className="space-y-2 sm:space-y-3">
           <SectionHeading count={activeJobs.length + reviewJobs.length}>
             Active Stories
           </SectionHeading>
-          <div className="space-y-2">
+          <div className="space-y-1.5 sm:space-y-2">
             {reviewJobs.map((job) => (
               <StoryCard key={job.id} job={job} />
             ))}
@@ -314,11 +313,11 @@ export default function HomePage() {
       )}
 
       {publishedJobs.length > 0 && (
-        <section className="space-y-3">
+        <section className="space-y-2 sm:space-y-3">
           <SectionHeading count={publishedJobs.length}>
             Recently Published
           </SectionHeading>
-          <div className="space-y-2">
+          <div className="space-y-1.5 sm:space-y-2">
             {publishedJobs.map((job) => (
               <PublishedCard key={job.id} job={job} />
             ))}
@@ -327,20 +326,20 @@ export default function HomePage() {
       )}
 
       {killedJobs.length > 0 && (
-        <section className="space-y-3">
+        <section className="space-y-2 sm:space-y-3">
           <SectionHeading count={killedJobs.length}>
             Killed Stories
           </SectionHeading>
           {!showKilled ? (
             <button
               onClick={() => setShowKilled(true)}
-              className="text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-primary"
+              className="min-h-[44px] text-fluid-sm font-medium text-muted-foreground transition-colors hover:text-primary"
             >
               Show {killedJobs.length} killed{" "}
               {killedJobs.length === 1 ? "story" : "stories"}
             </button>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1.5 sm:space-y-2">
               {killedJobs.map((job) => (
                 <KilledCard key={job.id} job={job} />
               ))}
