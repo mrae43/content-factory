@@ -89,9 +89,9 @@ export default function JobDetailPage({
 
 function LoadingSkeleton() {
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
       <div className="space-y-3">
-        <Skeleton className="h-9 w-96" />
+        <Skeleton className="h-9 w-full max-w-96" />
         <Skeleton className="h-4 w-64" />
         <div className="flex gap-2">
           <Skeleton className="h-5 w-12 rounded-[4px]" />
@@ -164,7 +164,7 @@ function JobDetailContent({
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-10">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
       <div className="space-y-2">
         <h1 className="font-heading text-3xl font-bold tracking-tight">
           {job.topic}
@@ -242,7 +242,7 @@ function FailedSection({ job }: { job: RenderJobResponse }) {
           <p className="text-sm text-muted-foreground mt-1">{message}</p>
         </div>
       </div>
-      <div className="grid gap-x-6 gap-y-1 text-xs text-muted-foreground">
+      <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
         {stage && <p>Phase: {stage}</p>}
         {agent && <p>Agent: {agent}</p>}
         <p>
@@ -319,8 +319,9 @@ function FormatTabs({
 
   return (
     <Tabs defaultValue={formatScripts[0].format_type ?? `fmt-${formatScripts[0].id}`}>
-      <TabsList variant="line" className="mb-0">
-        {formatScripts.map((s: ScriptResponse) => (
+      <div className="overflow-x-auto -mx-1 px-1">
+        <TabsList variant="line" className="mb-0">
+          {formatScripts.map((s: ScriptResponse) => (
           <TabsTrigger
             key={s.id}
             value={s.format_type ?? `fmt-${s.id}`}
@@ -332,6 +333,7 @@ function FormatTabs({
           </TabsTrigger>
         ))}
       </TabsList>
+      </div>
       {formatScripts.map((s: ScriptResponse) => (
         <TabsContent
           key={s.id}
