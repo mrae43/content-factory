@@ -190,3 +190,7 @@ opencode.jsonc
 
 # TypeScript
 *.tsbuildinfo
+
+# pgadmin
+servers.json
+
