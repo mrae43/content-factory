@@ -1,8 +1,7 @@
 "use client";
 
 import type { BlogFormatPayload } from "@content-factory/shared-types";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { CollapsibleSection } from "@/components/editorial/collapsible-section";
 
 interface BlogViewerProps {
   payload: BlogFormatPayload;
@@ -10,82 +9,109 @@ interface BlogViewerProps {
 
 export function BlogViewer({ payload }: BlogViewerProps) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold">{payload.title}</h1>
+        <h1 className="font-heading text-2xl font-bold tracking-tight">
+          {payload.title}
+        </h1>
         {payload.subtitle && (
-          <p className="mt-1 text-muted-foreground text-lg">{payload.subtitle}</p>
+          <p className="mt-1.5 font-heading text-base font-medium text-muted-foreground italic">
+            {payload.subtitle}
+          </p>
         )}
       </div>
 
       {payload.sections.map((section, i) => (
-        <Card key={i}>
-          <CardContent className="pt-6 space-y-3">
-            <h2 className="text-lg font-semibold">{section.heading}</h2>
-            <div className="whitespace-pre-wrap text-sm">{section.body}</div>
-            {section.key_takeaway && (
-              <div className="rounded-md bg-muted p-3 text-sm">
-                <span className="font-medium">Key Takeaway:</span>{" "}
-                {section.key_takeaway}
-              </div>
-            )}
-            {section.sources_used && section.sources_used.length > 0 && (
-              <p className="text-xs text-muted-foreground">
-                Sources: {section.sources_used.join(", ")}
+        <div key={i} className="space-y-3">
+          <h2 className="font-heading text-xl font-semibold tracking-tight">
+            {section.heading}
+          </h2>
+          <div
+            className={`text-[15px] leading-[1.7] text-foreground ${
+              i === 0 ? "drop-cap" : ""
+            }`}
+          >
+            {section.body.split("\n").map((paragraph, pi) => (
+              <p key={pi} className="mb-4 last:mb-0">
+                {paragraph}
               </p>
-            )}
-          </CardContent>
-        </Card>
-      ))}
-
-      <details className="rounded-lg border p-4">
-        <summary className="cursor-pointer text-sm font-medium">
-          SEO Metadata
-        </summary>
-        <div className="mt-3 space-y-1 text-sm">
-          <p>
-            <span className="font-medium">Title:</span>{" "}
-            {payload.seo_meta.meta_title}
-          </p>
-          <p>
-            <span className="font-medium">Description:</span>{" "}
-            {payload.seo_meta.meta_description}
-          </p>
-          <div className="flex flex-wrap gap-1 mt-1">
-            {payload.seo_meta.keywords.map((kw) => (
-              <Badge key={kw} variant="outline" className="text-xs">
-                {kw}
-              </Badge>
             ))}
           </div>
-          {payload.seo_meta.canonical_url && (
-            <p>
-              <span className="font-medium">Canonical URL:</span>{" "}
-              {payload.seo_meta.canonical_url}
+          {section.key_takeaway && (
+            <blockquote className="pull-quote my-4">
+              {section.key_takeaway}
+            </blockquote>
+          )}
+          <div className="flex items-center justify-between">
+            {section.sources_used && section.sources_used.length > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Sources: {section.sources_used.length} research chunk
+                {section.sources_used.length !== 1 ? "s" : ""}
+              </p>
+            ) : (
+              <span />
+            )}
+            <p className="text-xs text-muted-foreground">
+              {section.word_count} words
             </p>
+          </div>
+          {i < payload.sections.length - 1 && (
+            <div className="editorial-rule pt-4" />
           )}
         </div>
-      </details>
+      ))}
+
+      <CollapsibleSection label="SEO Details">
+        <div className="space-y-2">
+          <p>
+            <span className="font-semibold text-foreground">Meta Title:</span>{" "}
+            <span className="text-foreground">{payload.seo_meta.meta_title}</span>
+          </p>
+          <p>
+            <span className="font-semibold text-foreground">Meta Description:</span>{" "}
+            <span className="text-foreground">{payload.seo_meta.meta_description}</span>
+          </p>
+          {payload.seo_meta.canonical_url && (
+            <p>
+              <span className="font-semibold text-foreground">Canonical URL:</span>{" "}
+              <span className="text-foreground">{payload.seo_meta.canonical_url}</span>
+            </p>
+          )}
+          {payload.seo_meta.keywords.length > 0 && (
+            <div className="flex flex-wrap gap-1 pt-1">
+              {payload.seo_meta.keywords.map((kw) => (
+                <span
+                  key={kw}
+                  className="inline-flex items-center rounded-[4px] bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-primary"
+                >
+                  {kw}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </CollapsibleSection>
 
       {payload.tags.length > 0 && (
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-2">
           {payload.tags.map((tag) => (
-            <Badge key={tag} variant="secondary">
+            <span
+              key={tag}
+              className="text-sm text-muted-foreground font-heading italic"
+            >
               {tag}
-            </Badge>
+            </span>
           ))}
         </div>
       )}
 
       {payload.call_to_action && (
-        <Card>
-          <CardContent className="pt-4">
-            <p className="text-sm font-medium">Call to Action</p>
-            <p className="text-sm text-muted-foreground">
-              {payload.call_to_action}
-            </p>
-          </CardContent>
-        </Card>
+        <div className="rounded-md border border-primary/20 bg-primary/5 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-1">
+            Call to Action
+          </p>
+          <p className="text-sm text-foreground">{payload.call_to_action}</p>
+        </div>
       )}
     </div>
   );

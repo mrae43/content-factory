@@ -1,9 +1,6 @@
 "use client";
 
 import type { VideoFormatPayload } from "@content-factory/shared-types";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 
 interface VideoScriptViewerProps {
   payload: VideoFormatPayload;
@@ -11,53 +8,64 @@ interface VideoScriptViewerProps {
 
 export function VideoScriptViewer({ payload }: VideoScriptViewerProps) {
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-4 text-sm">
-        <div>
-          <span className="font-medium">Visual Style:</span>{" "}
-          {payload.visual_style}
+    <div className="space-y-5">
+      <div className="space-y-2">
+        <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
+          <span>
+            <span className="font-semibold text-foreground">Visual Style:</span>{" "}
+            {payload.visual_style}
+          </span>
+          {payload.audio_direction && (
+            <span>
+              <span className="font-semibold text-foreground">Audio Direction:</span>{" "}
+              {payload.audio_direction}
+            </span>
+          )}
+          <span>
+            <span className="font-semibold text-foreground">Total Duration:</span>{" "}
+            {payload.total_duration_seconds}s
+          </span>
         </div>
-        {payload.audio_direction && (
-          <div>
-            <span className="font-medium">Audio Direction:</span>{" "}
-            {payload.audio_direction}
-          </div>
-        )}
-        <div>
-          <span className="font-medium">Total Duration:</span>{" "}
-          {payload.total_duration_seconds}s
-        </div>
+        <div className="editorial-rule" />
       </div>
 
-      <Separator />
-
       {payload.scenes.map((scene) => (
-        <Card key={scene.scene_number}>
-          <CardContent className="pt-4 space-y-2">
-            <div className="flex items-center gap-2">
-              <Badge variant="outline">Scene {scene.scene_number}</Badge>
-              <span className="text-xs text-muted-foreground">
-                {scene.duration_seconds}s
-              </span>
-            </div>
-            <div className="space-y-1 text-sm">
-              <p>
-                <span className="font-medium">Narration:</span>{" "}
-                {scene.narration_text}
+        <div
+          key={scene.scene_number}
+          className="rounded-lg border border-border bg-card p-5 space-y-4"
+        >
+          <div className="flex items-center justify-between">
+            <span className="font-heading text-base font-semibold">
+              Scene {scene.scene_number}
+            </span>
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {scene.duration_seconds}s
+            </span>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="rounded-md bg-muted p-3 space-y-1">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-primary">
+                Visual
               </p>
-              <p>
-                <span className="font-medium">Visual:</span>{" "}
-                {scene.visual_prompt}
-              </p>
-              {scene.audio_cue && (
-                <p>
-                  <span className="font-medium">Audio:</span>{" "}
-                  {scene.audio_cue}
-                </p>
-              )}
+              <p className="text-sm leading-relaxed">{scene.visual_prompt}</p>
             </div>
-          </CardContent>
-        </Card>
+            <div className="rounded-md bg-muted p-3 space-y-1">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-primary">
+                Narration
+              </p>
+              <p className="text-sm leading-relaxed italic">
+                &ldquo;{scene.narration_text}&rdquo;
+              </p>
+            </div>
+          </div>
+
+          {scene.audio_cue && (
+            <p className="text-xs italic text-muted-foreground">
+              Audio: {scene.audio_cue}
+            </p>
+          )}
+        </div>
       ))}
     </div>
   );
