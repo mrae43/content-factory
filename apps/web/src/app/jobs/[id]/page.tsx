@@ -139,16 +139,16 @@ function JobDetailContent({
   const [showRejectForm, setShowRejectForm] = useState(false);
 
   const scripts = job.scripts ?? [];
-  const assets = job.assets ?? [];
+  //const assets = job.assets ?? [];
   const isTerminal: boolean =
     job.status === "COMPLETED" ||
     job.status === "FAILED" ||
     job.status === "HUMAN_REVIEW_NEEDED";
   const isActive = !isTerminal;
 
-  const masterScript = scripts.find(
-    (s: ScriptResponse) => !s.format_payload
-  );
+  // const masterScript = scripts.find(
+  //   (s: ScriptResponse) => !s.format_payload
+  // );
   const formatScripts = scripts.filter(
     (s: ScriptResponse) => s.format_payload
   );
