@@ -4,7 +4,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
-import { useState } from "react";
+import { useState, useEffect, useLayoutEffect } from "react";
+import { useUIStore } from "@/stores/ui-store";
+
+const useIsomorphicLayoutEffect =
+  typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 export default function DashboardLayout({
   children,
@@ -13,6 +17,18 @@ export default function DashboardLayout({
 }) {
   const [queryClient] = useState(() => new QueryClient());
 
+  useIsomorphicLayoutEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    useUIStore.setState({ sidebarOpen: mq.matches });
+
+    function handleChange(e: MediaQueryListEvent) {
+      useUIStore.setState({ sidebarOpen: e.matches });
+    }
+
+    mq.addEventListener("change", handleChange);
+    return () => mq.removeEventListener("change", handleChange);
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -20,7 +36,9 @@ export default function DashboardLayout({
           <Sidebar />
           <div className="flex flex-1 flex-col overflow-hidden">
             <Header />
-            <main id="main" className="flex-1 overflow-y-auto p-6">{children}</main>
+            <main id="main" className="flex-1 overflow-y-auto p-4 md:p-6">
+              {children}
+            </main>
           </div>
         </div>
       </TooltipProvider>

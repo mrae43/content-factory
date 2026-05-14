@@ -48,6 +48,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    volumes:
+      - ./servers.json:/pgadmin4/servers.json
     deploy:
       resources:
         limits:
