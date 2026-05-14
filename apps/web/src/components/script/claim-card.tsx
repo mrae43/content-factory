@@ -31,7 +31,7 @@ export function ClaimCard({
         &ldquo;{claim_text}&rdquo;
       </p>
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${config.dot === "bg-success" ? "text-success" : config.dot === "bg-info" ? "text-info" : config.dot === "bg-destructive" ? "text-destructive" : "text-warning"}`}>
           <span className={`inline-block h-2 w-2 rounded-full ${config.dot}`} />
           {config.label}

@@ -42,7 +42,7 @@ export function BlogViewer({ payload }: BlogViewerProps) {
               {section.key_takeaway}
             </blockquote>
           )}
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
             {section.sources_used && section.sources_used.length > 0 ? (
               <p className="text-xs text-muted-foreground">
                 Sources: {section.sources_used.length} research chunk

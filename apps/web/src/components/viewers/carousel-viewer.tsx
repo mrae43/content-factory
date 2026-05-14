@@ -66,7 +66,7 @@ export function CarouselViewer({ payload, platform }: CarouselViewerProps) {
             </p>
           )}
 
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
             {slide.sources_used && slide.sources_used.length > 0 ? (
               <p className="text-xs text-muted-foreground">
                 Sources: {slide.sources_used.join(", ")}
