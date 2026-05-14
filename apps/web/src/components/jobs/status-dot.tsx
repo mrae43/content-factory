@@ -24,13 +24,13 @@ export function StatusDot({ status, className = "" }: StatusDotProps) {
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 ${className}`}
+      className={`inline-flex min-h-[20px] items-center gap-1.5 ${className}`}
       aria-label={`Status: ${config.label}`}
     >
-    <span
-      className={`inline-block h-2 w-2 rounded-full ${config.color}`}
-    />
-      <span className="text-[0.6875rem] font-medium text-muted-foreground">
+      <span
+        className={`inline-block h-2 w-2 shrink-0 rounded-full ${config.color}`}
+      />
+      <span className="text-fluid-xs font-medium text-muted-foreground whitespace-nowrap">
         {config.label}
       </span>
     </span>
