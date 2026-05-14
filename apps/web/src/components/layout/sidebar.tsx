@@ -15,9 +15,7 @@ const navItems = [
 function Masthead() {
   return (
     <div className="px-5 pt-6 pb-4">
-      <h2
-        className="font-heading text-[1.25rem] font-bold leading-tight tracking-[-0.01em] text-foreground"
-      >
+      <h2 className="font-heading text-[1.25rem] font-bold leading-tight tracking-[-0.01em] text-foreground">
         Content Factory
       </h2>
       <div className="mt-1.5 h-[2px] w-[4.5rem] bg-primary" />
@@ -61,48 +59,59 @@ function DarkModeToggle() {
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { sidebarOpen } = useUIStore();
+  const { sidebarOpen, toggleSidebar } = useUIStore();
 
   return (
-    <aside
-      className={cn(
-        "flex h-full w-60 shrink-0 flex-col border-r border-border bg-background transition-[width,opacity] duration-200",
-        !sidebarOpen && "w-0 overflow-hidden border-r-0 opacity-0"
+    <>
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={toggleSidebar}
+          aria-hidden="true"
+        />
       )}
-    >
-      <Masthead />
+      <aside
+        className={cn(
+          "flex flex-col border-r border-border bg-background",
+          "fixed inset-y-0 left-0 z-50 w-60 shrink-0 transition-transform duration-200 md:static md:z-auto md:transition-[width,opacity]",
+          !sidebarOpen && "-translate-x-full md:translate-x-0 md:w-0 md:overflow-hidden md:border-r-0 md:opacity-0"
+        )}
+      >
+        <Masthead />
+        <nav className="mt-2 flex flex-col gap-1 px-3">
+          {navItems.map((item) => {
+            const isActive = (() => {
+              if (item.href === "/") return pathname === "/";
+              if (item.href === "/jobs/new") return pathname === "/jobs/new";
+              return pathname === "/jobs" || (pathname.startsWith("/jobs/") && pathname !== "/jobs/new");
+            })();
 
-      <nav className="mt-2 flex flex-col gap-1 px-3">
-        {navItems.map((item) => {
-          const isActive = (() => {
-            if (item.href === "/") return pathname === "/";
-            if (item.href === "/jobs/new") return pathname === "/jobs/new";
-            return pathname === "/jobs" || (pathname.startsWith("/jobs/") && pathname !== "/jobs/new");
-          })();
-
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "block rounded-none py-2 pl-[17px] pr-4 text-[0.875rem] font-medium leading-none transition-colors",
-                isActive
-                  ? "border-l-[3px] border-primary bg-accent text-primary"
-                  : "border-l-[3px] border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-              )}
-            >
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
-
-      <div className="mt-auto border-t border-border px-3 pb-4 pt-3">
-        <DarkModeToggle />
-        <p className="px-2 pt-2 text-[0.6875rem] font-medium tracking-[0.02em] text-muted-foreground/60">
-          v1.0
-        </p>
-      </div>
-    </aside>
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => {
+                  if (window.innerWidth < 768) toggleSidebar();
+                }}
+                className={cn(
+                  "block rounded-none py-2 pl-[17px] pr-4 text-[0.875rem] font-medium leading-none transition-colors",
+                  isActive
+                    ? "border-l-[3px] border-primary bg-accent text-primary"
+                    : "border-l-[3px] border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                )}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+        <div className="mt-auto border-t border-border px-3 pb-4 pt-3">
+          <DarkModeToggle />
+          <p className="px-2 pt-2 text-[0.6875rem] font-medium tracking-[0.02em] text-muted-foreground/60">
+            v1.0
+          </p>
+        </div>
+      </aside>
+    </>
   );
 }
