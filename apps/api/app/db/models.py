@@ -161,6 +161,7 @@ class Script(Base):
     __tablename__ = "scripts"
     __table_args__ = (
         UniqueConstraint("job_id", "version", name="uq_script_job_version"),
+        CheckConstraint("role IN ('master', 'format')", name="ck_scripts_role"),
         {"schema": "factory"},
     )
 
@@ -172,6 +173,7 @@ class Script(Base):
         index=True,
     )
 
+    role = Column(String, nullable=False, server_default="master")
     version = Column(Integer, nullable=False, default=1)
     content = Column(String, nullable=False)
 
@@ -181,7 +183,7 @@ class Script(Base):
     # Agentic Reflection Loop history
     feedback_history = Column(JSONB, nullable=False, server_default="[]")
 
-    format_type = Column(String, nullable=False, server_default="VIDEO")
+    format_type = Column(String, nullable=True)
     format_payload = Column(JSONB, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
