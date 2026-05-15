@@ -365,6 +365,47 @@ async def _resolve_evidence_refs(
             ]
 
 
+def _build_format_content(format_type: str, payload: dict) -> str:
+    if format_type == "BLOG":
+        title = payload.get("title", "")
+        sections = payload.get("sections", [])
+        parts = [f"# {title}"] if title else []
+        for sec in sections:
+            heading = sec.get("heading", "")
+            body = sec.get("body", "")
+            parts.append(f"## {heading}\n\n{body}" if heading else body)
+        return "\n\n".join(parts)
+
+    if format_type == "CAROUSEL":
+        thread_title = payload.get("thread_title", "")
+        slides = payload.get("slides", [])
+        parts = [f"# {thread_title}"] if thread_title else []
+        for slide in slides:
+            num = slide.get("slide_number", "")
+            text = slide.get("text", "")
+            parts.append(f"**Slide {num}**\n\n{text}")
+        return "\n\n---\n\n".join(parts)
+
+    if format_type == "VIDEO":
+        title = payload.get("title", "")
+        scenes = payload.get("scenes", [])
+        parts = [f"# {title}"] if title else []
+        for scene in scenes:
+            num = scene.get("scene_number", "")
+            narration = scene.get("narration_text", "")
+            visual = scene.get("visual_prompt", "")
+            audio = scene.get("audio_cue", "")
+            parts.append(
+                f"### Scene {num}\n\n"
+                f"**Narration:** {narration}\n\n"
+                f"**Visual:** {visual}\n\n"
+                f"**Audio:** {audio}"
+            )
+        return "\n\n".join(parts)
+
+    return payload.get("title", payload.get("thread_title", ""))
+
+
 def _next_status_after_formatting(format_type: str) -> JobStatusEnum:
     fmt = (format_type or "all").lower()
     if fmt in ("video", "all"):
@@ -471,13 +512,11 @@ async def _transition_formatting(db: AsyncSession, job) -> None:
             continue
 
         if raw_result.success:
-            title = raw_result.payload.get(
-                "title", raw_result.payload.get("thread_title", fmt_name)
-            )
+            content = _build_format_content(fmt_name, raw_result.payload)
             await save_format_script(
                 db,
                 job_id=job.id,
-                content=title,
+                content=content,
                 version=next_version,
                 format_type=fmt_name,
                 format_payload=raw_result.payload,
