@@ -38,6 +38,7 @@ def make_mock_job(**overrides):
 def make_mock_script(**overrides):
     defaults = {
         "id": uuid4(),
+        "role": "master",
         "version": 1,
         "content": "Test script content",
         "is_approved": False,
