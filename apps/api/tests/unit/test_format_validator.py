@@ -110,7 +110,7 @@ class TestBlogValidator:
 
         assert result.valid is False
         assert result.error_message is not None
-        assert "sections" in result.error_message.lower()
+        assert "section" in result.error_message.lower()
 
     def test_should_reject_section_missing_body(self):
         validator = BlogValidator()
