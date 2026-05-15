@@ -146,11 +146,8 @@ function JobDetailContent({
     job.status === "HUMAN_REVIEW_NEEDED";
   const isActive = !isTerminal;
 
-  // const masterScript = scripts.find(
-  //   (s: ScriptResponse) => !s.format_payload
-  // );
   const formatScripts = scripts.filter(
-    (s: ScriptResponse) => s.format_payload
+    (s: ScriptResponse) => s.role === "format"
   );
   const allClaims = scripts.flatMap(
     (s: ScriptResponse) => s.claims ?? []
@@ -419,10 +416,10 @@ function ActiveOutput({ job }: { job: RenderJobResponse }) {
   const scripts = job.scripts ?? [];
   const assets = job.assets ?? [];
   const masterScript = scripts.find(
-    (s: ScriptResponse) => !s.format_payload
+    (s: ScriptResponse) => s.role === "master"
   );
   const formatScripts = scripts.filter(
-    (s: ScriptResponse) => s.format_payload
+    (s: ScriptResponse) => s.role === "format"
   );
   const allClaims = scripts.flatMap(
     (s: ScriptResponse) => s.claims ?? []
@@ -590,7 +587,7 @@ function ReviewSection({
 }) {
   const scripts = job.scripts ?? [];
   const masterScript = scripts.find(
-    (s: ScriptResponse) => !s.format_payload
+    (s: ScriptResponse) => s.role === "master"
   );
 
   return (
