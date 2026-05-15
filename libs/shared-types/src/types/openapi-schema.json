@@ -703,25 +703,23 @@
           "format_type": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/FormatTypeEnum"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Format Type",
             "default": "all"
           },
           "platform": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/PlatformEnum"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Platform"
+            ]
           },
           "final_video_url": {
             "anyOf": [
@@ -843,6 +841,11 @@
             "format": "uuid",
             "title": "Id"
           },
+          "role": {
+            "type": "string",
+            "title": "Role",
+            "default": "master"
+          },
           "version": {
             "type": "integer",
             "title": "Version"
@@ -886,8 +889,7 @@
                 "type": "null"
               }
             ],
-            "title": "Format Type",
-            "default": "VIDEO"
+            "title": "Format Type"
           },
           "format_payload": {
             "anyOf": [
