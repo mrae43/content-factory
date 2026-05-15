@@ -25,15 +25,22 @@ class BlogValidator(FormatValidator):
     def validate(self, payload: dict) -> FormatValidationResult:
         try:
             validated = BlogFormatPayload.model_validate(payload)
-            return FormatValidationResult(
-                valid=True,
-                validated_payload=validated.model_dump(by_alias=True, mode="json"),
-            )
         except ValidationError as e:
             return FormatValidationResult(
                 valid=False,
                 error_message=str(e),
             )
+
+        if len(validated.sections) < 1:
+            return FormatValidationResult(
+                valid=False,
+                error_message="Blog must have at least 1 section.",
+            )
+
+        return FormatValidationResult(
+            valid=True,
+            validated_payload=validated.model_dump(by_alias=True, mode="json"),
+        )
 
 
 class CarouselValidator(FormatValidator):

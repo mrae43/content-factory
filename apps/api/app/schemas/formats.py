@@ -44,7 +44,7 @@ class BlogFormatPayload(BaseModel):
     version: int = Field(alias="_version", default=1)
     title: str
     subtitle: str
-    sections: List[BlogSection]
+    sections: List[BlogSection] = Field(min_length=1)
     seo_meta: SeoMeta
     tags: List[str]
     call_to_action: str
