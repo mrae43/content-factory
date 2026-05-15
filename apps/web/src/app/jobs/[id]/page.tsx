@@ -152,13 +152,28 @@ function JobDetailContent({
   const formatScripts = scripts.filter(
     (s: ScriptResponse) => s.format_payload
   );
+  const allClaims = scripts.flatMap(
+    (s: ScriptResponse) => s.claims ?? []
+  );
 
   function renderSection1() {
     if (job.status === "FAILED") {
       return <FailedSection job={job} />;
     }
     if (job.status === "COMPLETED") {
-      return <FormatTabs formatScripts={formatScripts} platform={job.platform} />;
+      return (
+        <div className="space-y-4">
+          <FormatTabs formatScripts={formatScripts} platform={job.platform} />
+          {allClaims.length > 0 && (
+            <div className="rounded-lg border border-border p-5 space-y-3">
+              <h4 className="font-heading text-sm font-semibold text-muted-foreground">
+                Fact Check Audit
+              </h4>
+              <ClaimsSection claims={allClaims} />
+            </div>
+          )}
+        </div>
+      );
     }
     return <ActiveOutput job={job} />;
   }
@@ -352,6 +367,53 @@ function FormatTabs({
   );
 }
 
+function ClaimsSection({ claims }: { claims: FactCheckClaimResponse[] }) {
+  if (claims.length === 0) return null;
+  return (
+    <div className="space-y-2">
+      {claims.map((claim: FactCheckClaimResponse) => (
+        <div
+          key={claim.id}
+          className="rounded-md border border-border p-3 text-sm space-y-1"
+        >
+          <p className="italic text-muted-foreground">
+            &ldquo;{claim.claim_text}&rdquo;
+          </p>
+          <div className="flex items-center gap-2 text-xs">
+            <span
+              className={`inline-flex items-center gap-1 font-semibold ${
+                claim.verdict === "SUPPORTED"
+                  ? "text-success"
+                  : claim.verdict === "CONTESTED"
+                    ? "text-info"
+                    : claim.verdict === "UNSUPPORTED"
+                      ? "text-destructive"
+                      : "text-warning"
+              }`}
+            >
+              <span
+                className={`inline-block h-1.5 w-1.5 rounded-full ${
+                  claim.verdict === "SUPPORTED"
+                    ? "bg-success"
+                    : claim.verdict === "CONTESTED"
+                      ? "bg-info"
+                      : claim.verdict === "UNSUPPORTED"
+                        ? "bg-destructive"
+                        : "bg-warning"
+                }`}
+              />
+              {claim.verdict}
+            </span>
+            <span className="text-muted-foreground">
+              {(claim.confidence * 100).toFixed(0)}%
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ActiveOutput({ job }: { job: RenderJobResponse }) {
   const status = job.status;
   const scripts = job.scripts ?? [];
@@ -434,45 +496,7 @@ function ActiveOutput({ job }: { job: RenderJobResponse }) {
           </p>
           {status === "FACT_CHECKING_SCRIPT" && allClaims.length > 0 && (
             <div className="space-y-2 pt-2 border-t border-border">
-              {allClaims.map((claim: FactCheckClaimResponse) => (
-                <div
-                  key={claim.id}
-                  className="rounded-md border border-border p-3 text-sm space-y-1"
-                >
-                  <p className="italic text-muted-foreground">
-                    &ldquo;{claim.claim_text}&rdquo;
-                  </p>
-                  <div className="flex items-center gap-2 text-xs">
-                    <span
-                      className={`inline-flex items-center gap-1 font-semibold ${
-                        claim.verdict === "SUPPORTED"
-                          ? "text-success"
-                          : claim.verdict === "CONTESTED"
-                            ? "text-info"
-                            : claim.verdict === "UNSUPPORTED"
-                              ? "text-destructive"
-                              : "text-warning"
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-1.5 w-1.5 rounded-full ${
-                          claim.verdict === "SUPPORTED"
-                            ? "bg-success"
-                            : claim.verdict === "CONTESTED"
-                              ? "bg-info"
-                              : claim.verdict === "UNSUPPORTED"
-                                ? "bg-destructive"
-                                : "bg-warning"
-                        }`}
-                      />
-                      {claim.verdict}
-                    </span>
-                    <span className="text-muted-foreground">
-                      {(claim.confidence * 100).toFixed(0)}%
-                    </span>
-                  </div>
-                </div>
-              ))}
+              <ClaimsSection claims={allClaims} />
             </div>
           )}
         </div>
