@@ -108,9 +108,9 @@ class TestBlogValidator:
 
         result = validator.validate(payload)
 
-        assert result.valid is True
-        assert result.validated_payload is not None
-        assert result.validated_payload["sections"] == []
+        assert result.valid is False
+        assert result.error_message is not None
+        assert "sections" in result.error_message.lower()
 
     def test_should_reject_section_missing_body(self):
         validator = BlogValidator()

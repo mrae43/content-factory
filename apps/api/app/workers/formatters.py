@@ -2,7 +2,7 @@ import logging
 from typing import Any, Dict, List
 
 from langchain_core.prompts import ChatPromptTemplate
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.workers.agents import AgentActionStatus, AgentResult, BaseAgent
 from app.schemas.formats import BlogSection, SeoMeta, CarouselSlide, VideoScene
@@ -27,7 +27,7 @@ class BlogPlan(BaseModel):
 class BlogFormatterOutput(BaseModel):
     title: str
     subtitle: str
-    sections: List[BlogSection]
+    sections: List[BlogSection] = Field(min_length=1)
     seo_meta: SeoMeta
     tags: List[str]
     call_to_action: str
