@@ -133,7 +133,10 @@ async def approve_script(
     if not job.scripts:
         raise HTTPException(status_code=400, detail="No script found to approve")
 
-    latest_script = max(job.scripts, key=lambda s: s.version)
+    master_scripts = [s for s in job.scripts if s.role == "master"]
+    if not master_scripts:
+        raise HTTPException(status_code=400, detail="No master script found to approve")
+    latest_script = max(master_scripts, key=lambda s: s.version)
 
     if request.is_approved:
         latest_script.is_approved = True

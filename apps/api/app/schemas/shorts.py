@@ -181,12 +181,13 @@ class ScriptResponse(BaseModel):
     """Outputs for Step 5: The Agentic Script."""
 
     id: UUID
+    role: str = "master"
     version: int
     content: str
     is_approved: bool
     feedback_history: List[Union[str, Dict[str, Any]]]
     claims: List[FactCheckClaimResponse] = Field(default_factory=list)
-    format_type: Optional[str] = "VIDEO"
+    format_type: Optional[str] = None
     format_payload: Optional[FormatPayload] = None
     created_at: datetime
     updated_at: datetime

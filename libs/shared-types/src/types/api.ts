@@ -306,13 +306,9 @@ export interface components {
             status: components["schemas"]["JobStatusEnum"];
             /** Strict Compliance Mode */
             strict_compliance_mode: boolean;
-            /**
-             * Format Type
-             * @default all
-             */
-            format_type: string | null;
-            /** Platform */
-            platform?: string | null;
+            /** @default all */
+            format_type: components["schemas"]["FormatTypeEnum"] | null;
+            platform?: components["schemas"]["PlatformEnum"] | null;
             /** Final Video Url */
             final_video_url: string | null;
             /** Refined Context */
@@ -369,6 +365,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Role
+             * @default master
+             */
+            role: string;
             /** Version */
             version: number;
             /** Content */
@@ -381,11 +382,8 @@ export interface components {
             })[];
             /** Claims */
             claims?: components["schemas"]["FactCheckClaimResponse"][];
-            /**
-             * Format Type
-             * @default VIDEO
-             */
-            format_type: string | null;
+            /** Format Type */
+            format_type?: string | null;
             /** Format Payload */
             format_payload?: (components["schemas"]["VideoFormatPayload"] | components["schemas"]["BlogFormatPayload"] | components["schemas"]["CarouselFormatPayload"]) | null;
             /**

@@ -12,7 +12,7 @@ from app.schemas.shorts import JobStatusEnum
 async def get_latest_script(db: AsyncSession, job_id: UUID) -> Optional[Script]:
     stmt = (
         select(Script)
-        .where(Script.job_id == job_id)
+        .where(Script.job_id == job_id, Script.role == "master")
         .order_by(Script.version.desc())
         .limit(1)
     )
@@ -31,8 +31,8 @@ async def get_latest_format_script(
         select(Script)
         .where(
             Script.job_id == job_id,
+            Script.role == "format",
             Script.format_type == format_type,
-            Script.format_payload.isnot(None),
         )
         .order_by(Script.version.desc())
         .limit(1)
@@ -114,7 +114,7 @@ async def log_error(db: AsyncSession, job_id: UUID, error_message: str, phase: s
 
 async def save_script(db: AsyncSession, job_id: UUID, content: str, version: int):
     new_script = Script(
-        job_id=job_id, content=content, version=version, is_approved=False
+        job_id=job_id, role="master", content=content, version=version, is_approved=False
     )
     db.add(new_script)
     await db.commit()
@@ -131,6 +131,7 @@ async def save_format_script(
 ):
     new_script = Script(
         job_id=job_id,
+        role="format",
         content=content,
         version=version,
         is_approved=is_approved,
