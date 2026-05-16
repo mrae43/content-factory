@@ -213,6 +213,11 @@ export interface components {
             /** Confidence */
             confidence: number;
             /**
+             * Evidence Text
+             * @description Evidence text supporting this verdict
+             */
+            evidence_text?: string | null;
+            /**
              * Evidence References
              * @description IDs of ResearchChunks
              */

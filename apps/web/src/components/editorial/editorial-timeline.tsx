@@ -2,7 +2,6 @@
 
 import { CollapsibleSection } from "./collapsible-section";
 import type { ScriptResponse, FactCheckClaimResponse, AssetResponse } from "@content-factory/shared-types";
-import { ClaimCard } from "@/components/script/claim-card";
 
 const pipelineStages = [
   "PENDING",
@@ -203,21 +202,39 @@ function TimelineNode({ stage, state, isLast, job }: TimelineNodeProps) {
       summaryText = isCompleted
         ? `${masterScript?.is_approved ? "Approved" : "Evaluated"} \u00B7 ${claimCount} claims${claimCount > 0 ? ` (${supportedCount} supported)` : ""}`
         : "Evaluating claims\u2026";
-      if (claims.length > 0) {
-        outputContent = (
-          <div className="mt-3 space-y-2">
-            {claims.map((claim: FactCheckClaimResponse) => (
-              <ClaimCard
-                key={claim.id}
-                claim_text={claim.claim_text}
-                verdict={claim.verdict}
-                confidence={claim.confidence}
-                evidence_references={claim.evidence_references ?? []}
-              />
-            ))}
+      outputContent = claimCount > 0 ? (
+        <div className="mt-3 space-y-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <span>{claimCount} total</span>
+            <span className="text-success font-semibold">
+              {claims.filter((c: FactCheckClaimResponse) => c.verdict === "SUPPORTED").length} supported
+            </span>
+            {claims.filter((c: FactCheckClaimResponse) => c.verdict === "CONTESTED").length > 0 && (
+              <span className="text-info font-semibold">
+                {claims.filter((c: FactCheckClaimResponse) => c.verdict === "CONTESTED").length} contested
+              </span>
+            )}
+            {claims.filter((c: FactCheckClaimResponse) => c.verdict === "UNSUPPORTED").length > 0 && (
+              <span className="text-destructive font-semibold">
+                {claims.filter((c: FactCheckClaimResponse) => c.verdict === "UNSUPPORTED").length} unsupported
+              </span>
+            )}
           </div>
-        );
-      }
+          <a
+            href="#fact-check-audit"
+            className="inline-block text-xs text-primary hover:underline"
+          >
+            View full audit trail &rarr;
+          </a>
+        </div>
+      ) : (
+        <div className="mt-3 rounded-md bg-muted p-4">
+          <p className="text-xs text-muted-foreground">
+            No verifiable factual claims found in this output. All content passed
+            editorial review as non-factual or opinion-based material.
+          </p>
+        </div>
+      );
     }
   }
 
