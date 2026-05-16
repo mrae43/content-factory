@@ -97,7 +97,6 @@ class RenderJob(Base):
 
     format_type = Column(String, nullable=False, server_default="all")
     platform = Column(String, nullable=True)
-    hedge_index = Column(JSONB, nullable=True)
 
     created_at = Column(
         DateTime(timezone=True), server_default=text("now()"), nullable=False
@@ -222,9 +221,6 @@ class FactCheckClaim(Base):
     confidence = Column(Float, nullable=False)
 
     evidence_text = Column(Text, nullable=True)
-    evidence_text_inline = Column(JSONB, nullable=False, server_default="[]")
-
-    hedge_required = Column(Boolean, default=False, nullable=False)
 
     evidence_references = Column(JSONB, nullable=False, server_default="[]")
 

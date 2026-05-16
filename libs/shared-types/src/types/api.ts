@@ -218,17 +218,6 @@ export interface components {
              */
             evidence_text?: string | null;
             /**
-             * Evidence Text Inline
-             * @description Snapshot of raw evidence chunk content for audit trail persistence
-             */
-            evidence_text_inline?: string[];
-            /**
-             * Hedge Required
-             * @description True when verdict is UNCERTAIN — formatter should apply hedged language
-             * @default false
-             */
-            hedge_required: boolean;
-            /**
              * Evidence References
              * @description IDs of ResearchChunks
              */

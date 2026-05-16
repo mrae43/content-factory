@@ -540,20 +540,6 @@
             "title": "Evidence Text",
             "description": "Evidence text supporting this verdict"
           },
-          "evidence_text_inline": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Evidence Text Inline",
-            "description": "Snapshot of raw evidence chunk content for audit trail persistence"
-          },
-          "hedge_required": {
-            "type": "boolean",
-            "title": "Hedge Required",
-            "description": "True when verdict is UNCERTAIN \u2014 formatter should apply hedged language",
-            "default": false
-          },
           "evidence_references": {
             "items": {
               "type": "string",

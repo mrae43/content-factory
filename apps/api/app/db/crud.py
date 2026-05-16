@@ -152,7 +152,6 @@ async def get_script_claims(db: AsyncSession, script_id: UUID) -> list[dict]:
             "verdict": c.verdict,
             "evidence_text": c.evidence_text or "",
             "evidence_references": c.evidence_references,
-            "hedge_required": c.hedge_required,
         }
         for c in claims
     ]
@@ -195,8 +194,6 @@ async def save_fact_check_claims(
             verdict=c["verdict"],
             confidence=c["confidence"],
             evidence_text=c.get("evidence_text"),
-            evidence_text_inline=c.get("evidence_text_inline", []),
-            hedge_required=c.get("hedge_required", False),
             evidence_references=c.get("evidence_references", []),
         )
         for c in claims
