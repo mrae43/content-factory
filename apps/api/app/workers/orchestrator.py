@@ -263,6 +263,13 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
         claims_data = result.payload.get("claims", [])
         await _resolve_evidence_refs(db, vector_store, job.id, claims_data)
 
+        if not claims_data:
+            logger.info(
+                f"Red Team found 0 claims for Job {job.id}. "
+                f"Script contains no verifiable factual assertions. "
+                f"Proceeding without fact-check audit."
+            )
+
         if claims_data and latest_script_obj:
             await save_fact_check_claims(db, latest_script_obj.id, claims_data)
 
