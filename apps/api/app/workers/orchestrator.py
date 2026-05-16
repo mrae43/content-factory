@@ -274,16 +274,27 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
             await save_fact_check_claims(db, latest_script_obj.id, claims_data)
 
         if latest_script_obj:
-            latest_script_obj.is_approved = True
-            await db.commit()
-
-        logger.info(
-            f"Red Team Approved for Job {job.id}. "
-            f"{len(claims_data)} claims persisted. Proceeding to {next_status_after_fact_check(job.format_type).value}."
-        )
-        await update_job_status(
-            db, job.id, next_status_after_fact_check(job.format_type)
-        )
+            if job.strict_compliance_mode:
+                latest_script_obj.is_approved = False
+                await db.commit()
+                logger.info(
+                    f"Red Team Approved for Job {job.id}. "
+                    f"{len(claims_data)} claims persisted. "
+                    f"Strict compliance mode: awaiting human review."
+                )
+                await update_job_status(
+                    db, job.id, JobStatusEnum.HUMAN_REVIEW_NEEDED
+                )
+            else:
+                latest_script_obj.is_approved = True
+                await db.commit()
+                logger.info(
+                    f"Red Team Approved for Job {job.id}. "
+                    f"{len(claims_data)} claims persisted. Proceeding to {next_status_after_fact_check(job.format_type).value}."
+                )
+                await update_job_status(
+                    db, job.id, next_status_after_fact_check(job.format_type)
+                )
 
     elif result.status == AgentActionStatus.REVISION_NEEDED:
         claims_data = result.payload.get("claims", [])
