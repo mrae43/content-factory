@@ -290,9 +290,7 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
                     f"{len(claims_data)} claims persisted. "
                     f"Strict compliance mode: awaiting human review."
                 )
-                await update_job_status(
-                    db, job.id, JobStatusEnum.HUMAN_REVIEW_NEEDED
-                )
+                await update_job_status(db, job.id, JobStatusEnum.HUMAN_REVIEW_NEEDED)
             else:
                 latest_script_obj.is_approved = True
                 await db.commit()

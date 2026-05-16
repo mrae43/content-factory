@@ -39,11 +39,12 @@ def upgrade() -> None:
     )
     # 4. Backfill existing format scripts: format_payload IS NOT NULL
     op.execute(
-        "UPDATE factory.scripts SET role = 'format' "
-        "WHERE format_payload IS NOT NULL"
+        "UPDATE factory.scripts SET role = 'format' WHERE format_payload IS NOT NULL"
     )
     # 5. Drop old check constraint on format_type first
-    op.drop_constraint("ck_scripts_format_type", "scripts", schema="factory", type_="check")
+    op.drop_constraint(
+        "ck_scripts_format_type", "scripts", schema="factory", type_="check"
+    )
     # 6. Alter format_type to nullable before we set master scripts to NULL
     op.alter_column("scripts", "format_type", nullable=True, schema="factory")
     # 7. Null out format_type for existing master scripts (Decision 2: master has no format)
@@ -61,13 +62,21 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint("ck_scripts_format_type", "scripts", schema="factory", type_="check")
+    op.drop_constraint(
+        "ck_scripts_format_type", "scripts", schema="factory", type_="check"
+    )
     # First set format_type back to 'VIDEO' for master scripts before re-adding NOT NULL
     op.execute(
         "UPDATE factory.scripts SET format_type = 'VIDEO' "
         "WHERE role = 'master' AND format_type IS NULL"
     )
-    op.alter_column("scripts", "format_type", nullable=False, server_default="VIDEO", schema="factory")
+    op.alter_column(
+        "scripts",
+        "format_type",
+        nullable=False,
+        server_default="VIDEO",
+        schema="factory",
+    )
     op.create_check_constraint(
         "ck_scripts_format_type",
         "scripts",

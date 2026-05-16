@@ -29,7 +29,9 @@ def upgrade() -> None:
     # Fix 1 — Hedge mechanism
     op.add_column(
         "fact_check_claims",
-        sa.Column("hedge_required", sa.Boolean(), nullable=False, server_default="false"),
+        sa.Column(
+            "hedge_required", sa.Boolean(), nullable=False, server_default="false"
+        ),
         schema="factory",
     )
     op.add_column(

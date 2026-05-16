@@ -513,9 +513,7 @@ class RedTeamAgent(BaseAgent):
             guardrail_config.uncertain_is_soft_fail if guardrail_config else False
         )
         if uncertain_is_fail:
-            all_supported = all(
-                c.verdict == "SUPPORTED" for c in structured.claims
-            )
+            all_supported = all(c.verdict == "SUPPORTED" for c in structured.claims)
         else:
             all_supported = all(
                 c.verdict in ("SUPPORTED", "UNCERTAIN") for c in structured.claims
