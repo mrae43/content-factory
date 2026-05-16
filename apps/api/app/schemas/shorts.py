@@ -173,6 +173,14 @@ class FactCheckClaimResponse(BaseModel):
     evidence_text: Optional[str] = Field(
         None, description="Evidence text supporting this verdict"
     )
+    evidence_text_inline: List[str] = Field(
+        default_factory=list,
+        description="Snapshot of raw evidence chunk content for audit trail persistence",
+    )
+    hedge_required: bool = Field(
+        False,
+        description="True when verdict is UNCERTAIN — formatter should apply hedged language",
+    )
     evidence_references: List[UUID] = Field(
         default_factory=list, description="IDs of ResearchChunks"
     )
