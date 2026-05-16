@@ -10,6 +10,24 @@ from app.schemas.formats import BlogSection, SeoMeta, CarouselSlide, VideoScene
 logger = logging.getLogger(__name__)
 
 
+def _build_hedge_block(hedge_index: list) -> str:
+    if not hedge_index:
+        return ""
+    hedge_lines = "\n".join(
+        f'  - "{c.get("claim_text", "")}" [{c.get("verdict", "UNCERTAIN")}]'
+        for c in hedge_index
+    )
+    return (
+        "UNCERTAIN CLAIMS — apply hedged language to each of these:\n"
+        f"{hedge_lines}\n\n"
+        "Hedging rules:\n"
+        "  - Statistics:    \"figures suggest...\" / \"estimates indicate...\"\n"
+        "  - Attributions:  \"reportedly...\" / \"according to some sources...\"\n"
+        "  - Causal:        \"research suggests a link between...\" / \"may contribute to...\"\n"
+        "  - Never: \"studies prove\", \"it is a fact that\", \"definitively\"\n"
+    )
+
+
 class BlogOutlineSection(BaseModel):
     heading: str
     key_points: List[str]
@@ -247,6 +265,7 @@ class BlogFormatterAgent(BaseAgent):
         script_content = context.get("script_content", "")
         refined_context = context.get("refined_context", "")
         verified_claims = context.get("verified_claims", [])
+        hedge_index = context.get("hedge_index", [])
         correction_hint = context.get("correction_hint", "")
 
         if not script_content:
@@ -270,9 +289,12 @@ class BlogFormatterAgent(BaseAgent):
             for c in verified_claims
         )
 
+        hedge_block = _build_hedge_block(hedge_index)
+        blog_plan_system = f"{hedge_block}{BLOG_PLAN_SYSTEM}" if hedge_block else BLOG_PLAN_SYSTEM
+
         plan_prompt = ChatPromptTemplate.from_messages(
             [
-                ("system", BLOG_PLAN_SYSTEM),
+                ("system", blog_plan_system),
                 ("human", BLOG_PLAN_HUMAN),
             ]
         )
@@ -288,9 +310,10 @@ class BlogFormatterAgent(BaseAgent):
         plan_text = plan.model_dump_json(indent=2)
         logger.info("Blog plan produced: %d sections", len(plan.sections))
 
+        blog_exec_system = f"{hedge_block}{BLOG_FORMATTER_SYSTEM}" if hedge_block else BLOG_FORMATTER_SYSTEM
         exec_prompt = ChatPromptTemplate.from_messages(
             [
-                ("system", BLOG_FORMATTER_SYSTEM),
+                ("system", blog_exec_system),
                 ("human", BLOG_FORMATTER_HUMAN),
             ]
         )
@@ -328,6 +351,7 @@ class CarouselFormatterAgent(BaseAgent):
         script_content = context.get("script_content", "")
         refined_context = context.get("refined_context", "")
         verified_claims = context.get("verified_claims", [])
+        hedge_index = context.get("hedge_index", [])
         platform = context.get("platform", "")
         correction_hint = context.get("correction_hint", "")
 
@@ -352,9 +376,12 @@ class CarouselFormatterAgent(BaseAgent):
             for c in verified_claims
         )
 
+        hedge_block = _build_hedge_block(hedge_index)
+        carousel_plan_system = f"{hedge_block}{CAROUSEL_PLAN_SYSTEM}" if hedge_block else CAROUSEL_PLAN_SYSTEM
+
         plan_prompt = ChatPromptTemplate.from_messages(
             [
-                ("system", CAROUSEL_PLAN_SYSTEM),
+                ("system", carousel_plan_system),
                 ("human", CAROUSEL_PLAN_HUMAN),
             ]
         )
@@ -371,9 +398,10 @@ class CarouselFormatterAgent(BaseAgent):
         plan_text = plan.model_dump_json(indent=2)
         logger.info("Carousel plan produced: %d slides", len(plan.slides))
 
+        carousel_exec_system = f"{hedge_block}{CAROUSEL_FORMATTER_SYSTEM}" if hedge_block else CAROUSEL_FORMATTER_SYSTEM
         exec_prompt = ChatPromptTemplate.from_messages(
             [
-                ("system", CAROUSEL_FORMATTER_SYSTEM),
+                ("system", carousel_exec_system),
                 ("human", CAROUSEL_FORMATTER_HUMAN),
             ]
         )
@@ -415,6 +443,7 @@ class VideoFormatterAgent(BaseAgent):
         script_content = context.get("script_content", "")
         refined_context = context.get("refined_context", "")
         verified_claims = context.get("verified_claims", [])
+        hedge_index = context.get("hedge_index", [])
         correction_hint = context.get("correction_hint", "")
 
         if not script_content:
@@ -438,9 +467,12 @@ class VideoFormatterAgent(BaseAgent):
             for c in verified_claims
         )
 
+        hedge_block = _build_hedge_block(hedge_index)
+        video_plan_system = f"{hedge_block}{VIDEO_PLAN_SYSTEM}" if hedge_block else VIDEO_PLAN_SYSTEM
+
         plan_prompt = ChatPromptTemplate.from_messages(
             [
-                ("system", VIDEO_PLAN_SYSTEM),
+                ("system", video_plan_system),
                 ("human", VIDEO_PLAN_HUMAN),
             ]
         )
@@ -456,9 +488,10 @@ class VideoFormatterAgent(BaseAgent):
         plan_text = plan.model_dump_json(indent=2)
         logger.info("Video plan produced: %d scenes", len(plan.scene_outline))
 
+        video_exec_system = f"{hedge_block}{VIDEO_FORMATTER_SYSTEM}" if hedge_block else VIDEO_FORMATTER_SYSTEM
         exec_prompt = ChatPromptTemplate.from_messages(
             [
-                ("system", VIDEO_FORMATTER_SYSTEM),
+                ("system", video_exec_system),
                 ("human", VIDEO_FORMATTER_HUMAN),
             ]
         )

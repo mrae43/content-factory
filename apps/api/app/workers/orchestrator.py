@@ -42,6 +42,7 @@ from app.workers.formatters import (
 from app.workers.harness import FormatterHarness
 from app.schemas.shorts import JobStatusEnum, next_status_after_fact_check
 from app.core.config import settings
+from app.core.guardrails import get_guardrail_config
 
 logger = logging.getLogger("factory.orchestrator")
 
@@ -252,10 +253,17 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
     latest_script_obj = await get_latest_script(db, job.id)
     latest_script = latest_script_obj.content if latest_script_obj else ""
 
+    pre_context = job.pre_context or {}
+    guardrail_cfg = get_guardrail_config(
+        strictness=pre_context.get("guardrail_strictness", "High"),
+        strict_compliance_mode=job.strict_compliance_mode,
+    )
+
     agent_context = {
         "job_id": job.id,
         "script_content": latest_script,
         "vector_store": vector_store,
+        "guardrail_config": guardrail_cfg,
     }
     result = await red_team.run(context=agent_context)
 
@@ -438,10 +446,20 @@ async def _transition_formatting(db: AsyncSession, job) -> None:
 
     verified_claims = await get_script_claims(db, latest_script.id)
 
+    hedge_index = [
+        {"claim_text": c["claim_text"], "verdict": c["verdict"]}
+        for c in verified_claims
+        if c.get("hedge_required")
+    ]
+    if hedge_index:
+        job.hedge_index = hedge_index
+        await db.commit()
+
     base_context = {
         "script_content": latest_script.content,
         "refined_context": job.refined_context or "",
         "verified_claims": verified_claims,
+        "hedge_index": hedge_index,
         "platform": job.platform or "",
     }
 
