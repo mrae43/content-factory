@@ -13,6 +13,7 @@ interface ClaimCardProps {
   claim_text: string;
   verdict: string;
   confidence: number;
+  evidence_text?: string | null;
   evidence_references: string[];
 }
 
@@ -20,6 +21,7 @@ export function ClaimCard({
   claim_text,
   verdict,
   confidence,
+  evidence_text,
   evidence_references,
 }: ClaimCardProps) {
   const config = verdictConfig[verdict] ?? { dot: "bg-muted-foreground", label: verdict };
@@ -57,8 +59,16 @@ export function ClaimCard({
         )}
       </div>
 
-      {evidence_references.length > 0 && (
+      {evidence_text && (
         <CollapsibleSection label="Evidence">
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            {evidence_text}
+          </p>
+        </CollapsibleSection>
+      )}
+
+      {evidence_references.length > 0 && (
+        <CollapsibleSection label="Source Chunks">
           <div className="space-y-1 text-muted-foreground">
             {evidence_references.map((ref, i) => (
               <p key={i}>Chunk: {ref}</p>
