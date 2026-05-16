@@ -24,6 +24,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ClaimCard } from "@/components/script/claim-card";
 
 function renderFormatViewer(
   formatType: string,
@@ -161,14 +162,6 @@ function JobDetailContent({
       return (
         <div className="space-y-4">
           <FormatTabs formatScripts={formatScripts} platform={job.platform} />
-          {allClaims.length > 0 && (
-            <div className="rounded-lg border border-border p-5 space-y-3">
-              <h4 className="font-heading text-sm font-semibold text-muted-foreground">
-                Fact Check Audit
-              </h4>
-              <ClaimsSection claims={allClaims} />
-            </div>
-          )}
         </div>
       );
     }
@@ -217,6 +210,8 @@ function JobDetailContent({
           <EditorialTimeline job={job} />
         </div>
       </div>
+
+      <FactCheckAudit allClaims={allClaims} />
 
       {job.status === "HUMAN_REVIEW_NEEDED" && (
         <ReviewSection
@@ -364,21 +359,74 @@ function FormatTabs({
   );
 }
 
-function ClaimsSection({ claims }: { claims: FactCheckClaimResponse[] }) {
-  if (claims.length === 0) return null;
+function annotateOutput(
+  content: string,
+  claims: FactCheckClaimResponse[]
+): { html: string; matchedCount: number } {
+  let annotated = content;
+  let matchedCount = 0;
+  const seen = new Set<string>();
+  claims.forEach((claim, i) => {
+    if (seen.has(claim.claim_text)) return;
+    seen.add(claim.claim_text);
+    const idx = annotated.indexOf(claim.claim_text);
+    if (idx !== -1) {
+      const before = annotated.slice(0, idx + claim.claim_text.length);
+      const after = annotated.slice(idx + claim.claim_text.length);
+      annotated = `${before}<sup class="claim-ref cursor-help" title="${claim.verdict} — ${(claim.confidence * 100).toFixed(0)}%" data-index="${i}">[${i + 1}]</sup>${after}`;
+      matchedCount++;
+    }
+  });
+  return { html: annotated, matchedCount };
+}
+
+function AnnotatedContent({
+  content,
+  claims,
+}: {
+  content: string;
+  claims: FactCheckClaimResponse[];
+}) {
+  const { html, matchedCount } = annotateOutput(content, claims);
   return (
-    <div className="space-y-2">
-      {claims.map((claim: FactCheckClaimResponse) => (
-        <div
-          key={claim.id}
-          className="rounded-md border border-border p-3 text-sm space-y-1"
-        >
-          <p className="italic text-muted-foreground">
-            &ldquo;{claim.claim_text}&rdquo;
-          </p>
-          <div className="flex items-center gap-2 text-xs">
+    <div>
+      <p
+        className="text-sm leading-relaxed whitespace-pre-wrap"
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+      {matchedCount > 0 && <ClaimReferenceLegend claims={claims} />}
+    </div>
+  );
+}
+
+function ClaimReferenceLegend({
+  claims,
+}: {
+  claims: FactCheckClaimResponse[];
+}) {
+  const seen = new Set<string>();
+  const unique = claims.filter((c) => {
+    if (seen.has(c.claim_text)) return false;
+    seen.add(c.claim_text);
+    return true;
+  });
+  return (
+    <div className="mt-3 pt-3 border-t border-border space-y-1.5">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+        Claim References
+      </p>
+      <div className="space-y-1">
+        {unique.map((claim, i) => (
+          <p
+            key={i}
+            className="text-xs text-muted-foreground flex items-start gap-2"
+          >
+            <span className="font-mono text-[10px] text-primary font-semibold mt-0.5 shrink-0">
+              [{i + 1}]
+            </span>
+            <span className="italic">&ldquo;{claim.claim_text}&rdquo;</span>
             <span
-              className={`inline-flex items-center gap-1 font-semibold ${
+              className={`shrink-0 font-semibold ${
                 claim.verdict === "SUPPORTED"
                   ? "text-success"
                   : claim.verdict === "CONTESTED"
@@ -388,25 +436,14 @@ function ClaimsSection({ claims }: { claims: FactCheckClaimResponse[] }) {
                       : "text-warning"
               }`}
             >
-              <span
-                className={`inline-block h-1.5 w-1.5 rounded-full ${
-                  claim.verdict === "SUPPORTED"
-                    ? "bg-success"
-                    : claim.verdict === "CONTESTED"
-                      ? "bg-info"
-                      : claim.verdict === "UNSUPPORTED"
-                        ? "bg-destructive"
-                        : "bg-warning"
-                }`}
-              />
               {claim.verdict}
             </span>
             <span className="text-muted-foreground">
               {(claim.confidence * 100).toFixed(0)}%
             </span>
-          </div>
-        </div>
-      ))}
+          </p>
+        ))}
+      </div>
     </div>
   );
 }
@@ -488,14 +525,11 @@ function ActiveOutput({ job }: { job: RenderJobResponse }) {
               {hasRevisions ? " (revised)" : ""}
             </span>
           </div>
-          <p className="text-sm leading-relaxed whitespace-pre-wrap">
-            {masterScript.content}
-          </p>
-          {status === "FACT_CHECKING_SCRIPT" && allClaims.length > 0 && (
-            <div className="space-y-2 pt-2 border-t border-border">
-              <ClaimsSection claims={allClaims} />
-            </div>
-          )}
+          <AnnotatedContent
+            content={masterScript.content}
+            claims={allClaims}
+          />
+
         </div>
       );
     }
@@ -568,6 +602,40 @@ function ActiveOutput({ job }: { job: RenderJobResponse }) {
   }
 
   return null;
+}
+
+function FactCheckAudit({
+  allClaims,
+}: {
+  allClaims: FactCheckClaimResponse[];
+}) {
+  return (
+    <div id="fact-check-audit" className="space-y-4">
+      <SectionHeader label="FACT CHECK AUDIT" />
+      <div className="rounded-lg border border-border p-5 space-y-3">
+        {allClaims.length > 0 ? (
+          <div className="space-y-3">
+            {allClaims.map((claim, i) => (
+              <ClaimCard
+                key={i}
+                claim_text={claim.claim_text}
+                verdict={claim.verdict}
+                confidence={claim.confidence}
+                evidence_text={claim.evidence_text}
+                evidence_references={claim.evidence_references ?? []}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            No verifiable factual claims found in this output.
+            All content passed editorial review as non-factual or
+            opinion-based material.
+          </p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function ReviewSection({
