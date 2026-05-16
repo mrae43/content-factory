@@ -272,6 +272,14 @@ class ClaimItem(BaseModel):
     evidence_text: str = Field(
         description="Quote or paraphrase from sources supporting this verdict"
     )
+    evidence_text_inline: list[str] = Field(
+        default_factory=list,
+        description="Snapshot of raw evidence chunk content for audit trail persistence",
+    )
+    hedge_required: bool = Field(
+        False,
+        description="True when verdict is UNCERTAIN — formatter should apply hedged language",
+    )
 
 
 class RedTeamVerdict(BaseModel):
@@ -359,6 +367,7 @@ class RedTeamAgent(BaseAgent):
         script_content = context.get("script_content", "")
         vector_store = context.get("vector_store")
         job_id = context.get("job_id")
+        guardrail_config = context.get("guardrail_config")
 
         if not script_content:
             return AgentResult(
@@ -392,6 +401,13 @@ class RedTeamAgent(BaseAgent):
                 metadata={"model": self.model_name},
             )
 
+        # Filter claims by guardrail extract_categories if configured
+        if guardrail_config and extracted.claims:
+            allowed = set(guardrail_config.extract_categories)
+            extracted.claims = [
+                c for c in extracted.claims if c.claim_category in allowed
+            ]
+
         if not extracted.claims:
             return AgentResult(
                 status=AgentActionStatus.SUCCESS,
@@ -410,6 +426,8 @@ class RedTeamAgent(BaseAgent):
         )
 
         # Pass 2: Per-claim evidence retrieval
+        top_k = guardrail_config.top_k_per_claim if guardrail_config else 5
+        threshold = guardrail_config.similarity_threshold if guardrail_config else None
         enriched_claims: List[ClaimEvidence] = []
         if vector_store and job_id:
             for claim in extracted.claims:
@@ -417,7 +435,8 @@ class RedTeamAgent(BaseAgent):
                     query=claim.search_query,
                     job_id=job_id,
                     scopes=["RAW-CONTEXT", "LOCAL"],
-                    top_k=5,
+                    top_k=top_k,
+                    similarity_threshold=threshold,
                 )
                 evidence_chunks = [r["content"] for r in evidence_results]
                 enriched_claims.append(
@@ -483,9 +502,24 @@ class RedTeamAgent(BaseAgent):
                 metadata={"model": self.model_name},
             )
 
-        all_supported = all(
-            c.verdict in ("SUPPORTED", "UNCERTAIN") for c in structured.claims
+        # Enrich claims with inline evidence text and hedge signals
+        enrichment_map = {ec.claim_text: ec.evidence_chunks for ec in enriched_claims}
+        for claim in structured.claims:
+            if claim.claim_text in enrichment_map:
+                claim.evidence_text_inline = enrichment_map[claim.claim_text]
+            claim.hedge_required = claim.verdict == "UNCERTAIN"
+
+        uncertain_is_fail = (
+            guardrail_config.uncertain_is_soft_fail if guardrail_config else False
         )
+        if uncertain_is_fail:
+            all_supported = all(
+                c.verdict == "SUPPORTED" for c in structured.claims
+            )
+        else:
+            all_supported = all(
+                c.verdict in ("SUPPORTED", "UNCERTAIN") for c in structured.claims
+            )
         overall_verdict = "SUPPORTED" if all_supported else "UNSUPPORTED"
         avg_confidence = sum(c.confidence for c in structured.claims) / len(
             structured.claims
