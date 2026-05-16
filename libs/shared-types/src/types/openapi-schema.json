@@ -528,6 +528,18 @@
             "minimum": 0.0,
             "title": "Confidence"
           },
+          "evidence_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence Text",
+            "description": "Evidence text supporting this verdict"
+          },
           "evidence_references": {
             "items": {
               "type": "string",
