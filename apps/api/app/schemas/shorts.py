@@ -170,6 +170,9 @@ class FactCheckClaimResponse(BaseModel):
     claim_text: str
     verdict: VerdictEnum
     confidence: float = Field(..., ge=0.0, le=1.0)
+    evidence_text: Optional[str] = Field(
+        None, description="Evidence text supporting this verdict"
+    )
     evidence_references: List[UUID] = Field(
         default_factory=list, description="IDs of ResearchChunks"
     )
