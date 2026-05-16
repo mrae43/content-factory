@@ -19,7 +19,7 @@ def _load_env() -> Path | None:
     from dotenv import load_dotenv
 
     candidates = [
-        Path(__file__).parent.parent / ".env",           # apps/api/.env
+        Path(__file__).parent.parent / ".env",  # apps/api/.env
         Path(__file__).parent.parent.parent.parent / ".env",  # repo root .env
     ]
     for path in candidates:

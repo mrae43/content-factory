@@ -21,10 +21,10 @@ def _build_hedge_block(hedge_index: list) -> str:
         "UNCERTAIN CLAIMS — apply hedged language to each of these:\n"
         f"{hedge_lines}\n\n"
         "Hedging rules:\n"
-        "  - Statistics:    \"figures suggest...\" / \"estimates indicate...\"\n"
-        "  - Attributions:  \"reportedly...\" / \"according to some sources...\"\n"
-        "  - Causal:        \"research suggests a link between...\" / \"may contribute to...\"\n"
-        "  - Never: \"studies prove\", \"it is a fact that\", \"definitively\"\n"
+        '  - Statistics:    "figures suggest..." / "estimates indicate..."\n'
+        '  - Attributions:  "reportedly..." / "according to some sources..."\n'
+        '  - Causal:        "research suggests a link between..." / "may contribute to..."\n'
+        '  - Never: "studies prove", "it is a fact that", "definitively"\n'
     )
 
 
@@ -290,7 +290,9 @@ class BlogFormatterAgent(BaseAgent):
         )
 
         hedge_block = _build_hedge_block(hedge_index)
-        blog_plan_system = f"{hedge_block}{BLOG_PLAN_SYSTEM}" if hedge_block else BLOG_PLAN_SYSTEM
+        blog_plan_system = (
+            f"{hedge_block}{BLOG_PLAN_SYSTEM}" if hedge_block else BLOG_PLAN_SYSTEM
+        )
 
         plan_prompt = ChatPromptTemplate.from_messages(
             [
@@ -310,7 +312,11 @@ class BlogFormatterAgent(BaseAgent):
         plan_text = plan.model_dump_json(indent=2)
         logger.info("Blog plan produced: %d sections", len(plan.sections))
 
-        blog_exec_system = f"{hedge_block}{BLOG_FORMATTER_SYSTEM}" if hedge_block else BLOG_FORMATTER_SYSTEM
+        blog_exec_system = (
+            f"{hedge_block}{BLOG_FORMATTER_SYSTEM}"
+            if hedge_block
+            else BLOG_FORMATTER_SYSTEM
+        )
         exec_prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", blog_exec_system),
@@ -377,7 +383,11 @@ class CarouselFormatterAgent(BaseAgent):
         )
 
         hedge_block = _build_hedge_block(hedge_index)
-        carousel_plan_system = f"{hedge_block}{CAROUSEL_PLAN_SYSTEM}" if hedge_block else CAROUSEL_PLAN_SYSTEM
+        carousel_plan_system = (
+            f"{hedge_block}{CAROUSEL_PLAN_SYSTEM}"
+            if hedge_block
+            else CAROUSEL_PLAN_SYSTEM
+        )
 
         plan_prompt = ChatPromptTemplate.from_messages(
             [
@@ -398,7 +408,11 @@ class CarouselFormatterAgent(BaseAgent):
         plan_text = plan.model_dump_json(indent=2)
         logger.info("Carousel plan produced: %d slides", len(plan.slides))
 
-        carousel_exec_system = f"{hedge_block}{CAROUSEL_FORMATTER_SYSTEM}" if hedge_block else CAROUSEL_FORMATTER_SYSTEM
+        carousel_exec_system = (
+            f"{hedge_block}{CAROUSEL_FORMATTER_SYSTEM}"
+            if hedge_block
+            else CAROUSEL_FORMATTER_SYSTEM
+        )
         exec_prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", carousel_exec_system),
@@ -468,7 +482,9 @@ class VideoFormatterAgent(BaseAgent):
         )
 
         hedge_block = _build_hedge_block(hedge_index)
-        video_plan_system = f"{hedge_block}{VIDEO_PLAN_SYSTEM}" if hedge_block else VIDEO_PLAN_SYSTEM
+        video_plan_system = (
+            f"{hedge_block}{VIDEO_PLAN_SYSTEM}" if hedge_block else VIDEO_PLAN_SYSTEM
+        )
 
         plan_prompt = ChatPromptTemplate.from_messages(
             [
@@ -488,7 +504,11 @@ class VideoFormatterAgent(BaseAgent):
         plan_text = plan.model_dump_json(indent=2)
         logger.info("Video plan produced: %d scenes", len(plan.scene_outline))
 
-        video_exec_system = f"{hedge_block}{VIDEO_FORMATTER_SYSTEM}" if hedge_block else VIDEO_FORMATTER_SYSTEM
+        video_exec_system = (
+            f"{hedge_block}{VIDEO_FORMATTER_SYSTEM}"
+            if hedge_block
+            else VIDEO_FORMATTER_SYSTEM
+        )
         exec_prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", video_exec_system),
