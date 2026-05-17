@@ -32,18 +32,18 @@ User submits a topic (e.g., *"BRICS De-dollarization 2025"*) along with pre-cont
 `MarkdownTextSplitter` chunks the raw text into `RAW-CONTEXT` scope vectors in the pgvector `research_chunks` table.
 
 ### 3. Deep Research (`RESEARCHING`)
-Tavily web search enriches the topic with live results (ingested as `LOCAL`-scope vectors). The **Research Agent** (`gemini-2.5-flash`) retrieves all chunks via semantic search, produces refined `LOCAL` chunks vetted for factual accuracy, **and synthesizes a `refined_context` summary** — a condensed, self-contained research brief persisted to the `render_jobs` table by the orchestrator.
+Tavily web search enriches the topic with live results (ingested as `LOCAL`-scope vectors). The **Research Agent** (`meta-llama/Llama-3.3-70B-Instruct-Turbo`, configurable) retrieves all chunks via semantic search, produces refined `LOCAL` chunks vetted for factual accuracy, **and synthesizes a `refined_context` summary** — a condensed, self-contained research brief persisted to the `render_jobs` table by the orchestrator.
 
 ### 4. Source Fact-Check (`FACT_CHECKING_RESEARCH`)
 **MVP: Passthrough** — auto-advances to `SCRIPTING`. The Red Team at Step 6 catches issues downstream.
 
 ### 5. Script & Storyboard (`SCRIPTING`)
-The **Copywriter Agent** (`gemini-1.5-pro`, temp=0.7) receives the **`refined_context`** from the orchestrator (not the raw vector store). This curated context ensures a bounded, consistent input regardless of chunk count or embedding noise. The agent drafts a retention-optimized script + visual storyboard.
+The **Copywriter Agent** (`meta-llama/Llama-3.3-70B-Instruct-Turbo`, temp=0.7, configurable) receives the **`refined_context`** from the orchestrator (not the raw vector store). This curated context ensures a bounded, consistent input regardless of chunk count or embedding noise. The agent drafts a retention-optimized script + visual storyboard.
 
-On revision (when Red Team rejects claims), the **Script Optimizer Agent** (`gemini-2.5-flash`, temp=0.3, both configurable) receives only the failed claims and patches them surgically — preserving the rest of the script.
+On revision (when Red Team rejects claims), the **Script Optimizer Agent** (`meta-llama/Llama-3.3-70B-Instruct-Turbo`, temp=0.3, configurable) receives only the failed claims and patches them surgically — preserving the rest of the script.
 
 ### 6. Red Team Evaluation (`FACT_CHECKING_SCRIPT`)
-The critical step. The **Red Team Agent** (`gemini-1.5-pro`, temp=0.0, both configurable) uses a three-pass evaluation with `.with_structured_output()`:
+The critical step. The **Red Team Agent** (`meta-llama/Llama-3.3-70B-Instruct-Turbo`, temp=0.0, configurable) uses a three-pass evaluation with `.with_structured_output()`:
 
 1. **Claim Extraction** — Breaks the script into atomic claims
 2. **Evidence Retrieval** — Per-claim `semantic_search(query=claim.search_query, top_k=5)` against the vector store
@@ -65,7 +65,7 @@ Each formatter is wrapped in a **`FormatterHarness`** — a generate-validate-re
 When `format_type = "all"`, both formatters run concurrently via `asyncio.gather()`.
 
 ### 8. Asset Generation (`ASSET_GENERATION`)
-**MVP: Mocked** — The **Asset Studio Agent** (`gemini-2.5-flash`) generates Veo/Lyria production prompts but returns a fake `s3://` URL. No real TTS, video rendering, or FFmpeg yet.
+**MVP: Mocked** — The **Asset Studio Agent** (`meta-llama/Llama-3.3-70B-Instruct-Turbo`, configurable) generates Veo/Lyria production prompts but returns a fake `s3://` URL. No real TTS, video rendering, or FFmpeg yet.
 
 ### 9. Completion (`COMPLETED`)
 LOCAL-scope vector chunks are cleaned up. The final job state, scripts, audit trail, and asset metadata are available via the API.
@@ -88,13 +88,13 @@ LOCAL-scope vector chunks are cleaned up. The final job state, scripts, audit tr
 | Layer | Technology |
 |-------|-----------|
 | Monorepo | Nx workspace, pnpm 11 (with `allowBuilds` in `pnpm-workspace.yaml`) |
-| Frontend | Next.js 16 (App Router), React Query, Zustand, shadcn/ui, Tailwind CSS v4 |
+| Frontend | Next.js 16 (App Router), React Query, Zustand, shadcn, Tailwind CSS v4 |
 | API | FastAPI (async, Pydantic V2), Python 3.11, uv |
 | Database | PostgreSQL 16 + pgvector (HNSW index, `factory` schema) |
 | ORM | SQLAlchemy 2 async (`asyncpg`) |
 | Migrations | Alembic (sync via `psycopg2`) |
 | AI Orchestration | LangChain + Google GenAI + Together AI (OpenAI-compatible) |
-| Models | `gemini-2.5-flash` (research, assets, optimizer), `gemini-1.5-pro` (copywriting, red team) — both configurable via env vars. Eval suite supports Together AI models (Llama-3.3-70B, MiniMax-M2.7, Qwen3-235B, etc.) |
+| Models | All default to `meta-llama/Llama-3.3-70B-Instruct-Turbo` via Together AI. Each agent stage configurable via `{research,copywriter,evaluator,optimizer,asset,formatter}_{model,temperature}` env vars. Eval suite uses separate `eval_*` models. Embeddings: `models/gemini-embedding-001` (Gemini). |
 | Embeddings | `models/gemini-embedding-001` (768-dim, pgvector HNSW with cosine) |
 | Web Search | Tavily (`langchain-tavily`) |
 | Background Queue | `asyncio.create_task` + `FOR UPDATE SKIP LOCKED` (no Celery/Redis) |
@@ -102,6 +102,7 @@ LOCAL-scope vector chunks are cleaned up. The final job state, scripts, audit tr
 | CI/CD | GitHub Actions (lint → unit/agent tests → eval/integration/docker) |
 | Containerization | Docker Compose (pgvector:pg16, pgAdmin4, API, Web) |
 | Linter/Formatter | Ruff (Python), ESLint (TypeScript) |
+| Design System | Stone & Copper palette, Playfair Display + Inter + JetBrains Mono — see [`DESIGN.md`](DESIGN.md) |
 
 ---
 
@@ -191,7 +192,7 @@ Required `.env` variables:
 |----------|-------------|
 | `GEMINI_API_KEY` | Mandatory — Google AI API key |
 | `TAVILY_API_KEY` | Mandatory — Tavily web search API key |
-| `TOGETHER_API_KEY` | Optional — Together AI API key (required for live eval mode) |
+| `TOGETHER_API_KEY` | Required — Together AI API key (all default production models route through Together AI) |
 | `DATABASE_URL` | Async connection string, e.g. `postgresql+asyncpg://user:password@db:5432/content_factory` (Docker hostname `db` in container, `localhost` for local dev) |
 | `POSTGRES_USER` | Docker Compose DB user |
 | `POSTGRES_DB` | Docker Compose DB name |
@@ -200,26 +201,37 @@ Required `.env` variables:
 | `PGADMIN_PASSWORD` | pgAdmin login password |
 | `API_PORT` | Docker Compose API host port (default `8000`) |
 
-Optional `.env` overrides:
+Optional `.env` overrides (all default to via Together AI unless `gemini-` prefixed):
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `EVALUATOR_MODEL` | `gemini-1.5-pro` | Red Team agent model |
+| `RESEARCH_MODEL` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` | Research agent model |
+| `RESEARCH_TEMPERATURE` | `0.2` | Research agent temperature |
+| `COPYWRITER_MODEL` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` | Copywriter agent model |
+| `COPYWRITER_TEMPERATURE` | `0.7` | Copywriter agent temperature |
+| `EVALUATOR_MODEL` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` | Red Team agent model |
 | `EVALUATOR_TEMPERATURE` | `0.0` | Red Team agent temperature |
-| `OPTIMIZER_MODEL` | `gemini-2.5-flash` | Script Optimizer agent model |
+| `OPTIMIZER_MODEL` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` | Script Optimizer agent model |
 | `OPTIMIZER_TEMPERATURE` | `0.3` | Script Optimizer agent temperature |
+| `ASSET_MODEL` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` | Asset Studio agent model |
+| `ASSET_TEMPERATURE` | `0.5` | Asset Studio agent temperature |
+| `FORMATTER_MODEL` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` | Blog/Carousel formatter model |
+| `FORMATTER_TEMPERATURE` | `0.3` | Blog/Carousel formatter temperature |
 | `MAX_RED_TEAM_REVISIONS` | `3` | Max revision loops before human escalation |
 | `SIMILARITY_THRESHOLD` | `0.75` | Vector search cosine similarity cutoff |
 | `SYNTHID_WATERMARK_ENABLED` | `True` | SynthID flag (no implementation yet) |
 | `WORKER_POLL_INTERVAL_SECONDS` | `5` | QueueWorker poll interval |
 | `WORKER_LOCK_TIMEOUT_MINUTES` | `15` | Stuck job recovery timeout |
-| `FORMATTER_MODEL` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` | Blog/Carousel formatter model |
-| `FORMATTER_TEMPERATURE` | `0.3` | Blog/Carousel formatter temperature |
-| `EVAL_RESEARCH_MODEL` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` | Eval research agent model (Together AI) |
-| `EVAL_COPYWRITER_MODEL` | `MiniMaxAI/MiniMax-M2.7` | Eval copywriter agent model (Together AI) |
-| `EVAL_RED_TEAM_MODEL` | `openai/gpt-oss-120b` | Eval Red Team agent model (Together AI) |
-| `EVAL_OPTIMIZER_MODEL` | `openai/gpt-oss-20b` | eval optimizer model (Together AI) |
+| `EVAL_RESEARCH_MODEL` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` | Eval research agent (Together AI) |
+| `EVAL_RESEARCH_TEMPERATURE` | `0.2` | Eval research temperature |
+| `EVAL_COPYWRITER_MODEL` | `MiniMaxAI/MiniMax-M2.7` | Eval copywriter agent (Together AI) |
+| `EVAL_COPYWRITER_TEMPERATURE` | `0.7` | Eval copywriter temperature |
+| `EVAL_RED_TEAM_MODEL` | `openai/gpt-oss-120b` | Eval Red Team agent (Together AI) |
+| `EVAL_RED_TEAM_TEMPERATURE` | `0.0` | Eval red team temperature |
+| `EVAL_OPTIMIZER_MODEL` | `openai/gpt-oss-20b` | Eval optimizer agent (Together AI) |
+| `EVAL_OPTIMIZER_TEMPERATURE` | `0.3` | Eval optimizer temperature |
 | `EVAL_JUDGE_MODEL` | `Qwen/Qwen3-235B-A22B-Instruct-2507-tput` | LLM-as-Judge model (Together AI) |
+| `EVAL_JUDGE_TEMPERATURE` | `0.0` | Eval judge temperature |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Frontend API base URL |
 | `WEB_PORT` | `3000` | Docker Compose web host port |
 
@@ -229,6 +241,7 @@ Optional `.env` overrides:
 
 ```
 content-factory/                  # Nx workspace root
+├── DESIGN.md                     # UI design source of truth — editorial theme, visual language, migration plan
 ├── apps/
 │   ├── api/                      # Python FastAPI backend
 │   │   ├── app/
@@ -275,6 +288,8 @@ content-factory/                  # Nx workspace root
 │       └── project.json          # Nx project config
 ├── libs/
 │   └── shared-types/             # Auto-generated TS types from Pydantic schemas
+├── pyproject.toml                # uv workspace root (member: apps/api)
+├── uv.lock                       # Root uv lockfile
 ├── nx.json                       # Nx workspace config
 ├── package.json                  # Root package (Nx + dev deps)
 ├── pnpm-lock.yaml                # Workspace lockfile (lockfileVersion 9.0, pnpm 11)
@@ -315,7 +330,11 @@ Eval modes:
 The `.github/workflows/ci.yml` pipeline runs on push/PR:
 
 ```
-lint → unit-tests + agent-tests (parallel) → eval-tests + integration-tests (PR only) + docker-build
+lint (python + frontend in parallel)
+├── unit-tests + agent-tests (parallel, after python lint)
+│    └── integration-tests (after unit + agent)
+└── lint-frontend → build-frontend → docker-build-web
+docker-build-api (after python lint only)
 ```
 
 ---
@@ -344,7 +363,7 @@ lint → unit-tests + agent-tests (parallel) → eval-tests + integration-tests 
 - **Evaluator-Optimizer Pattern** — Configurable models/temperatures via env vars for both Red Team and Optimizer agents
 - **Test Suite** — Unit (~100) + agent (~41) + integration tests with CI pipeline via GitHub Actions
 - **Eval Infrastructure** — LLM-as-Judge scoring (judge.py), deterministic assertions, rubrics, golden dataset (23+ cases), 4 outcome test files with 34 parametrized cases
-- **Multi-provider LLM** — Gemini (production) + Together AI (evals) routing via model name prefix. Configurable eval models for each agent stage
+- **Multi-provider LLM** — Routing via model name prefix: `gemini-*` → Google GenAI SDK, all others → Together AI (OpenAI-compatible). All production agents default to Together AI (`meta-llama/Llama-3.3-70B-Instruct-Turbo`). Configurable per-stage via env vars. Embeddings always use `models/gemini-embedding-001` (Gemini). Eval suite uses separate `eval_*` model configs.
 - **Multi-Format Output** — Blog and carousel formatters with Plan-then-Execute two-phase LLM calls, `FormatterHarness` generate-validate-retry with doom loop detection, platform-aware validation (per-slide character limits)
 - **Docker** — 4-service Compose stack (pgvector, pgAdmin, API, Web). Migrations auto-run on API container start via `entrypoint.sh`. Single workspace lockfile at repo root (`apps/web/pnpm-lock.yaml` removed). pnpm 11 `allowBuilds` in `pnpm-workspace.yaml`.
 
