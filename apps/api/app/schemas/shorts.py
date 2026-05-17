@@ -31,6 +31,17 @@ FormatPayload = Annotated[
 # 1. ENUMS (Mapped directly to DB Enums)
 # ==========================================
 class JobStatusEnum(str, Enum):
+    # Editorial desk names (used in UI/outward-facing):
+    #   PENDING              → Queued
+    #   RESEARCHING          → Research Desk
+    #   FACT_CHECKING_RESEARCH → Source Verification
+    #   SCRIPTING            → Writer's Desk
+    #   FACT_CHECKING_SCRIPT → Fact-Check Desk
+    #   FORMATTING           → Layout Desk
+    #   ASSET_GENERATION     → Production Studio
+    #   COMPLETED            → Published
+    #   FAILED               → Killed
+    #   HUMAN_REVIEW_NEEDED  → Your Review
     PENDING = "PENDING"
     RESEARCHING = "RESEARCHING"
     FACT_CHECKING_RESEARCH = "FACT_CHECKING_RESEARCH"
@@ -139,7 +150,7 @@ class JobCreateRequest(BaseModel):
         ..., min_length=3, max_length=200, example="BRICS De-dollarization 2025"
     )
     pre_context: PreContextPayload
-    strict_compliance_mode: bool = Field(
+    strict_compliance_mode: bool = Field(  # TODO: remove — absorbed into guardrail_strictness
         True, description="Enforce rigorous fact-checking"
     )
     format_type: FormatTypeEnum = Field(
@@ -224,7 +235,7 @@ class RenderJobResponse(BaseModel):
     id: UUID
     topic: str
     status: JobStatusEnum
-    strict_compliance_mode: bool
+    strict_compliance_mode: bool  # TODO: remove — absorbed into guardrail_strictness
     format_type: Optional[FormatTypeEnum] = FormatTypeEnum.ALL
     platform: Optional[PlatformEnum] = None
     final_video_url: Optional[str]

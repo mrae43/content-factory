@@ -24,6 +24,17 @@ Base = declarative_base()
 # ==========================================
 # 1. ENUMS (Strict State Management)
 # ==========================================
+# Editorial desk names (used in UI/outward-facing):
+#   PENDING              → Queued
+#   RESEARCHING          → Research Desk
+#   FACT_CHECKING_RESEARCH → Source Verification
+#   SCRIPTING            → Writer's Desk
+#   FACT_CHECKING_SCRIPT → Fact-Check Desk
+#   FORMATTING           → Layout Desk
+#   ASSET_GENERATION     → Production Studio
+#   COMPLETED            → Published
+#   FAILED               → Killed
+#   HUMAN_REVIEW_NEEDED  → Your Review
 JobStatusEnum = ENUM(
     "PENDING",
     "RESEARCHING",
@@ -88,7 +99,7 @@ class RenderJob(Base):
     pre_context = Column(JSONB, nullable=False, server_default="{}")
 
     status = Column(JobStatusEnum, nullable=False, server_default="PENDING")
-    strict_compliance_mode = Column(Boolean, default=True, nullable=False)
+    strict_compliance_mode = Column(Boolean, default=True, nullable=False)  # TODO: remove — absorbed into guardrail_strictness + High profile
 
     # Step 8: Final outputs
     final_video_url = Column(String, nullable=True)
