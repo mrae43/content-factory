@@ -106,6 +106,8 @@ class RenderJob(Base):
     # Step 8: Final outputs
     final_video_url = Column(String, nullable=True)
     refined_context = Column(Text, nullable=True)
+    research_confidence = Column(Float, nullable=True)
+    citation_index = Column(JSONB, nullable=True)
     error_log = Column(JSONB, nullable=True)
 
     format_type = Column(String, nullable=False, server_default="all")

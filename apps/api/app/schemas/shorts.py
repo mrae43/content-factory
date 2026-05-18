@@ -295,6 +295,8 @@ class RenderJobResponse(BaseModel):
     platform: Optional[PlatformEnum] = None
     final_video_url: Optional[str]
     refined_context: Optional[str] = None
+    research_confidence: Optional[float] = None
+    citation_index: Optional[List[Dict[str, Any]]] = None
     error_log: Optional[Dict[str, Any]]
     pre_context: Optional[Dict[str, Any]] = Field(
         None, description="Original user-provided context"
