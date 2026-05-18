@@ -8,7 +8,12 @@ from httpx import AsyncClient, ASGITransport
 
 from app.api.routes import router
 from app.db.session import get_db
-from app.schemas.shorts import JobStatusEnum, PlatformEnum, FormatTypeEnum, resolve_formats
+from app.schemas.shorts import (
+    JobStatusEnum,
+    PlatformEnum,
+    FormatTypeEnum,
+    resolve_formats,
+)
 
 
 def make_mock_job(**overrides):
@@ -149,7 +154,9 @@ class TestCreateRenderJob:
         resp = await client.post("/api/v1/jobs/", json=payload)
         assert resp.status_code == 422
 
-    async def test_should_reject_invalid_format_for_platform_422(self, client, sample_job_payload):
+    async def test_should_reject_invalid_format_for_platform_422(
+        self, client, sample_job_payload
+    ):
         payload = {**sample_job_payload, "platform": "linkedin", "format_type": "video"}
         resp = await client.post("/api/v1/jobs/", json=payload)
         assert resp.status_code == 422
@@ -339,7 +346,11 @@ class TestListRenderJobs:
 class TestResolveFormats:
     def test_all_on_twitter_returns_blog_carousel_video(self):
         result = resolve_formats(PlatformEnum.TWITTER, FormatTypeEnum.ALL)
-        assert result == [FormatTypeEnum.BLOG, FormatTypeEnum.CAROUSEL, FormatTypeEnum.VIDEO]
+        assert result == [
+            FormatTypeEnum.BLOG,
+            FormatTypeEnum.CAROUSEL,
+            FormatTypeEnum.VIDEO,
+        ]
 
     def test_all_on_linkedin_returns_carousel_blog(self):
         result = resolve_formats(PlatformEnum.LINKEDIN, FormatTypeEnum.ALL)

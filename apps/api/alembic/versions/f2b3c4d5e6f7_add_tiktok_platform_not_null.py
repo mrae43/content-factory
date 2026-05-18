@@ -19,8 +19,12 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.drop_constraint("ck_render_jobs_format_type", "render_jobs", schema="factory", type_="check")
-    op.drop_constraint("ck_render_jobs_platform", "render_jobs", schema="factory", type_="check")
+    op.drop_constraint(
+        "ck_render_jobs_format_type", "render_jobs", schema="factory", type_="check"
+    )
+    op.drop_constraint(
+        "ck_render_jobs_platform", "render_jobs", schema="factory", type_="check"
+    )
 
     op.alter_column("render_jobs", "platform", nullable=False, schema="factory")
 
@@ -39,7 +43,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint("ck_render_jobs_platform", "render_jobs", schema="factory", type_="check")
+    op.drop_constraint(
+        "ck_render_jobs_platform", "render_jobs", schema="factory", type_="check"
+    )
 
     op.alter_column("render_jobs", "platform", nullable=True, schema="factory")
 

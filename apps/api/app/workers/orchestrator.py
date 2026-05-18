@@ -439,7 +439,9 @@ def _build_format_content(format_type: str, payload: dict) -> str:
     return payload.get("title", payload.get("thread_title", ""))
 
 
-def _next_status_after_formatting(resolved_formats: list[FormatTypeEnum]) -> JobStatusEnum:
+def _next_status_after_formatting(
+    resolved_formats: list[FormatTypeEnum],
+) -> JobStatusEnum:
     if FormatTypeEnum.VIDEO in resolved_formats:
         return JobStatusEnum.ASSET_GENERATION
     return JobStatusEnum.COMPLETED

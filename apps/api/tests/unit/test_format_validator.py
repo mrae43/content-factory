@@ -418,7 +418,15 @@ class TestCarouselValidator:
     def test_should_pass_tiktok_char_limit(self):
         validator = CarouselValidator(platform="tiktok")
         payload = _valid_carousel_payload(
-            slides=[{"slide_number": 1, "text": "x" * 2200, "visual_prompt": "Visual", "hook_type": "question", "sources_used": []}]
+            slides=[
+                {
+                    "slide_number": 1,
+                    "text": "x" * 2200,
+                    "visual_prompt": "Visual",
+                    "hook_type": "question",
+                    "sources_used": [],
+                }
+            ]
         )
         result = validator.validate(payload)
         assert result.valid is True
@@ -426,7 +434,15 @@ class TestCarouselValidator:
     def test_should_reject_tiktok_char_limit_exceeded(self):
         validator = CarouselValidator(platform="tiktok")
         payload = _valid_carousel_payload(
-            slides=[{"slide_number": 1, "text": "x" * 2201, "visual_prompt": "Visual", "hook_type": "question", "sources_used": []}]
+            slides=[
+                {
+                    "slide_number": 1,
+                    "text": "x" * 2201,
+                    "visual_prompt": "Visual",
+                    "hook_type": "question",
+                    "sources_used": [],
+                }
+            ]
         )
         result = validator.validate(payload)
         assert result.valid is False

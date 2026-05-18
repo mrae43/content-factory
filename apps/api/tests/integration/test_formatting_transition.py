@@ -511,7 +511,10 @@ class TestNextStatusAfterFormatting:
             ([FormatTypeEnum.BLOG], JobStatusEnum.COMPLETED),
             ([FormatTypeEnum.CAROUSEL], JobStatusEnum.COMPLETED),
             ([FormatTypeEnum.VIDEO], JobStatusEnum.ASSET_GENERATION),
-            ([FormatTypeEnum.VIDEO, FormatTypeEnum.BLOG], JobStatusEnum.ASSET_GENERATION),
+            (
+                [FormatTypeEnum.VIDEO, FormatTypeEnum.BLOG],
+                JobStatusEnum.ASSET_GENERATION,
+            ),
         ],
     )
     def test_should_route_correctly(self, resolved_formats, expected):

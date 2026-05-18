@@ -1,4 +1,12 @@
-from pydantic import BaseModel, Field, ConfigDict, HttpUrl, Discriminator, Tag, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    ConfigDict,
+    HttpUrl,
+    Discriminator,
+    Tag,
+    model_validator,
+)
 from typing import Annotated, List, Dict, Optional, Any, Union
 from uuid import UUID
 from datetime import datetime
@@ -89,7 +97,11 @@ def next_status_after_fact_check(format_type: str) -> "JobStatusEnum":
 
 
 PLATFORM_FORMAT_MAP: dict[PlatformEnum, list[FormatTypeEnum]] = {
-    PlatformEnum.TWITTER: [FormatTypeEnum.BLOG, FormatTypeEnum.CAROUSEL, FormatTypeEnum.VIDEO],
+    PlatformEnum.TWITTER: [
+        FormatTypeEnum.BLOG,
+        FormatTypeEnum.CAROUSEL,
+        FormatTypeEnum.VIDEO,
+    ],
     PlatformEnum.LINKEDIN: [FormatTypeEnum.CAROUSEL, FormatTypeEnum.BLOG],
     PlatformEnum.INSTAGRAM: [FormatTypeEnum.CAROUSEL, FormatTypeEnum.VIDEO],
     PlatformEnum.TIKTOK: [FormatTypeEnum.CAROUSEL, FormatTypeEnum.VIDEO],
@@ -97,7 +109,9 @@ PLATFORM_FORMAT_MAP: dict[PlatformEnum, list[FormatTypeEnum]] = {
 }
 
 
-def resolve_formats(platform: PlatformEnum, format_type: FormatTypeEnum) -> list[FormatTypeEnum]:
+def resolve_formats(
+    platform: PlatformEnum, format_type: FormatTypeEnum
+) -> list[FormatTypeEnum]:
     """Expand 'all' into platform-specific formats, or return [format_type] if specific."""
     if format_type == FormatTypeEnum.ALL:
         return PLATFORM_FORMAT_MAP[platform]
@@ -172,15 +186,18 @@ class JobCreateRequest(BaseModel):
         ..., min_length=3, max_length=200, example="BRICS De-dollarization 2025"
     )
     pre_context: PreContextPayload
-    strict_compliance_mode: bool = Field(  # TODO: remove — absorbed into guardrail_strictness
-        True, description="Enforce rigorous fact-checking"
+    strict_compliance_mode: bool = (
+        Field(  # TODO: remove — absorbed into guardrail_strictness
+            True, description="Enforce rigorous fact-checking"
+        )
     )
     format_type: FormatTypeEnum = Field(
         FormatTypeEnum.ALL,
         description="Output format: all, video, blog, or carousel",
     )
     platform: PlatformEnum = Field(
-        ..., description="Target platform: twitter, linkedin, instagram, youtube, tiktok"
+        ...,
+        description="Target platform: twitter, linkedin, instagram, youtube, tiktok",
     )
 
     @model_validator(mode="after")
