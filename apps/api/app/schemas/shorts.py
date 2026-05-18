@@ -131,8 +131,8 @@ def resolve_formats(
 # ==========================================
 # 2. SHARED CONTEXT MODELS (For JSONB columns)
 # ==========================================
-class PreContextPayload(BaseModel):
-    """Schema for the JSONB pre_context column provided by the user."""
+class ResearchInputs(BaseModel):
+    """User-provided source material — consumed by the Indexing sub-phase."""
 
     source_urls: List[HttpUrl] = Field(
         default_factory=list, description="URLs to scrape for research"
@@ -140,11 +140,22 @@ class PreContextPayload(BaseModel):
     raw_text: Optional[str] = Field(
         None, description="Raw copied text or book excerpts"
     )
+
+
+class StoryDirectives(BaseModel):
+    """Editorial guardrails and creative direction — consumed by Synthesis & Scripting."""
+
     target_audience: str = Field(
         "General", description="e.g., Academics, TikTok, Investors"
     )
     guardrail_strictness: str = Field(
         "High", description="Defines how aggressively the Red Team operates"
+    )
+    tone: Optional[str] = Field(
+        None, description="Desired narrative tone (e.g., urgent, analytical, hopeful)"
+    )
+    angle: Optional[str] = Field(
+        None, description="Specific editorial angle or framing"
     )
 
 
@@ -190,7 +201,8 @@ class JobCreateRequest(BaseModel):
     topic: str = Field(
         ..., min_length=3, max_length=200, example="BRICS De-dollarization 2025"
     )
-    pre_context: PreContextPayload
+    research_inputs: ResearchInputs
+    story_directives: StoryDirectives = Field(default_factory=StoryDirectives)
     strict_compliance_mode: bool = (
         Field(  # TODO: remove — absorbed into guardrail_strictness
             True, description="Enforce rigorous fact-checking"

@@ -60,9 +60,11 @@ def mock_web_search_service():
 def sample_job_payload():
     return {
         "topic": "BRICS De-dollarization 2025",
-        "pre_context": {
+        "research_inputs": {
             "raw_text": "The BRICS nations announced a new payment system...",
             "source_urls": [],
+        },
+        "story_directives": {
             "target_audience": "Investors",
             "guardrail_strictness": "High",
         },
