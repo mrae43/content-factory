@@ -37,11 +37,19 @@ const FORMAT_OPTIONS = [
   { value: "carousel", label: "Carousel" },
 ] as const;
 
+const PLATFORM_FORMATS: Record<string, typeof FORMAT_OPTIONS[number]["value"][]> = {
+  twitter: ["all", "blog", "carousel", "video"],
+  linkedin: ["all", "carousel", "blog"],
+  instagram: ["all", "carousel", "video"],
+  tiktok: ["all", "carousel", "video"],
+  youtube: ["all", "blog", "video"],
+};
+
 const PLATFORM_OPTIONS = [
-  { value: "none", label: "None" },
   { value: "twitter", label: "Twitter / X" },
   { value: "linkedin", label: "LinkedIn" },
   { value: "instagram", label: "Instagram" },
+  { value: "tiktok", label: "TikTok" },
   { value: "youtube", label: "YouTube" },
 ] as const;
 
@@ -69,7 +77,7 @@ function NewJobForm() {
   );
   const [sourceUrls, setSourceUrls] = useState("");
   const [formatType, setFormatType] = useState("all");
-  const [platform, setPlatform] = useState("none");
+  const [platform, setPlatform] = useState("");
   const [targetAudience, setTargetAudience] = useState("general");
   const [guardrailStrictness, setGuardrailStrictness] = useState("high");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -94,10 +102,7 @@ function NewJobForm() {
         },
         strict_compliance_mode: true,
         format_type: formatType as "all" | "video" | "blog" | "carousel",
-        platform:
-          platform === "none"
-            ? undefined
-            : (platform as "twitter" | "linkedin" | "instagram" | "youtube"),
+        platform: platform as "twitter" | "linkedin" | "instagram" | "youtube" | "tiktok",
       });
       router.push(`/jobs/${result.id}`);
       toast.success("Story commissioned — pipeline started.");
@@ -114,8 +119,12 @@ function NewJobForm() {
     setShowConfirmation(true);
   };
 
+  const availableFormats = platform
+    ? FORMAT_OPTIONS.filter((o) => PLATFORM_FORMATS[platform]?.includes(o.value))
+    : [];
+
   const formatLabel = FORMAT_OPTIONS.find((o) => o.value === formatType)?.label;
-  const platformLabel = platform !== "none" ? PLATFORM_OPTIONS.find((o) => o.value === platform)?.label : null;
+  const platformLabel = PLATFORM_OPTIONS.find((o) => o.value === platform)?.label;
 
   return (
     <div className="px-4 py-6 sm:px-6 sm:py-8 md:py-10 lg:py-12">
@@ -178,12 +187,13 @@ function NewJobForm() {
                     <Select
                       value={formatType}
                       onValueChange={(v) => v !== null && setFormatType(v)}
+                      disabled={!platform}
                     >
                       <SelectTrigger className="w-full h-11 text-base sm:h-9 sm:text-sm">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {FORMAT_OPTIONS.map((opt) => (
+                        {availableFormats.map((opt) => (
                           <SelectItem key={opt.value} value={opt.value}>
                             {opt.label}
                           </SelectItem>
@@ -197,7 +207,10 @@ function NewJobForm() {
                     </span>
                     <Select
                       value={platform}
-                      onValueChange={(v) => v !== null && setPlatform(v)}
+                      onValueChange={(v) => {
+                        setPlatform(v ?? "");
+                        setFormatType("all");
+                      }}
                     >
                       <SelectTrigger className="w-full h-11 text-base sm:h-9 sm:text-sm">
                         <SelectValue />
@@ -332,7 +345,7 @@ function NewJobForm() {
                   </p>
                   <p className="text-[0.8125rem] sm:text-[0.75rem] font-medium tracking-[0.02em] text-muted-foreground">
                     {formatLabel}
-                    {platformLabel ? ` · ${platformLabel}` : ""}
+                    {" · "}{platformLabel}
                     {" · "}{guardrailStrictness} strictness
                     {rawText ? " · Brief provided" : ""}
                     {parsedSourceUrls.length > 0
