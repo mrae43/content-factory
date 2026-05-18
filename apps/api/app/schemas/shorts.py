@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, ConfigDict, HttpUrl, Discriminator, Tag
+from pydantic import BaseModel, Field, ConfigDict, HttpUrl, Discriminator, Tag, model_validator
 from typing import Annotated, List, Dict, Optional, Any, Union
 from uuid import UUID
 from datetime import datetime
@@ -81,10 +81,32 @@ class PlatformEnum(str, Enum):
     LINKEDIN = "linkedin"
     INSTAGRAM = "instagram"
     YOUTUBE = "youtube"
+    TIKTOK = "tiktok"
 
 
 def next_status_after_fact_check(format_type: str) -> "JobStatusEnum":
     return JobStatusEnum.FORMATTING
+
+
+PLATFORM_FORMAT_MAP: dict[PlatformEnum, list[FormatTypeEnum]] = {
+    PlatformEnum.TWITTER: [FormatTypeEnum.BLOG, FormatTypeEnum.CAROUSEL, FormatTypeEnum.VIDEO],
+    PlatformEnum.LINKEDIN: [FormatTypeEnum.CAROUSEL, FormatTypeEnum.BLOG],
+    PlatformEnum.INSTAGRAM: [FormatTypeEnum.CAROUSEL, FormatTypeEnum.VIDEO],
+    PlatformEnum.TIKTOK: [FormatTypeEnum.CAROUSEL, FormatTypeEnum.VIDEO],
+    PlatformEnum.YOUTUBE: [FormatTypeEnum.BLOG, FormatTypeEnum.VIDEO],
+}
+
+
+def resolve_formats(platform: PlatformEnum, format_type: FormatTypeEnum) -> list[FormatTypeEnum]:
+    """Expand 'all' into platform-specific formats, or return [format_type] if specific."""
+    if format_type == FormatTypeEnum.ALL:
+        return PLATFORM_FORMAT_MAP[platform]
+    if format_type not in PLATFORM_FORMAT_MAP[platform]:
+        raise ValueError(
+            f"Format '{format_type.value}' is not valid for platform '{platform.value}'. "
+            f"Valid formats: {[f.value for f in PLATFORM_FORMAT_MAP[platform]]}"
+        )
+    return [format_type]
 
 
 # ==========================================
@@ -157,9 +179,20 @@ class JobCreateRequest(BaseModel):
         FormatTypeEnum.ALL,
         description="Output format: all, video, blog, or carousel",
     )
-    platform: Optional[PlatformEnum] = Field(
-        None, description="Target platform: twitter, linkedin, instagram, youtube"
+    platform: PlatformEnum = Field(
+        ..., description="Target platform: twitter, linkedin, instagram, youtube, tiktok"
     )
+
+    @model_validator(mode="after")
+    def validate_format_for_platform(self):
+        if self.format_type != FormatTypeEnum.ALL:
+            valid = PLATFORM_FORMAT_MAP.get(self.platform, [])
+            if self.format_type not in valid:
+                raise ValueError(
+                    f"Format '{self.format_type.value}' is not supported on '{self.platform.value}'. "
+                    f"Valid formats: {[f.value for f in valid]}"
+                )
+        return self
 
 
 class ScriptApprovalRequest(BaseModel):
