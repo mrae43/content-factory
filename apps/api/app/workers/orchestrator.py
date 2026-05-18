@@ -148,7 +148,7 @@ async def _transition_researching(db: AsyncSession, job) -> None:
                 chunks=web_texts,
                 scope="LOCAL",
                 meta={
-                    "source": "web_search",
+                    "source_type": "WEB_SEARCH",
                     "query": job.topic,
                     "urls": web_urls,
                     "search_depth": "basic",
@@ -174,6 +174,15 @@ async def _transition_researching(db: AsyncSession, job) -> None:
                 "Cannot proceed to scripting without a research summary."
             )
         job.refined_context = refined_context
+
+        confidence = result.confidence_score
+        if confidence is not None:
+            job.research_confidence = confidence
+
+        citation_index = result.payload.get("citation_index", [])
+        if citation_index:
+            job.citation_index = citation_index
+
         await db.commit()
         await update_job_status(db, job.id, JobStatusEnum.FACT_CHECKING_RESEARCH)
     else:
