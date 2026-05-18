@@ -55,6 +55,10 @@ GUARDRAIL_PROFILES = {
 }
 
 
+# TODO: Collapse strict_compliance_mode into High profile.
+#   - High profile should set uncertain_is_soft_fail=True.
+#   - Remove strict_compliance_mode parameter from this function.
+#   - Callers use guardrail_strictness as the single knob.
 def get_guardrail_config(
     strictness: str, strict_compliance_mode: bool
 ) -> GuardrailConfig:

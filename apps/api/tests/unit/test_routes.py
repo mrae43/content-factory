@@ -8,7 +8,12 @@ from httpx import AsyncClient, ASGITransport
 
 from app.api.routes import router
 from app.db.session import get_db
-from app.schemas.shorts import JobStatusEnum
+from app.schemas.shorts import (
+    JobStatusEnum,
+    PlatformEnum,
+    FormatTypeEnum,
+    resolve_formats,
+)
 
 
 def make_mock_job(**overrides):
@@ -62,6 +67,9 @@ def make_mock_claim(**overrides):
         "claim_text": "Test claim",
         "verdict": "SUPPORTED",
         "confidence": 0.95,
+        "evidence_text": None,
+        "evidence_text_inline": [],
+        "hedge_required": False,
         "evidence_references": [],
     }
     defaults.update(overrides)
@@ -140,6 +148,18 @@ class TestCreateRenderJob:
         assert data["assets"] == []
         mock_db.add.assert_called_once()
         mock_db.commit.assert_awaited_once()
+
+    async def test_should_reject_missing_platform_422(self, client, sample_job_payload):
+        payload = {k: v for k, v in sample_job_payload.items() if k != "platform"}
+        resp = await client.post("/api/v1/jobs/", json=payload)
+        assert resp.status_code == 422
+
+    async def test_should_reject_invalid_format_for_platform_422(
+        self, client, sample_job_payload
+    ):
+        payload = {**sample_job_payload, "platform": "linkedin", "format_type": "video"}
+        resp = await client.post("/api/v1/jobs/", json=payload)
+        assert resp.status_code == 422
 
 
 @pytest.mark.unit
@@ -320,3 +340,42 @@ class TestListRenderJobs:
         data = resp.json()
         assert len(data) == 1
         assert data[0]["status"] == "COMPLETED"
+
+
+@pytest.mark.unit
+class TestResolveFormats:
+    def test_all_on_twitter_returns_blog_carousel_video(self):
+        result = resolve_formats(PlatformEnum.TWITTER, FormatTypeEnum.ALL)
+        assert result == [
+            FormatTypeEnum.BLOG,
+            FormatTypeEnum.CAROUSEL,
+            FormatTypeEnum.VIDEO,
+        ]
+
+    def test_all_on_linkedin_returns_carousel_blog(self):
+        result = resolve_formats(PlatformEnum.LINKEDIN, FormatTypeEnum.ALL)
+        assert result == [FormatTypeEnum.CAROUSEL, FormatTypeEnum.BLOG]
+
+    def test_all_on_instagram_returns_carousel_video(self):
+        result = resolve_formats(PlatformEnum.INSTAGRAM, FormatTypeEnum.ALL)
+        assert result == [FormatTypeEnum.CAROUSEL, FormatTypeEnum.VIDEO]
+
+    def test_all_on_tiktok_returns_carousel_video(self):
+        result = resolve_formats(PlatformEnum.TIKTOK, FormatTypeEnum.ALL)
+        assert result == [FormatTypeEnum.CAROUSEL, FormatTypeEnum.VIDEO]
+
+    def test_all_on_youtube_returns_blog_video(self):
+        result = resolve_formats(PlatformEnum.YOUTUBE, FormatTypeEnum.ALL)
+        assert result == [FormatTypeEnum.BLOG, FormatTypeEnum.VIDEO]
+
+    def test_specific_format_returns_itself(self):
+        result = resolve_formats(PlatformEnum.TWITTER, FormatTypeEnum.BLOG)
+        assert result == [FormatTypeEnum.BLOG]
+
+    def test_invalid_format_raises_value_error(self):
+        with pytest.raises(ValueError, match="not valid for platform"):
+            resolve_formats(PlatformEnum.LINKEDIN, FormatTypeEnum.VIDEO)
+
+    def test_invalid_format_on_tiktok_raises(self):
+        with pytest.raises(ValueError, match="not valid for platform"):
+            resolve_formats(PlatformEnum.TIKTOK, FormatTypeEnum.BLOG)

@@ -40,7 +40,13 @@ from app.workers.formatters import (
     VideoFormatterAgent,
 )
 from app.workers.harness import FormatterHarness
-from app.schemas.shorts import JobStatusEnum, next_status_after_fact_check
+from app.schemas.shorts import (
+    JobStatusEnum,
+    next_status_after_fact_check,
+    resolve_formats,
+    FormatTypeEnum,
+    PlatformEnum,
+)
 from app.core.config import settings
 from app.core.guardrails import get_guardrail_config
 
@@ -256,7 +262,7 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
     pre_context = job.pre_context or {}
     guardrail_cfg = get_guardrail_config(
         strictness=pre_context.get("guardrail_strictness", "High"),
-        strict_compliance_mode=job.strict_compliance_mode,
+        strict_compliance_mode=job.strict_compliance_mode,  # TODO: remove strict_compliance_mode arg after collapsing into High profile
     )
 
     agent_context = {
@@ -281,6 +287,9 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
         if claims_data and latest_script_obj:
             await save_fact_check_claims(db, latest_script_obj.id, claims_data)
 
+        # TODO: when strict_compliance_mode is collapsed into High profile,
+        #       `is_approved = False + HUMAN_REVIEW_NEEDED` becomes the High-profile path.
+        #       Non-High profiles go straight to FORMATTING.
         if latest_script_obj:
             if job.strict_compliance_mode:
                 latest_script_obj.is_approved = False
@@ -430,9 +439,10 @@ def _build_format_content(format_type: str, payload: dict) -> str:
     return payload.get("title", payload.get("thread_title", ""))
 
 
-def _next_status_after_formatting(format_type: str) -> JobStatusEnum:
-    fmt = (format_type or "all").lower()
-    if fmt in ("video", "all"):
+def _next_status_after_formatting(
+    resolved_formats: list[FormatTypeEnum],
+) -> JobStatusEnum:
+    if FormatTypeEnum.VIDEO in resolved_formats:
         return JobStatusEnum.ASSET_GENERATION
     return JobStatusEnum.COMPLETED
 
@@ -461,10 +471,17 @@ async def _transition_formatting(db: AsyncSession, job) -> None:
         "platform": job.platform or "",
     }
 
-    format_type = (job.format_type or "all").lower()
+    db_format_type = (job.format_type or "all").lower()
+    db_platform = job.platform if job.platform else "twitter"
+
+    format_type_enum = FormatTypeEnum(db_format_type)
+    platform_enum = PlatformEnum(db_platform)
+    target_formats = resolve_formats(platform_enum, format_type_enum)
+    target_format_names = [f.value.upper() for f in target_formats]
+
     formatter_specs: list[tuple[str, FormatterHarness, dict]] = []
 
-    if format_type in ("blog", "all"):
+    if "BLOG" in target_format_names:
         blog_ctx = {**base_context, "format_type": "blog"}
         blog_harness = FormatterHarness(
             formatter=BlogFormatterAgent(
@@ -476,7 +493,7 @@ async def _transition_formatting(db: AsyncSession, job) -> None:
         )
         formatter_specs.append(("BLOG", blog_harness, blog_ctx))
 
-    if format_type in ("carousel", "all"):
+    if "CAROUSEL" in target_format_names:
         carousel_ctx = {
             **base_context,
             "format_type": "carousel",
@@ -492,7 +509,7 @@ async def _transition_formatting(db: AsyncSession, job) -> None:
         )
         formatter_specs.append(("CAROUSEL", carousel_harness, carousel_ctx))
 
-    if format_type in ("video", "all"):
+    if "VIDEO" in target_format_names:
         video_ctx = {**base_context, "format_type": "video"}
         video_harness = FormatterHarness(
             formatter=VideoFormatterAgent(
@@ -506,16 +523,16 @@ async def _transition_formatting(db: AsyncSession, job) -> None:
 
     if not formatter_specs:
         logger.warning(
-            f"No formatters configured for format_type='{format_type}' on Job {job.id}"
+            f"No formatters configured for format_type='{db_format_type}' on Job {job.id}"
         )
         await update_job_status(
-            db, job.id, _next_status_after_formatting(job.format_type)
+            db, job.id, _next_status_after_formatting(target_formats)
         )
         return
 
     logger.info(
         f"Running {len(formatter_specs)} formatter(s) in parallel for Job {job.id} "
-        f"(format_type={format_type})"
+        f"(format_type={db_format_type})"
     )
 
     harness_results = await asyncio.gather(
@@ -583,4 +600,4 @@ async def _transition_formatting(db: AsyncSession, job) -> None:
             f"All formatters failed for Job {job.id}. Failed script rows recorded."
         )
 
-    await update_job_status(db, job.id, _next_status_after_formatting(job.format_type))
+    await update_job_status(db, job.id, _next_status_after_formatting(target_formats))

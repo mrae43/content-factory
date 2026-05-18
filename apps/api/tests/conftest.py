@@ -67,6 +67,7 @@ def sample_job_payload():
             "guardrail_strictness": "High",
         },
         "strict_compliance_mode": True,
+        "platform": "youtube",
     }
 
 

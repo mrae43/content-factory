@@ -34,9 +34,9 @@ async def create_render_job(
         new_job = RenderJob(
             topic=request.topic,
             pre_context=request.pre_context.model_dump(mode="json"),
-            strict_compliance_mode=request.strict_compliance_mode,
+            strict_compliance_mode=request.strict_compliance_mode,  # TODO: remove — absorbed into guardrail_strictness
             format_type=request.format_type.value,
-            platform=request.platform.value if request.platform else None,
+            platform=request.platform.value,
             status=JobStatusEnum.PENDING,
         )
         db.add(new_job)

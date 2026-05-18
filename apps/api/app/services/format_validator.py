@@ -49,6 +49,7 @@ class CarouselValidator(FormatValidator):
             "twitter": 280,
             "linkedin": 700,
             "instagram": 2200,
+            "tiktok": 2200,
         }
         self.platform = platform
         self.char_limit = self.char_limit_map.get(platform, 500)

@@ -1,4 +1,12 @@
-from pydantic import BaseModel, Field, ConfigDict, HttpUrl, Discriminator, Tag
+from pydantic import (
+    BaseModel,
+    Field,
+    ConfigDict,
+    HttpUrl,
+    Discriminator,
+    Tag,
+    model_validator,
+)
 from typing import Annotated, List, Dict, Optional, Any, Union
 from uuid import UUID
 from datetime import datetime
@@ -31,6 +39,17 @@ FormatPayload = Annotated[
 # 1. ENUMS (Mapped directly to DB Enums)
 # ==========================================
 class JobStatusEnum(str, Enum):
+    # Editorial desk names (used in UI/outward-facing):
+    #   PENDING              → Queued
+    #   RESEARCHING          → Research Desk
+    #   FACT_CHECKING_RESEARCH → Source Verification
+    #   SCRIPTING            → Writer's Desk
+    #   FACT_CHECKING_SCRIPT → Fact-Check Desk
+    #   FORMATTING           → Layout Desk
+    #   ASSET_GENERATION     → Production Studio
+    #   COMPLETED            → Published
+    #   FAILED               → Killed
+    #   HUMAN_REVIEW_NEEDED  → Your Review
     PENDING = "PENDING"
     RESEARCHING = "RESEARCHING"
     FACT_CHECKING_RESEARCH = "FACT_CHECKING_RESEARCH"
@@ -70,10 +89,43 @@ class PlatformEnum(str, Enum):
     LINKEDIN = "linkedin"
     INSTAGRAM = "instagram"
     YOUTUBE = "youtube"
+    TIKTOK = "tiktok"
 
 
 def next_status_after_fact_check(format_type: str) -> "JobStatusEnum":
     return JobStatusEnum.FORMATTING
+
+
+PLATFORM_FORMAT_MAP: dict[PlatformEnum, list[FormatTypeEnum]] = {
+    PlatformEnum.TWITTER: [
+        FormatTypeEnum.BLOG,
+        FormatTypeEnum.CAROUSEL,
+        FormatTypeEnum.VIDEO,
+    ],
+    PlatformEnum.LINKEDIN: [FormatTypeEnum.CAROUSEL, FormatTypeEnum.BLOG],
+    PlatformEnum.INSTAGRAM: [FormatTypeEnum.CAROUSEL, FormatTypeEnum.VIDEO],
+    PlatformEnum.TIKTOK: [FormatTypeEnum.CAROUSEL, FormatTypeEnum.VIDEO],
+    PlatformEnum.YOUTUBE: [FormatTypeEnum.BLOG, FormatTypeEnum.VIDEO],
+}
+
+
+def resolve_formats(
+    platform: PlatformEnum, format_type: FormatTypeEnum
+) -> list[FormatTypeEnum]:
+    """Expand 'all' into platform-specific formats, or return [format_type] if specific."""
+    if format_type == FormatTypeEnum.ALL:
+        if platform not in PLATFORM_FORMAT_MAP:
+            raise ValueError(f"Unknown platform '{platform.value}' in resolve_formats")
+        return PLATFORM_FORMAT_MAP[platform]
+    if (
+        platform not in PLATFORM_FORMAT_MAP
+        or format_type not in PLATFORM_FORMAT_MAP[platform]
+    ):
+        raise ValueError(
+            f"Format '{format_type.value}' is not valid for platform '{platform.value}'. "
+            f"Valid formats: {[f.value for f in PLATFORM_FORMAT_MAP[platform]]}"
+        )
+    return [format_type]
 
 
 # ==========================================
@@ -139,16 +191,30 @@ class JobCreateRequest(BaseModel):
         ..., min_length=3, max_length=200, example="BRICS De-dollarization 2025"
     )
     pre_context: PreContextPayload
-    strict_compliance_mode: bool = Field(
-        True, description="Enforce rigorous fact-checking"
+    strict_compliance_mode: bool = (
+        Field(  # TODO: remove — absorbed into guardrail_strictness
+            True, description="Enforce rigorous fact-checking"
+        )
     )
     format_type: FormatTypeEnum = Field(
         FormatTypeEnum.ALL,
         description="Output format: all, video, blog, or carousel",
     )
-    platform: Optional[PlatformEnum] = Field(
-        None, description="Target platform: twitter, linkedin, instagram, youtube"
+    platform: PlatformEnum = Field(
+        ...,
+        description="Target platform: twitter, linkedin, instagram, youtube, tiktok",
     )
+
+    @model_validator(mode="after")
+    def validate_format_for_platform(self):
+        if self.format_type != FormatTypeEnum.ALL:
+            valid = PLATFORM_FORMAT_MAP.get(self.platform, [])
+            if self.format_type not in valid:
+                raise ValueError(
+                    f"Format '{self.format_type.value}' is not supported on '{self.platform.value}'. "
+                    f"Valid formats: {[f.value for f in valid]}"
+                )
+        return self
 
 
 class ScriptApprovalRequest(BaseModel):
@@ -224,7 +290,7 @@ class RenderJobResponse(BaseModel):
     id: UUID
     topic: str
     status: JobStatusEnum
-    strict_compliance_mode: bool
+    strict_compliance_mode: bool  # TODO: remove — absorbed into guardrail_strictness
     format_type: Optional[FormatTypeEnum] = FormatTypeEnum.ALL
     platform: Optional[PlatformEnum] = None
     final_video_url: Optional[str]

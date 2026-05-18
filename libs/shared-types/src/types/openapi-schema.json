@@ -621,21 +621,15 @@
             "default": "all"
           },
           "platform": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PlatformEnum"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Target platform: twitter, linkedin, instagram, youtube"
+            "$ref": "#/components/schemas/PlatformEnum",
+            "description": "Target platform: twitter, linkedin, instagram, youtube, tiktok"
           }
         },
         "type": "object",
         "required": [
           "topic",
-          "pre_context"
+          "pre_context",
+          "platform"
         ],
         "title": "JobCreateRequest",
         "description": "Payload for Step 1: User inserts topic & context."
@@ -662,7 +656,8 @@
           "twitter",
           "linkedin",
           "instagram",
-          "youtube"
+          "youtube",
+          "tiktok"
         ],
         "title": "PlatformEnum"
       },
