@@ -120,7 +120,8 @@ async def _transition_pending(db: AsyncSession, job) -> None:
     if raw_chunks:
         vector_store = ContentFactoryVectorStore(db)
         await vector_store.ingest_chunks(
-            job_id=job.id, chunks=raw_chunks, scope="RAW-CONTEXT"
+            job_id=job.id, chunks=raw_chunks, scope="RAW-CONTEXT",
+            meta={"source_type": "USER_PROVIDED"},
         )
     else:
         logger.warning(f"No raw chunks found for job {job.id}")
