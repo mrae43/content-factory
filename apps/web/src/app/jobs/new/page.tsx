@@ -116,6 +116,7 @@ function NewJobForm() {
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!platform) return;
     setShowConfirmation(true);
   };
 
@@ -345,8 +346,8 @@ function NewJobForm() {
                   </p>
                   <p className="text-[0.8125rem] sm:text-[0.75rem] font-medium tracking-[0.02em] text-muted-foreground">
                     {formatLabel}
-                    {" · "}{platformLabel}
-                    {" · "}{guardrailStrictness} strictness
+                    {platformLabel ? ` · ${platformLabel}` : ""}
+                    {guardrailStrictness ? ` · ${guardrailStrictness} strictness` : ""}
                     {rawText ? " · Brief provided" : ""}
                     {parsedSourceUrls.length > 0
                       ? ` · ${parsedSourceUrls.length} source${parsedSourceUrls.length > 1 ? "s" : ""}`
