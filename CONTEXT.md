@@ -4,13 +4,45 @@
 
 The central unit of work flowing through the pipeline. Represented in the database as a `RenderJob`. A Story has a topic (headline), a status, and carries all content produced through the pipeline (research, scripts, claims, assets).
 
+## Research
+
+The first value-adding phase of the pipeline. Performed by the Research Desk. Two sub-phases:
+
+- **Indexing** — source materials (user-provided URLs, raw text) and web search results are chunked, embedded (Gemini 768-dim, cosine), and stored in the vector store. This is the retrieval layer.
+- **Synthesis** — the vector store is queried against the Story's topic; retrieved chunks are fed to an LLM to produce a **Refined Context** (800–1500 word synthesis) and a **research_confidence** score (float 0.0–1.0). Both are persisted on the Story — the Refined Context is consumed by downstream desks, and research_confidence signals whether the pipeline should warn an editor before scripting begins.
+
+_Ancillary term:_ **Research Chunks** — the individual vectorized text fragments stored in pgvector, tagged with a **source_type** enum (`USER_PROVIDED` from user-supplied URLs/raw text, `WEB_SEARCH` from Tavily results, `INFERRED` from the Research Agent's own Synthesis), and a **scope** (`RAW-CONTEXT` for user-provided material, `LOCAL` for web results and refined chunks). source_type controls epistemic weight during fact-checking; scope controls lifecycle (LOCAL chunks are cleaned up after completion).
+
+## Citation Index
+
+A structured sidecar attached to the Story alongside the Refined Context after Synthesis. Maps claim fragments (or synthesis passages) to their source URLs and Research Chunk IDs. Enables the Fact-Check Loop to trace any claim to its origin — without re-searching the vector store. Not embedded in the Refined Context text itself.
+
+## Research Inputs
+
+The retrievable material fed into the Indexer. Includes user-provided URLs, raw text, and web search results. Consumed during Indexing and discarded after Synthesis — they do not travel downstream.
+
+_Avoid:_ Mixing Story Directives into Research Inputs. Directives shape synthesis; Inputs feed retrieval.
+
+## Story Directives
+
+The editorial metadata that shapes *how* research and scripting are framed. Includes target audience, tone, angle, and guardrail strictness. Unlike Research Inputs, Directives travel all the way to the Writer's Desk — they are consumed by Synthesis and Scripting, not by Indexing.
+
 ## Script
 
 The narrative body of a Story, written by the Writer's Desk. A script has a role (`master` for the general narrative, `format` for a format-specific adaptation), a version number, and optionally associated Claims from fact-checking. A master script is drafted first; format scripts are derived from it during the Layout Desk stage.
 
 ## Format Output
 
-The structured, published-ready rendering of a Story in a specific format. Types: `BLOG`, `CAROUSEL`, `VIDEO`. Produced by the Layout Desk from the master script using a format-specific payload schema (sections for blog, slides for carousel, scenes for video). A format output may carry SEO metadata, hashtags, and source references.
+A text-only rendering of a Story in blog format. Produced by the Layout Desk from the master script. Contains sections, SEO metadata, tags, and a call to action. Format Outputs are publish-ready without further rendering — unlike Visual Assets, which require the Production Studio.
+
+## Visual Asset
+
+A media artifact that must be rendered from a blueprint. Two sub-types, both produced by a two-stage pipeline (Layout Desk plans the structure, Production Studio renders the media):
+
+- **Carousel Slide Deck** — a sequence of composited slide images (graphic design + text), targeted at Instagram/TikTok. The Layout Desk produces a slide outline with per-slide text and visual prompts; the Production Studio renders each slide into an image.
+- **Video** — a rendered motion picture with scenes, narration, and audio. The Layout Desk produces a scene outline; the Production Studio renders each scene and assembles the final video.
+
+_Avoid_: Calling a Carousel a "Format Output" — it's a Visual Asset that gets rendered, not formatted.
 
 ## Red Team Report
 
@@ -57,7 +89,16 @@ In code, the bounded counter is named `remediation_depth` (0–3). In editorial/
 
 ## Asset
 
-A generated media file associated with a Story. Types: `VISUAL_VEO` (video clip), `AUDIO_LYRIA` (music/sound), `VOICEOVER`, `SUBTITLE_JSON`, `DATA_CHART`. Produced by the Production Studio (only for Stories targeting video formats). Each asset carries generation metadata (prompt, timing, SynthID watermark).
+A generated media file associated with a Story. Produced by the Production Studio. Each asset carries generation metadata (prompt, timing, SynthID watermark). Types:
+
+| Asset Type | Applies To | Description |
+|---|---|---|
+| `CAROUSEL_SLIDE` | Carousel | A single rendered slide image |
+| `VISUAL_VEO` | Video | A rendered video clip |
+| `AUDIO_LYRIA` | Video | Generated music or sound effect |
+| `VOICEOVER` | Video | AI-generated spoken narration |
+| `SUBTITLE_JSON` | Video | Timed subtitle track |
+| `DATA_CHART` | Video | Animated data visualization
 
 ## Pipeline Statuses
 
@@ -71,7 +112,7 @@ Each Story passes through editorial desks in sequence. The canonical outward-fac
 | Writer's Desk | `SCRIPTING` | No |
 | Fact-Check Desk | `FACT_CHECKING_SCRIPT` | No |
 | Layout Desk | `FORMATTING` | No |
-| Production Studio | `ASSET_GENERATION` | No |
+| Production Studio | `ASSET_GENERATION` | No | Renders Visual Assets (Carousel Slide Decks and Videos) |
 | Published | `COMPLETED` | Yes |
 | Killed | `FAILED` | Yes |
 | Your Review | `HUMAN_REVIEW_NEEDED` | Yes (blocked on human)

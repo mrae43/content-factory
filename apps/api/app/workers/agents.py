@@ -71,6 +71,14 @@ class BaseAgent(ABC):
         pass
 
 
+class CitationEntry(BaseModel):
+    claim_fragment: str = Field(
+        description="Short phrase or claim from the synthesized research"
+    )
+    source_url: str = Field(description="URL of the source supporting this claim")
+    chunk_id: str = Field(description="ID of the ResearchChunk this citation traces to")
+
+
 class ResearchSchema(BaseModel):
     chunks: List[str] = Field(description="Extracted highly-credible data chunks.")
     refined_context: str = Field(
@@ -82,6 +90,14 @@ class ResearchSchema(BaseModel):
             "script writing — it must be complete enough that a scriptwriter "
             "never needs to consult raw sources."
         )
+    )
+    citation_index: List[CitationEntry] = Field(
+        default_factory=list,
+        description=(
+            "Sidecar provenance mapping each significant claim to its source URL "
+            "and ResearchChunk ID. Fact-Check can trace claims without re-searching "
+            "the vector store."
+        ),
     )
     reasoning: str = Field(description="Why these facts were prioritized.")
     confidence: float = Field(
@@ -140,7 +156,12 @@ class ResearchAgent(BaseAgent):
                         "2. Preserves specific facts: dates, names, statistics, quotes, source attributions\n"
                         "3. Notes areas of conflicting evidence or uncertainty\n"
                         "4. Is self-contained — a scriptwriter using ONLY this summary can write an accurate script\n"
-                        "5. Is concise but complete — aim for 800-1500 words, not a list of bullet points"
+                        "5. Is concise but complete — aim for 800-1500 words, not a list of bullet points\n\n"
+                        "CITATION INDEX:\n"
+                        "For each significant claim in your synthesis, record which source URL "
+                        "and chunk ID it came from in the `citation_index` field. "
+                        "This allows the Fact-Check team to trace claims without re-searching "
+                        "the vector store."
                     ),
                 ),
                 (
@@ -166,7 +187,10 @@ class ResearchAgent(BaseAgent):
                 f"ResearchAgent ingesting {len(result.chunks)} REFINED chunks to vector store for Job {job_id}"
             )
             await vector_store.ingest_chunks(
-                job_id=job_id, chunks=result.chunks, scope="LOCAL"
+                job_id=job_id,
+                chunks=result.chunks,
+                scope="LOCAL",
+                meta={"source_type": "INFERRED"},
             )
 
         return AgentResult(
@@ -174,6 +198,7 @@ class ResearchAgent(BaseAgent):
             payload={
                 "chunks": result.chunks,
                 "refined_context": result.refined_context,
+                "citation_index": [c.model_dump() for c in result.citation_index],
             },
             reasoning=result.reasoning,
             confidence_score=result.confidence,
@@ -205,6 +230,14 @@ class CopywriterAgent(BaseAgent):
                 confidence_score=0.0,
             )
 
+        story_directives = context.get("story_directives", {})
+        target_audience = story_directives.get("target_audience", "General")
+        tone = story_directives.get("tone", "")
+        angle = story_directives.get("angle", "")
+        story_directives_text = (
+            f"Target Audience: {target_audience}\nTone: {tone}\nAngle: {angle}"
+        )
+
         prompt = ChatPromptTemplate.from_messages(
             [
                 (
@@ -216,6 +249,9 @@ class CopywriterAgent(BaseAgent):
                         "You receive a `refined_context` — a comprehensive research summary vetted and synthesized by the "
                         "research team. This is your SOLE source of truth. Do NOT introduce facts not present in the "
                         "refined_context.\n\n"
+                        "You also receive `story_directives` — target_audience, tone, and angle — that guide how the "
+                        "script should be framed. Tailor vocabulary, narrative voice, complexity, and perspective to "
+                        "match these directives.\n\n"
                         "## RULES\n"
                         "1. ZERO HALLUCINATION: Every claim must trace to the refined_context.\n"
                         "2. Write a clean narrative script (500-800 words) with no format-specific structure.\n"
@@ -223,11 +259,13 @@ class CopywriterAgent(BaseAgent):
                         "4. Build a clear narrative arc: hook → context → depth → payoff.\n"
                         "5. End with a compelling closer — a call-to-action, thought-provoking question, or forward-looking "
                         "statement.\n"
-                        "6. Write in a conversational, authoritative tone suitable for adaptation into any format.\n"
+                        "6. Write in a tone that respects the story_directives tone (if provided). Default to "
+                        "conversational, authoritative if no tone is specified.\n"
                         "7. If the refined_context has conflicting evidence, present the strongest case and note uncertainty.\n"
                         "8. Do NOT include scene numbers, timestamps, visual cues, audio cues, or storyboard elements.\n"
                         "9. Preserve specific data: numbers, dates, names, statistics, quotes, and attributions.\n"
-                        "10. If feedback is provided, address every point in the revised script."
+                        "10. If feedback is provided, address every point in the revised script.\n"
+                        "11. If story_directives specifies a particular angle, use it to focus the narrative perspective."
                     ),
                 ),
                 (
@@ -236,8 +274,10 @@ class CopywriterAgent(BaseAgent):
                         "Write a master narrative script for the following topic.\n\n"
                         "<topic>\n{topic}\n</topic>\n\n"
                         "<refined_context>\n{refined_context}\n</refined_context>\n\n"
+                        "<story_directives>\n{story_directives}\n</story_directives>\n\n"
                         "<feedback>\n{feedback}\n</feedback>\n\n"
-                        "First, analyze the narrative arc step-by-step. Then generate the script."
+                        "First, analyze the narrative arc step-by-step, considering the story_directives. "
+                        "Then generate the script."
                     ),
                 ),
             ]
@@ -248,6 +288,7 @@ class CopywriterAgent(BaseAgent):
             {
                 "topic": topic,
                 "refined_context": refined_context,
+                "story_directives": story_directives_text,
                 "feedback": feedback,
             }
         )

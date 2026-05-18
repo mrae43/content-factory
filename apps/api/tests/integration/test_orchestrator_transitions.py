@@ -265,7 +265,7 @@ class TestTransitionResearching:
             web_ingest = [c for c in ingest_calls if c.kwargs.get("scope") == "LOCAL"]
             assert len(web_ingest) == 1
             meta = web_ingest[0].kwargs["meta"]
-            assert meta["source"] == "web_search"
+            assert meta["source_type"] == "WEB_SEARCH"
             assert meta["query"] == mock_job.topic
             assert meta["urls"] == ["https://example.com/brics"]
             assert meta["search_depth"] == "basic"

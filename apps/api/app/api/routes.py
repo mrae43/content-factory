@@ -31,9 +31,13 @@ async def create_render_job(
     db: AsyncSession = Depends(get_db),
 ):
     try:
+        pre_context = {
+            **request.research_inputs.model_dump(mode="json"),
+            **request.story_directives.model_dump(mode="json"),
+        }
         new_job = RenderJob(
             topic=request.topic,
-            pre_context=request.pre_context.model_dump(mode="json"),
+            pre_context=pre_context,
             strict_compliance_mode=request.strict_compliance_mode,  # TODO: remove — absorbed into guardrail_strictness
             format_type=request.format_type.value,
             platform=request.platform.value,

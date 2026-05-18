@@ -120,7 +120,10 @@ async def _transition_pending(db: AsyncSession, job) -> None:
     if raw_chunks:
         vector_store = ContentFactoryVectorStore(db)
         await vector_store.ingest_chunks(
-            job_id=job.id, chunks=raw_chunks, scope="RAW-CONTEXT"
+            job_id=job.id,
+            chunks=raw_chunks,
+            scope="RAW-CONTEXT",
+            meta={"source_type": "USER_PROVIDED"},
         )
     else:
         logger.warning(f"No raw chunks found for job {job.id}")
@@ -147,7 +150,7 @@ async def _transition_researching(db: AsyncSession, job) -> None:
                 chunks=web_texts,
                 scope="LOCAL",
                 meta={
-                    "source": "web_search",
+                    "source_type": "WEB_SEARCH",
                     "query": job.topic,
                     "urls": web_urls,
                     "search_depth": "basic",
@@ -173,6 +176,15 @@ async def _transition_researching(db: AsyncSession, job) -> None:
                 "Cannot proceed to scripting without a research summary."
             )
         job.refined_context = refined_context
+
+        confidence = result.confidence_score
+        if confidence is not None:
+            job.research_confidence = confidence
+
+        citation_index = result.payload.get("citation_index", [])
+        if citation_index:
+            job.citation_index = citation_index
+
         await db.commit()
         await update_job_status(db, job.id, JobStatusEnum.FACT_CHECKING_RESEARCH)
     else:
@@ -209,10 +221,16 @@ async def _run_copywriter(db: AsyncSession, job, feedback: str = "") -> None:
         model_name=settings.copywriter_model,
         temperature=settings.copywriter_temperature,
     )
+    pre_context = job.pre_context or {}
     agent_context = {
         "job_id": job.id,
         "topic": job.topic,
         "refined_context": job.refined_context or "",
+        "story_directives": {
+            "target_audience": pre_context.get("target_audience", "General"),
+            "tone": pre_context.get("tone", ""),
+            "angle": pre_context.get("angle", ""),
+        },
         "feedback": feedback,
     }
     result = await copywriter.run(context=agent_context)
@@ -233,11 +251,17 @@ async def _run_optimizer(
         model_name=settings.optimizer_model,
         temperature=settings.optimizer_temperature,
     )
+    pre_context = job.pre_context or {}
     agent_context = {
         "job_id": job.id,
         "script_content": latest_script.content,
         "failed_claims": failed_claims,
         "refined_context": job.refined_context or "",
+        "story_directives": {
+            "target_audience": pre_context.get("target_audience", "General"),
+            "tone": pre_context.get("tone", ""),
+            "angle": pre_context.get("angle", ""),
+        },
     }
     result = await optimizer.run(context=agent_context)
 

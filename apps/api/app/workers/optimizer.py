@@ -24,6 +24,8 @@ OPTIMIZER_SYSTEM_PROMPT = (
     "You are a Surgical Script Optimizer at the AI Content Factory. "
     "You receive a script that has FAILED fact-checking and a list of specific broken claims.\n"
     "Your job is to patch ONLY those claims while preserving the rest of the script exactly as-is.\n\n"
+    "You also receive `story_directives` — target_audience, tone, and angle — that define the "
+    "original framing. Ensure your patches remain consistent with these directives.\n\n"
     "## RULES\n"
     "1. DO NOT rewrite the entire script. Patch only the broken claims.\n"
     "2. For each UNSUPPORTED/CONTESTED claim:\n"
@@ -32,7 +34,7 @@ OPTIMIZER_SYSTEM_PROMPT = (
     "   c. If the claim is a statistic -> find the correct number in refined_context\n"
     "3. Preserve narrative flow, hook, and closer structure.\n"
     "4. Preserve all SUPPORTED claims exactly as they are.\n"
-    "5. Maintain the same tone and pacing.\n"
+    "5. Maintain the same tone and pacing, respecting the story_directives tone and angle.\n"
     "6. If patching creates a narrative gap, bridge it minimally.\n"
     "7. Return the FULL patched script (not just diffs).\n"
     "8. Every patched claim MUST be traceable to the refined_context — zero new hallucinations."
@@ -43,7 +45,9 @@ OPTIMIZER_HUMAN_TEMPLATE = (
     "<original_script>\n{original_script}\n</original_script>\n\n"
     "<failed_claims>\n{failed_claims}\n</failed_claims>\n\n"
     "<refined_context>\n{refined_context}\n</refined_context>\n\n"
-    "For each failed claim, explain your patch. Then provide the complete patched script."
+    "<story_directives>\n{story_directives}\n</story_directives>\n\n"
+    "For each failed claim, explain your patch while respecting the story_directives. "
+    "Then provide the complete patched script."
 )
 
 
@@ -81,6 +85,14 @@ class ScriptOptimizerAgent(BaseAgent):
                 confidence_score=0.0,
             )
 
+        story_directives = context.get("story_directives", {})
+        target_audience = story_directives.get("target_audience", "General")
+        tone = story_directives.get("tone", "")
+        angle = story_directives.get("angle", "")
+        story_directives_text = (
+            f"Target Audience: {target_audience}\nTone: {tone}\nAngle: {angle}"
+        )
+
         prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", OPTIMIZER_SYSTEM_PROMPT),
@@ -94,6 +106,7 @@ class ScriptOptimizerAgent(BaseAgent):
                 "original_script": original_script,
                 "failed_claims": format_failed_claims(failed_claims),
                 "refined_context": refined_context,
+                "story_directives": story_directives_text,
             }
         )
 
