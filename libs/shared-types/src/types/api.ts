@@ -266,8 +266,8 @@ export interface components {
              * @default all
              */
             format_type: components["schemas"]["FormatTypeEnum"];
-            /** @description Target platform: twitter, linkedin, instagram, youtube */
-            platform?: components["schemas"]["PlatformEnum"] | null;
+            /** @description Target platform: twitter, linkedin, instagram, youtube, tiktok */
+            platform: components["schemas"]["PlatformEnum"];
         };
         /**
          * JobStatusEnum
@@ -278,7 +278,7 @@ export interface components {
          * PlatformEnum
          * @enum {string}
          */
-        PlatformEnum: "twitter" | "linkedin" | "instagram" | "youtube";
+        PlatformEnum: "twitter" | "linkedin" | "instagram" | "youtube" | "tiktok";
         /**
          * PreContextPayload
          * @description Schema for the JSONB pre_context column provided by the user.
