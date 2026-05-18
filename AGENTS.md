@@ -15,7 +15,7 @@ Multi-agent AI pipeline generating short/reel scripts, blog articles, and social
 | `nx test api -- -m eval -- --live` | Eval with real LLM calls |
 | `nx migrate api` | `alembic upgrade head` |
 | `nx generate-types api` | `scripts/generate_ts_types.py` |
-| `ruff format . && ruff check . --fix` | Python lint+format (line-length=88) |
+| `apps/api/clean_code.ps1` | Python lint+format via clean_code.ps1 (line-length=88) |
 | `uv sync --extra test` | Install Python deps + test extras (from `apps/api/`) |
 | `nx typecheck web` | `tsc --noEmit` |
 
@@ -57,7 +57,7 @@ Eval suite uses separate `eval_*` vars — see `app/core/config.py:49`.
 
 ## Conventions
 
-- **Python:** Ruff lint/format (line-length 88). No `print()` in production.
+- **Python:** Ruff lint/format via `apps/api/clean_code.ps1` (line-length 88). No `print()` in production.
 - **TypeScript:** ESLint with `@nx/enforce-module-boundaries` — apps can only import specific lib types.
 - **API schema changes:** always run `nx generate-types api` to regenerate TS types.
 
