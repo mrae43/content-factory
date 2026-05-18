@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from app.workers.agents import AgentActionStatus, AgentResult
 from app.workers.harness import HarnessResult
-from app.schemas.shorts import JobStatusEnum
+from app.schemas.shorts import JobStatusEnum, FormatTypeEnum
 from app.workers.orchestrator import execute_state_transition
 from tests.integration.conftest import _mock_agent_class
 
@@ -506,16 +506,16 @@ class TestNextStatusAfterFactCheck:
 @pytest.mark.integration
 class TestNextStatusAfterFormatting:
     @pytest.mark.parametrize(
-        "format_type,expected",
+        "resolved_formats,expected",
         [
-            ("blog", JobStatusEnum.COMPLETED),
-            ("carousel", JobStatusEnum.COMPLETED),
-            ("video", JobStatusEnum.ASSET_GENERATION),
-            ("all", JobStatusEnum.ASSET_GENERATION),
+            ([FormatTypeEnum.BLOG], JobStatusEnum.COMPLETED),
+            ([FormatTypeEnum.CAROUSEL], JobStatusEnum.COMPLETED),
+            ([FormatTypeEnum.VIDEO], JobStatusEnum.ASSET_GENERATION),
+            ([FormatTypeEnum.VIDEO, FormatTypeEnum.BLOG], JobStatusEnum.ASSET_GENERATION),
         ],
     )
-    def test_should_route_correctly(self, format_type, expected):
+    def test_should_route_correctly(self, resolved_formats, expected):
         from app.workers.orchestrator import _next_status_after_formatting
 
-        result = _next_status_after_formatting(format_type)
+        result = _next_status_after_formatting(resolved_formats)
         assert result == expected
