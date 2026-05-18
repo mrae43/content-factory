@@ -89,6 +89,7 @@ interface TimelineNodeProps {
     created_at: string;
     updated_at: string;
     refined_context?: string | null;
+    research_confidence?: number | null;
     pre_context?: Record<string, unknown> | null;
     scripts?: ScriptResponse[];
     assets?: AssetResponse[];
@@ -129,8 +130,13 @@ function TimelineNode({ stage, state, isLast, job }: TimelineNodeProps) {
         : "Gathering sources\u2026";
       if (job.refined_context) {
         outputContent = (
-          <div className="mt-3 rounded-md bg-muted p-4">
+          <div className="mt-3 rounded-md bg-muted p-4 space-y-3">
             <p className="text-sm leading-relaxed whitespace-pre-wrap">{job.refined_context}</p>
+            {job.research_confidence !== null && job.research_confidence !== undefined && (
+              <p className="text-xs text-muted-foreground border-t border-border pt-3">
+                Confidence: {(job.research_confidence * 100).toFixed(0)}%
+              </p>
+            )}
           </div>
         );
       }
@@ -342,6 +348,12 @@ function TimelineNode({ stage, state, isLast, job }: TimelineNodeProps) {
               {typeof preCtx.guardrail_strictness === "string" && (
                 <span>Strictness: {preCtx.guardrail_strictness}</span>
               )}
+              {typeof preCtx.tone === "string" && preCtx.tone && (
+                <span>Tone: {preCtx.tone}</span>
+              )}
+              {typeof preCtx.angle === "string" && preCtx.angle && (
+                <span>Angle: {preCtx.angle}</span>
+              )}
             </div>
           </div>
         )}
@@ -406,6 +418,7 @@ interface EditorialTimelineProps {
     created_at: string;
     updated_at: string;
     refined_context?: string | null;
+    research_confidence?: number | null;
     pre_context?: Record<string, unknown> | null;
     scripts?: ScriptResponse[];
     assets?: AssetResponse[];
