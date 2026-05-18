@@ -532,7 +532,7 @@ async def _transition_formatting(db: AsyncSession, job) -> None:
 
     logger.info(
         f"Running {len(formatter_specs)} formatter(s) in parallel for Job {job.id} "
-        f"(format_type={format_type})"
+        f"(format_type={db_format_type})"
     )
 
     harness_results = await asyncio.gather(
