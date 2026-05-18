@@ -114,8 +114,13 @@ def resolve_formats(
 ) -> list[FormatTypeEnum]:
     """Expand 'all' into platform-specific formats, or return [format_type] if specific."""
     if format_type == FormatTypeEnum.ALL:
+        if platform not in PLATFORM_FORMAT_MAP:
+            raise ValueError(f"Unknown platform '{platform.value}' in resolve_formats")
         return PLATFORM_FORMAT_MAP[platform]
-    if format_type not in PLATFORM_FORMAT_MAP[platform]:
+    if (
+        platform not in PLATFORM_FORMAT_MAP
+        or format_type not in PLATFORM_FORMAT_MAP[platform]
+    ):
         raise ValueError(
             f"Format '{format_type.value}' is not valid for platform '{platform.value}'. "
             f"Valid formats: {[f.value for f in PLATFORM_FORMAT_MAP[platform]]}"
