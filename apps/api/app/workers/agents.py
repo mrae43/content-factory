@@ -187,7 +187,8 @@ class ResearchAgent(BaseAgent):
                 f"ResearchAgent ingesting {len(result.chunks)} REFINED chunks to vector store for Job {job_id}"
             )
             await vector_store.ingest_chunks(
-                job_id=job_id, chunks=result.chunks, scope="LOCAL"
+                job_id=job_id, chunks=result.chunks, scope="LOCAL",
+                meta={"source_type": "INFERRED"},
             )
 
         return AgentResult(
@@ -195,6 +196,7 @@ class ResearchAgent(BaseAgent):
             payload={
                 "chunks": result.chunks,
                 "refined_context": result.refined_context,
+                "citation_index": [c.model_dump() for c in result.citation_index],
             },
             reasoning=result.reasoning,
             confidence_score=result.confidence,
