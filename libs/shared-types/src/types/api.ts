@@ -254,7 +254,8 @@ export interface components {
              * @example BRICS De-dollarization 2025
              */
             topic: string;
-            pre_context: components["schemas"]["PreContextPayload"];
+            research_inputs: components["schemas"]["ResearchInputs"];
+            story_directives?: components["schemas"]["StoryDirectives"];
             /**
              * Strict Compliance Mode
              * @description Enforce rigorous fact-checking
@@ -280,34 +281,6 @@ export interface components {
          */
         PlatformEnum: "twitter" | "linkedin" | "instagram" | "youtube" | "tiktok";
         /**
-         * PreContextPayload
-         * @description Schema for the JSONB pre_context column provided by the user.
-         */
-        PreContextPayload: {
-            /**
-             * Source Urls
-             * @description URLs to scrape for research
-             */
-            source_urls?: string[];
-            /**
-             * Raw Text
-             * @description Raw copied text or book excerpts
-             */
-            raw_text?: string | null;
-            /**
-             * Target Audience
-             * @description e.g., Academics, TikTok, Investors
-             * @default General
-             */
-            target_audience: string;
-            /**
-             * Guardrail Strictness
-             * @description Defines how aggressively the Red Team operates
-             * @default High
-             */
-            guardrail_strictness: string;
-        };
-        /**
          * RenderJobResponse
          * @description Outputs for Step 8: The Master Object State.
          */
@@ -329,6 +302,12 @@ export interface components {
             final_video_url: string | null;
             /** Refined Context */
             refined_context?: string | null;
+            /** Research Confidence */
+            research_confidence?: number | null;
+            /** Citation Index */
+            citation_index?: {
+                [key: string]: unknown;
+            }[] | null;
             /** Error Log */
             error_log: {
                 [key: string]: unknown;
@@ -354,6 +333,22 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /**
+         * ResearchInputs
+         * @description User-provided source material — consumed by the Indexing sub-phase.
+         */
+        ResearchInputs: {
+            /**
+             * Source Urls
+             * @description URLs to scrape for research
+             */
+            source_urls?: string[];
+            /**
+             * Raw Text
+             * @description Raw copied text or book excerpts
+             */
+            raw_text?: string | null;
         };
         /**
          * ScriptApprovalRequest
@@ -423,6 +418,34 @@ export interface components {
             keywords: string[];
             /** Canonical Url */
             canonical_url?: string | null;
+        };
+        /**
+         * StoryDirectives
+         * @description Editorial guardrails and creative direction — consumed by Synthesis & Scripting.
+         */
+        StoryDirectives: {
+            /**
+             * Target Audience
+             * @description e.g., Academics, TikTok, Investors
+             * @default General
+             */
+            target_audience: string;
+            /**
+             * Guardrail Strictness
+             * @description Defines how aggressively the Red Team operates
+             * @default High
+             */
+            guardrail_strictness: string;
+            /**
+             * Tone
+             * @description Desired narrative tone (e.g., urgent, analytical, hopeful)
+             */
+            tone?: string | null;
+            /**
+             * Angle
+             * @description Specific editorial angle or framing
+             */
+            angle?: string | null;
         };
         /** ValidationError */
         ValidationError: {

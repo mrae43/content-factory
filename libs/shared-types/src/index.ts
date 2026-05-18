@@ -8,7 +8,8 @@ export type PlatformEnum = S["PlatformEnum"];
 export type AssetTypeEnum = S["AssetTypeEnum"];
 export type VerdictEnum = S["VerdictEnum"];
 
-export type PreContextPayload = S["PreContextPayload"];
+export type ResearchInputs = S["ResearchInputs"];
+export type StoryDirectives = S["StoryDirectives"];
 export type AssetRenderMeta = S["AssetRenderMeta"];
 export type SeoMeta = S["SeoMeta"];
 
