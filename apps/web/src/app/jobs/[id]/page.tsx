@@ -213,6 +213,8 @@ function JobDetailContent({
 
       <FactCheckAudit allClaims={allClaims} />
 
+      <CitationIndexSection citationIndex={job.citation_index} />
+
       {job.status === "HUMAN_REVIEW_NEEDED" && (
         <ReviewSection
           job={job}
@@ -633,6 +635,60 @@ function FactCheckAudit({
             opinion-based material.
           </p>
         )}
+      </div>
+    </div>
+  );
+}
+
+type CitationEntry = {
+  claim_fragment?: string;
+  source_url?: string;
+  chunk_id?: string;
+};
+
+function CitationIndexSection({
+  citationIndex,
+}: {
+  citationIndex: { [key: string]: unknown }[] | null | undefined;
+}) {
+  if (!citationIndex || citationIndex.length === 0) return null;
+
+  const entries = citationIndex as CitationEntry[];
+
+  return (
+    <div id="citation-index" className="space-y-4">
+      <SectionHeader label="CITATION INDEX" />
+      <div className="rounded-lg border border-border p-5 space-y-3">
+        <p className="text-xs text-muted-foreground">
+          {entries.length} citation{entries.length > 1 ? "s" : ""} mapped from research synthesis
+        </p>
+        <div className="space-y-2">
+          {entries.map((entry, i) => (
+            <div
+              key={i}
+              className="rounded-md bg-muted p-3 space-y-1 text-xs"
+            >
+              <p className="font-medium text-foreground">
+                &ldquo;{entry.claim_fragment ?? ""}&rdquo;
+              </p>
+              {entry.source_url && (
+                <a
+                  href={entry.source_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline break-all"
+                >
+                  {entry.source_url}
+                </a>
+              )}
+              {entry.chunk_id && (
+                <p className="text-muted-foreground font-mono">
+                  Chunk: {entry.chunk_id.slice(0, 8)}&hellip;
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
