@@ -13,6 +13,12 @@ The first value-adding phase of the pipeline. Performed by the Research Desk. Tw
 
 _Ancillary term:_ **Research Chunks** — the individual vectorized text fragments stored in pgvector, tagged with a **source_type** enum (`USER_PROVIDED` from user-supplied URLs/raw text, `WEB_SEARCH` from Tavily results, `INFERRED` from the Research Agent's own Synthesis), and a **scope** (`RAW-CONTEXT` for user-provided material, `LOCAL` for web results and refined chunks). source_type controls epistemic weight during fact-checking; scope controls lifecycle (LOCAL chunks are cleaned up after completion).
 
+Each chunk carries enrichment metadata: **similarity_score** (cosine distance from the retrieval query), **topic_relevance** (categorical: `HIGH | MEDIUM | LOW`, derived from the score), and optionally **source_authority** (a signal from domain reputation — deferred).
+
+## Context Builder
+
+A component in the orchestrator that runs after Research completes and before the CopywriterAgent is invoked. It performs a fresh semantic search against the vector store (using the Story's early context as query), retrieves top-k chunks with full payloads (text + similarity_score + meta), and assembles the context structure that the CopywriterAgent receives — alongside the Refined Context and Story Directives.
+
 ## Citation Index
 
 A structured sidecar attached to the Story alongside the Refined Context after Synthesis. Maps claim fragments (or synthesis passages) to their source URLs and Research Chunk IDs. Enables the Fact-Check Loop to trace any claim to its origin — without re-searching the vector store. Not embedded in the Refined Context text itself.

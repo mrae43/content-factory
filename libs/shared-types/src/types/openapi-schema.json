@@ -606,8 +606,11 @@
             "title": "Topic",
             "example": "BRICS De-dollarization 2025"
           },
-          "pre_context": {
-            "$ref": "#/components/schemas/PreContextPayload"
+          "research_inputs": {
+            "$ref": "#/components/schemas/ResearchInputs"
+          },
+          "story_directives": {
+            "$ref": "#/components/schemas/StoryDirectives"
           },
           "strict_compliance_mode": {
             "type": "boolean",
@@ -628,7 +631,7 @@
         "type": "object",
         "required": [
           "topic",
-          "pre_context",
+          "research_inputs",
           "platform"
         ],
         "title": "JobCreateRequest",
@@ -660,48 +663,6 @@
           "tiktok"
         ],
         "title": "PlatformEnum"
-      },
-      "PreContextPayload": {
-        "properties": {
-          "source_urls": {
-            "items": {
-              "type": "string",
-              "maxLength": 2083,
-              "minLength": 1,
-              "format": "uri"
-            },
-            "type": "array",
-            "title": "Source Urls",
-            "description": "URLs to scrape for research"
-          },
-          "raw_text": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Raw Text",
-            "description": "Raw copied text or book excerpts"
-          },
-          "target_audience": {
-            "type": "string",
-            "title": "Target Audience",
-            "description": "e.g., Academics, TikTok, Investors",
-            "default": "General"
-          },
-          "guardrail_strictness": {
-            "type": "string",
-            "title": "Guardrail Strictness",
-            "description": "Defines how aggressively the Red Team operates",
-            "default": "High"
-          }
-        },
-        "type": "object",
-        "title": "PreContextPayload",
-        "description": "Schema for the JSONB pre_context column provided by the user."
       },
       "RenderJobResponse": {
         "properties": {
@@ -763,6 +724,32 @@
               }
             ],
             "title": "Refined Context"
+          },
+          "research_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Research Confidence"
+          },
+          "citation_index": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Citation Index"
           },
           "error_log": {
             "anyOf": [
@@ -827,6 +814,36 @@
         ],
         "title": "RenderJobResponse",
         "description": "Outputs for Step 8: The Master Object State."
+      },
+      "ResearchInputs": {
+        "properties": {
+          "source_urls": {
+            "items": {
+              "type": "string",
+              "maxLength": 2083,
+              "minLength": 1,
+              "format": "uri"
+            },
+            "type": "array",
+            "title": "Source Urls",
+            "description": "URLs to scrape for research"
+          },
+          "raw_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Text",
+            "description": "Raw copied text or book excerpts"
+          }
+        },
+        "type": "object",
+        "title": "ResearchInputs",
+        "description": "User-provided source material \u2014 consumed by the Indexing sub-phase."
       },
       "ScriptApprovalRequest": {
         "properties": {
@@ -993,6 +1010,49 @@
           "keywords"
         ],
         "title": "SeoMeta"
+      },
+      "StoryDirectives": {
+        "properties": {
+          "target_audience": {
+            "type": "string",
+            "title": "Target Audience",
+            "description": "e.g., Academics, TikTok, Investors",
+            "default": "General"
+          },
+          "guardrail_strictness": {
+            "type": "string",
+            "title": "Guardrail Strictness",
+            "description": "Defines how aggressively the Red Team operates",
+            "default": "High"
+          },
+          "tone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tone",
+            "description": "Desired narrative tone (e.g., urgent, analytical, hopeful)"
+          },
+          "angle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Angle",
+            "description": "Specific editorial angle or framing"
+          }
+        },
+        "type": "object",
+        "title": "StoryDirectives",
+        "description": "Editorial guardrails and creative direction \u2014 consumed by Synthesis & Scripting."
       },
       "ValidationError": {
         "properties": {

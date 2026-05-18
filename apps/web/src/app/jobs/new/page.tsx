@@ -80,9 +80,12 @@ function NewJobForm() {
   const [platform, setPlatform] = useState("");
   const [targetAudience, setTargetAudience] = useState("general");
   const [guardrailStrictness, setGuardrailStrictness] = useState("high");
+  const [tone, setTone] = useState("");
+  const [angle, setAngle] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [researchOpen, setResearchOpen] = useState(false);
+  const [directivesOpen, setDirectivesOpen] = useState(false);
 
   const parsedSourceUrls = sourceUrls
     .split("\n")
@@ -94,11 +97,15 @@ function NewJobForm() {
       setErrorMessage(null);
       const result = await createJob.mutateAsync({
         topic,
-        pre_context: {
+        research_inputs: {
           raw_text: rawText || undefined,
           source_urls: parsedSourceUrls.length > 0 ? parsedSourceUrls : [],
+        },
+        story_directives: {
           target_audience: targetAudience,
           guardrail_strictness: guardrailStrictness,
+          tone: tone || undefined,
+          angle: angle || undefined,
         },
         strict_compliance_mode: true,
         format_type: formatType as "all" | "video" | "blog" | "carousel",
@@ -176,11 +183,112 @@ function NewJobForm() {
                 />
               </div>
 
+              <Collapsible open={researchOpen} onOpenChange={setResearchOpen}>
+                <CollapsibleTrigger
+                  className={
+                    "flex w-full items-center gap-1.5 py-1 text-[0.75rem] font-medium text-muted-foreground hover:text-primary transition-colors " +
+                    (researchOpen ? "text-primary" : "")
+                  }
+                >
+                  <span className="inline-block text-[0.625rem] transition-transform duration-0">
+                    {researchOpen ? "\u25BC" : "\u25B6"}
+                  </span>
+                  <span className="font-heading text-[0.8125rem] font-semibold sm:text-[0.875rem]">
+                    Research Inputs
+                  </span>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="space-y-4 pt-4 sm:space-y-5">
+                  <div className="space-y-2">
+                    <span className="block text-[0.75rem] font-medium tracking-[0.02em] text-muted-foreground">
+                      Source URLs
+                    </span>
+                    <Textarea
+                      value={sourceUrls}
+                      onChange={(e) => setSourceUrls(e.target.value)}
+                      placeholder="https://..."
+                      rows={3}
+                      className="min-h-[60px] font-mono text-base sm:text-[0.8125rem]"
+                    />
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+
+              <Collapsible open={directivesOpen} onOpenChange={setDirectivesOpen}>
+                <CollapsibleTrigger
+                  className={
+                    "flex w-full items-center gap-1.5 py-1 text-[0.75rem] font-medium text-muted-foreground hover:text-primary transition-colors " +
+                    (directivesOpen ? "text-primary" : "")
+                  }
+                >
+                  <span className="inline-block text-[0.625rem] transition-transform duration-0">
+                    {directivesOpen ? "\u25BC" : "\u25B6"}
+                  </span>
+                  <span className="font-heading text-[0.8125rem] font-semibold sm:text-[0.875rem]">
+                    Story Directives
+                  </span>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="space-y-4 pt-4 sm:space-y-5">
+                  <div className="space-y-2">
+                    <span className="block text-[0.75rem] font-medium tracking-[0.02em] text-muted-foreground">
+                      Target Audience
+                    </span>
+                    <Input
+                      value={targetAudience}
+                      onChange={(e) => setTargetAudience(e.target.value)}
+                      placeholder="e.g., Marketing professionals"
+                      className="h-11 text-base sm:h-9 sm:text-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <span className="block text-[0.75rem] font-medium tracking-[0.02em] text-muted-foreground">
+                      Guardrail Strictness
+                    </span>
+                    <Select
+                      value={guardrailStrictness}
+                      onValueChange={(v) => v !== null && setGuardrailStrictness(v)}
+                    >
+                      <SelectTrigger className="w-full h-11 text-base sm:h-9 sm:text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STRICTNESS_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <span className="block text-[0.75rem] font-medium tracking-[0.02em] text-muted-foreground">
+                      Tone
+                    </span>
+                    <Input
+                      value={tone}
+                      onChange={(e) => setTone(e.target.value)}
+                      placeholder="e.g., urgent, analytical, hopeful"
+                      className="h-11 text-base sm:h-9 sm:text-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <span className="block text-[0.75rem] font-medium tracking-[0.02em] text-muted-foreground">
+                      Angle
+                    </span>
+                    <Input
+                      value={angle}
+                      onChange={(e) => setAngle(e.target.value)}
+                      placeholder="e.g., Geopolitical implications for emerging markets"
+                      className="h-11 text-base sm:h-9 sm:text-sm"
+                    />
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+
               <div className="space-y-3">
                 <span className="block font-heading text-[1rem] font-semibold text-foreground sm:text-[1.125rem]">
                   Publication Target
                 </span>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <span className="block text-[0.75rem] font-medium tracking-[0.02em] text-muted-foreground">
                       Format
@@ -225,81 +333,8 @@ function NewJobForm() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-1.5">
-                    <span className="block text-[0.75rem] font-medium tracking-[0.02em] text-muted-foreground">
-                      Strictness
-                    </span>
-                    <Select
-                      value={guardrailStrictness}
-                      onValueChange={(v) => v !== null && setGuardrailStrictness(v)}
-                    >
-                      <SelectTrigger className="w-full h-11 text-base sm:h-9 sm:text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {STRICTNESS_OPTIONS.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
                 </div>
               </div>
-
-              <Collapsible open={researchOpen} onOpenChange={setResearchOpen}>
-                <CollapsibleTrigger
-                  className={
-                    "flex w-full items-center gap-1.5 py-1 text-[0.75rem] font-medium text-muted-foreground hover:text-primary transition-colors " +
-                    (researchOpen ? "text-primary" : "")
-                  }
-                >
-                  <span className="inline-block text-[0.625rem] transition-transform duration-0">
-                    {researchOpen ? "\u25BC" : "\u25B6"}
-                  </span>
-                  <span className="font-heading text-[0.8125rem] font-semibold sm:text-[0.875rem]">
-                    Research Materials
-                  </span>
-                </CollapsibleTrigger>
-                <CollapsibleContent className="space-y-4 pt-4 sm:space-y-5">
-                  <div className="space-y-2">
-                    <span className="block text-[0.75rem] font-medium tracking-[0.02em] text-muted-foreground">
-                      Source URLs
-                    </span>
-                    <Textarea
-                      value={sourceUrls}
-                      onChange={(e) => setSourceUrls(e.target.value)}
-                      placeholder="https://..."
-                      rows={3}
-                      className="min-h-[60px] font-mono text-base sm:text-[0.8125rem]"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <span className="block text-[0.75rem] font-medium tracking-[0.02em] text-muted-foreground">
-                      Reference Text
-                    </span>
-                    <Textarea
-                      value={rawText}
-                      onChange={(e) => setRawText(e.target.value)}
-                      placeholder="Raw text, book excerpts, reports..."
-                      rows={4}
-                      className="min-h-[80px] text-base sm:text-sm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <span className="block text-[0.75rem] font-medium tracking-[0.02em] text-muted-foreground">
-                      Target Audience
-                    </span>
-                    <Input
-                      value={targetAudience}
-                      onChange={(e) => setTargetAudience(e.target.value)}
-                      placeholder="e.g., Marketing professionals"
-                      className="h-11 text-base sm:h-9 sm:text-sm"
-                    />
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
 
               {errorMessage && (
                 <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 sm:p-4 space-y-1">
@@ -352,6 +387,8 @@ function NewJobForm() {
                     {parsedSourceUrls.length > 0
                       ? ` · ${parsedSourceUrls.length} source${parsedSourceUrls.length > 1 ? "s" : ""}`
                       : ""}
+                    {tone ? ` · Tone: ${tone}` : ""}
+                    {angle ? ` · Angle: ${angle}` : ""}
                   </p>
                 </div>
               </div>
