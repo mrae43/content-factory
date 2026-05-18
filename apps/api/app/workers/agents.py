@@ -228,6 +228,16 @@ class CopywriterAgent(BaseAgent):
                 confidence_score=0.0,
             )
 
+        story_directives = context.get("story_directives", {})
+        target_audience = story_directives.get("target_audience", "General")
+        tone = story_directives.get("tone", "")
+        angle = story_directives.get("angle", "")
+        story_directives_text = (
+            f"Target Audience: {target_audience}\n"
+            f"Tone: {tone}\n"
+            f"Angle: {angle}"
+        )
+
         prompt = ChatPromptTemplate.from_messages(
             [
                 (
@@ -239,6 +249,9 @@ class CopywriterAgent(BaseAgent):
                         "You receive a `refined_context` — a comprehensive research summary vetted and synthesized by the "
                         "research team. This is your SOLE source of truth. Do NOT introduce facts not present in the "
                         "refined_context.\n\n"
+                        "You also receive `story_directives` — target_audience, tone, and angle — that guide how the "
+                        "script should be framed. Tailor vocabulary, narrative voice, complexity, and perspective to "
+                        "match these directives.\n\n"
                         "## RULES\n"
                         "1. ZERO HALLUCINATION: Every claim must trace to the refined_context.\n"
                         "2. Write a clean narrative script (500-800 words) with no format-specific structure.\n"
@@ -246,11 +259,13 @@ class CopywriterAgent(BaseAgent):
                         "4. Build a clear narrative arc: hook → context → depth → payoff.\n"
                         "5. End with a compelling closer — a call-to-action, thought-provoking question, or forward-looking "
                         "statement.\n"
-                        "6. Write in a conversational, authoritative tone suitable for adaptation into any format.\n"
+                        "6. Write in a tone that respects the story_directives tone (if provided). Default to "
+                        "conversational, authoritative if no tone is specified.\n"
                         "7. If the refined_context has conflicting evidence, present the strongest case and note uncertainty.\n"
                         "8. Do NOT include scene numbers, timestamps, visual cues, audio cues, or storyboard elements.\n"
                         "9. Preserve specific data: numbers, dates, names, statistics, quotes, and attributions.\n"
-                        "10. If feedback is provided, address every point in the revised script."
+                        "10. If feedback is provided, address every point in the revised script.\n"
+                        "11. If story_directives specifies a particular angle, use it to focus the narrative perspective."
                     ),
                 ),
                 (
@@ -259,8 +274,10 @@ class CopywriterAgent(BaseAgent):
                         "Write a master narrative script for the following topic.\n\n"
                         "<topic>\n{topic}\n</topic>\n\n"
                         "<refined_context>\n{refined_context}\n</refined_context>\n\n"
+                        "<story_directives>\n{story_directives}\n</story_directives>\n\n"
                         "<feedback>\n{feedback}\n</feedback>\n\n"
-                        "First, analyze the narrative arc step-by-step. Then generate the script."
+                        "First, analyze the narrative arc step-by-step, considering the story_directives. "
+                        "Then generate the script."
                     ),
                 ),
             ]
@@ -271,6 +288,7 @@ class CopywriterAgent(BaseAgent):
             {
                 "topic": topic,
                 "refined_context": refined_context,
+                "story_directives": story_directives_text,
                 "feedback": feedback,
             }
         )
