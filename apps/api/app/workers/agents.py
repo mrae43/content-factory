@@ -187,7 +187,9 @@ class ResearchAgent(BaseAgent):
                 f"ResearchAgent ingesting {len(result.chunks)} REFINED chunks to vector store for Job {job_id}"
             )
             await vector_store.ingest_chunks(
-                job_id=job_id, chunks=result.chunks, scope="LOCAL",
+                job_id=job_id,
+                chunks=result.chunks,
+                scope="LOCAL",
                 meta={"source_type": "INFERRED"},
             )
 
@@ -233,9 +235,7 @@ class CopywriterAgent(BaseAgent):
         tone = story_directives.get("tone", "")
         angle = story_directives.get("angle", "")
         story_directives_text = (
-            f"Target Audience: {target_audience}\n"
-            f"Tone: {tone}\n"
-            f"Angle: {angle}"
+            f"Target Audience: {target_audience}\nTone: {tone}\nAngle: {angle}"
         )
 
         prompt = ChatPromptTemplate.from_messages(

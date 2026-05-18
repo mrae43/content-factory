@@ -35,6 +35,7 @@ async def test_returns_success_with_chunks(
         job_id=job_id,
         chunks=research_schema_output.chunks,
         scope="LOCAL",
+        meta={"source_type": "INFERRED"},
     )
     assert 0.0 <= result.confidence_score <= 1.0
     assert result.metadata["model"] == "gemini-2.5-flash"

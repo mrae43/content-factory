@@ -35,9 +35,14 @@ async def test_returns_success_with_patched_script(
         "script_content": "BRICS GDP grew 15% last year. This is a big deal.",
         "failed_claims": SAMPLE_FAILED_CLAIMS,
         "refined_context": SAMPLE_REFINED_CONTEXT,
+        "story_directives": {
+            "target_audience": "Investors",
+            "tone": "analytical",
+            "angle": "economic risks",
+        },
     }
 
-    with chain_mock(optimizer_schema_output):
+    with chain_mock(optimizer_schema_output) as mock_ainvoke:
         result = await agent._execute(context)
 
     assert result.status == AgentActionStatus.SUCCESS
@@ -45,6 +50,11 @@ async def test_returns_success_with_patched_script(
     assert isinstance(result.payload["patch_summary"], str)
     assert 0.0 <= result.confidence_score <= 1.0
     assert result.metadata["agent"] == "optimizer"
+    call_args = mock_ainvoke.call_args
+    invoked_input = call_args[0][0]
+    assert "Target Audience: Investors" in invoked_input["story_directives"]
+    assert "Tone: analytical" in invoked_input["story_directives"]
+    assert "Angle: economic risks" in invoked_input["story_directives"]
 
 
 @pytest.mark.agent

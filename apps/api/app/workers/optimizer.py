@@ -90,9 +90,7 @@ class ScriptOptimizerAgent(BaseAgent):
         tone = story_directives.get("tone", "")
         angle = story_directives.get("angle", "")
         story_directives_text = (
-            f"Target Audience: {target_audience}\n"
-            f"Tone: {tone}\n"
-            f"Angle: {angle}"
+            f"Target Audience: {target_audience}\nTone: {tone}\nAngle: {angle}"
         )
 
         prompt = ChatPromptTemplate.from_messages(

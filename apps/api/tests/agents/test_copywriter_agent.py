@@ -22,14 +22,24 @@ async def test_returns_success_with_script(
         "topic": "BRICS De-dollarization 2025",
         "feedback": "",
         "refined_context": "BRICS collective GDP grew 3.2% in 2024. A new payment system was announced in Q2.",
+        "story_directives": {
+            "target_audience": "Investors",
+            "tone": "analytical",
+            "angle": "economic implications for emerging markets",
+        },
     }
 
-    with chain_mock(copywriter_schema_output):
+    with chain_mock(copywriter_schema_output) as mock_ainvoke:
         result = await agent._execute(context)
 
     assert result.status == AgentActionStatus.SUCCESS
     assert isinstance(result.payload["script_content"], str)
     assert len(result.payload["script_content"]) > 0
+    call_args = mock_ainvoke.call_args
+    invoked_input = call_args[0][0]
+    assert "Target Audience: Investors" in invoked_input["story_directives"]
+    assert "Tone: analytical" in invoked_input["story_directives"]
+    assert "Angle: economic implications" in invoked_input["story_directives"]
 
 
 @pytest.mark.agent
@@ -42,6 +52,11 @@ async def test_returns_success_with_feedback_from_revision(
         "topic": "BRICS De-dollarization 2025",
         "feedback": "Previous script too vague",
         "refined_context": "BRICS collective GDP grew 3.2% in 2024. A new payment system was announced in Q2.",
+        "story_directives": {
+            "target_audience": "General",
+            "tone": "conversational",
+            "angle": "",
+        },
     }
 
     with chain_mock(copywriter_schema_output) as mock_ainvoke:
@@ -51,6 +66,8 @@ async def test_returns_success_with_feedback_from_revision(
     call_args = mock_ainvoke.call_args
     invoked_input = call_args[0][0]
     assert invoked_input["feedback"] == "Previous script too vague"
+    assert "Target Audience: General" in invoked_input["story_directives"]
+    assert "Tone: conversational" in invoked_input["story_directives"]
 
 
 @pytest.mark.agent
