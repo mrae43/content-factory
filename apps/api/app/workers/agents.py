@@ -71,6 +71,14 @@ class BaseAgent(ABC):
         pass
 
 
+class CitationEntry(BaseModel):
+    claim_fragment: str = Field(
+        description="Short phrase or claim from the synthesized research"
+    )
+    source_url: str = Field(description="URL of the source supporting this claim")
+    chunk_id: str = Field(description="ID of the ResearchChunk this citation traces to")
+
+
 class ResearchSchema(BaseModel):
     chunks: List[str] = Field(description="Extracted highly-credible data chunks.")
     refined_context: str = Field(
@@ -82,6 +90,14 @@ class ResearchSchema(BaseModel):
             "script writing — it must be complete enough that a scriptwriter "
             "never needs to consult raw sources."
         )
+    )
+    citation_index: List[CitationEntry] = Field(
+        default_factory=list,
+        description=(
+            "Sidecar provenance mapping each significant claim to its source URL "
+            "and ResearchChunk ID. Fact-Check can trace claims without re-searching "
+            "the vector store."
+        ),
     )
     reasoning: str = Field(description="Why these facts were prioritized.")
     confidence: float = Field(
@@ -140,7 +156,12 @@ class ResearchAgent(BaseAgent):
                         "2. Preserves specific facts: dates, names, statistics, quotes, source attributions\n"
                         "3. Notes areas of conflicting evidence or uncertainty\n"
                         "4. Is self-contained — a scriptwriter using ONLY this summary can write an accurate script\n"
-                        "5. Is concise but complete — aim for 800-1500 words, not a list of bullet points"
+                        "5. Is concise but complete — aim for 800-1500 words, not a list of bullet points\n\n"
+                        "CITATION INDEX:\n"
+                        "For each significant claim in your synthesis, record which source URL "
+                        "and chunk ID it came from in the `citation_index` field. "
+                        "This allows the Fact-Check team to trace claims without re-searching "
+                        "the vector store."
                     ),
                 ),
                 (
