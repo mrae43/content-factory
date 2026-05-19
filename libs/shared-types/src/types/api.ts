@@ -274,7 +274,7 @@ export interface components {
          * JobStatusEnum
          * @enum {string}
          */
-        JobStatusEnum: "PENDING" | "RESEARCHING" | "FACT_CHECKING_RESEARCH" | "SCRIPTING" | "FACT_CHECKING_SCRIPT" | "FORMATTING" | "ASSET_GENERATION" | "COMPLETED" | "FAILED" | "HUMAN_REVIEW_NEEDED";
+        JobStatusEnum: "PENDING" | "RESEARCHING" | "RETRIEVAL" | "FACT_CHECKING_RESEARCH" | "SCRIPTING" | "FACT_CHECKING_SCRIPT" | "FORMATTING" | "ASSET_GENERATION" | "COMPLETED" | "FAILED" | "HUMAN_REVIEW_NEEDED";
         /**
          * PlatformEnum
          * @enum {string}
