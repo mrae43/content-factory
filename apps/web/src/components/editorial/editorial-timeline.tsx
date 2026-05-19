@@ -6,7 +6,7 @@ import type { ScriptResponse, FactCheckClaimResponse, AssetResponse } from "@con
 const pipelineStages = [
   "PENDING",
   "RESEARCHING",
-  "FACT_CHECKING_RESEARCH",
+  "RETRIEVAL",
   "SCRIPTING",
   "FACT_CHECKING_SCRIPT",
   "FORMATTING",
@@ -16,7 +16,7 @@ const pipelineStages = [
 const deskConfig: Record<string, { name: string; color: string }> = {
   PENDING: { name: "Assignment Queue", color: "bg-muted-foreground" },
   RESEARCHING: { name: "Research Desk", color: "bg-warning" },
-  FACT_CHECKING_RESEARCH: { name: "Source Verification", color: "bg-warning" },
+  RETRIEVAL: { name: "Retrieval Desk", color: "bg-warning" },
   SCRIPTING: { name: "Writer's Desk", color: "bg-info" },
   FACT_CHECKING_SCRIPT: { name: "Fact-Check Desk", color: "bg-info" },
   FORMATTING: { name: "Layout Desk", color: "bg-accent-purple" },
@@ -143,8 +143,19 @@ function TimelineNode({ stage, state, isLast, job }: TimelineNodeProps) {
     }
   }
 
-  if (stage === "FACT_CHECKING_RESEARCH") {
-    summaryText = isCompleted ? "Passthrough \u00B7 <1s" : isActive ? "Verifying\u2026" : "";
+  if (stage === "RETRIEVAL") {
+    summaryText = isCompleted
+      ? `Completed \u00B7 ${job.refined_context ? "Research summary available" : "No summary"}`
+      : isActive
+        ? "Retrieving evidence\u2026"
+        : "";
+    if (isCompleted && job.refined_context) {
+      outputContent = (
+        <div className="mt-3 rounded-md bg-muted p-4">
+          <p className="text-sm leading-relaxed whitespace-pre-wrap">{job.refined_context}</p>
+        </div>
+      );
+    }
   }
 
   if (stage === "SCRIPTING") {
