@@ -322,6 +322,7 @@
       "AssetTypeEnum": {
         "type": "string",
         "enum": [
+          "CAROUSEL_SLIDE",
           "VISUAL_VEO",
           "AUDIO_LYRIA",
           "VOICEOVER",
@@ -482,9 +483,9 @@
             "type": "string",
             "title": "Text"
           },
-          "visual_prompt": {
+          "visual_description": {
             "type": "string",
-            "title": "Visual Prompt"
+            "title": "Visual Description"
           },
           "hook_type": {
             "type": "string",
@@ -503,7 +504,7 @@
         "required": [
           "slide_number",
           "text",
-          "visual_prompt",
+          "visual_description",
           "hook_type"
         ],
         "title": "CarouselSlide"
@@ -612,12 +613,6 @@
           "story_directives": {
             "$ref": "#/components/schemas/StoryDirectives"
           },
-          "strict_compliance_mode": {
-            "type": "boolean",
-            "title": "Strict Compliance Mode",
-            "description": "Enforce rigorous fact-checking",
-            "default": true
-          },
           "format_type": {
             "$ref": "#/components/schemas/FormatTypeEnum",
             "description": "Output format: all, video, blog, or carousel",
@@ -678,10 +673,6 @@
           },
           "status": {
             "$ref": "#/components/schemas/JobStatusEnum"
-          },
-          "strict_compliance_mode": {
-            "type": "boolean",
-            "title": "Strict Compliance Mode"
           },
           "format_type": {
             "anyOf": [
@@ -807,7 +798,6 @@
           "id",
           "topic",
           "status",
-          "strict_compliance_mode",
           "final_video_url",
           "error_log",
           "created_at",
@@ -1022,9 +1012,16 @@
           },
           "guardrail_strictness": {
             "type": "string",
+            "pattern": "^(Low|Medium|High)$",
             "title": "Guardrail Strictness",
             "description": "Defines how aggressively the Red Team operates",
             "default": "High"
+          },
+          "uncertain_pass_through": {
+            "type": "boolean",
+            "title": "Uncertain Pass Through",
+            "description": "When True, UNCERTAIN verdicts pass through without soft-fail (High profile only)",
+            "default": false
           },
           "tone": {
             "anyOf": [

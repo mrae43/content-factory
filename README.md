@@ -7,7 +7,8 @@ Multi-agent system that generates multi-format content (Shorts/Reels/TikToks, bl
 ## Core Differentiators
 
 - **Agentic Over Atomic** — Research, Copywriter, and Red Team agents debate and correct each other through structured revision loops.
-- **Prompt Chaining with Semantic Memory** — ResearchAgent produces a condensed `refined_context` summary that the orchestrator persists and passes downstream. The CopywriterAgent works from this curated context instead of calling the vector store directly — eliminating context-window bloat, enabling auditable research summaries, and ensuring consistent behavior across revision loops.
+- **Prompt Chaining with Semantic Memory + Evidence Injection** — ResearchAgent produces a condensed `refined_context` summary that the orchestrator persists and passes downstream. A `ContextBuilder` service then performs structured RAG retrieval using `topic` + `story_directives`, producing `evidence_sections` — a formatted text block of similarity-scored, relevance-tagged chunks. The CopywriterAgent works from both `refined_context` and `evidence_sections` instead of calling the vector store directly — eliminating context-window bloat, enabling auditable research summaries with grounded evidence, and ensuring consistent behavior across revision loops.
+- **Structured Evidence Retrieval** — A dedicated `ContextBuilder` service queries the vector store before script writing, enriching the copywriter prompt with similarity-scored, relevance-tagged evidence chunks (`story_directives` guide the query composition). Evidence sections are injected directly into agent prompts for grounded generation.
 - **Zero-Hallucination Guardrails** — Red Team breaks scripts into atomic claims, cross-references each against the vector store directly, and persists verdicts to Postgres. Claims that fail are sent back for revision (max 3 attempts before human escalation).
 - **Governance-as-Code** — Full audit trail via `fact_check_claims` table with evidence references linked to source chunks. API returns the complete fact-check report alongside scripts and assets.
 - **Web-Enriched RAG** — Tavily search enriches user-provided context with live web results, ingested as vector chunks for semantic retrieval by downstream agents.
@@ -19,7 +20,9 @@ Multi-agent system that generates multi-format content (Shorts/Reels/TikToks, bl
 
 ## The 9-Step Pipeline
 
-A `RenderJob` flows through these state transitions asynchronously. After Red Team approval (Step 6), the pipeline branches by `format_type`:
+A `RenderJob` flows through these state transitions asynchronously. A **Context Retrieval** phase (Step 4) now replaces the legacy `FACT_CHECKING_RESEARCH` passthrough — the `ResearchAgent` runs here (after web ingest in Step 3) and a `ContextBuilder` assembles retrieved evidence chunks into an `AssembledContext` for the copywriter.
+
+After Red Team approval (Step 6), the pipeline branches by `format_type`:
 
 - **`video`** → skips FORMATTING, goes straight to ASSET_GENERATION
 - **`blog`** or **`carousel`** → FORMATTING → COMPLETED
@@ -32,15 +35,21 @@ User submits a topic (e.g., *"BRICS De-dollarization 2025"*) along with pre-cont
 `MarkdownTextSplitter` chunks the raw text into `RAW-CONTEXT` scope vectors in the pgvector `research_chunks` table.
 
 ### 3. Deep Research (`RESEARCHING`)
-Tavily web search enriches the topic with live results (ingested as `LOCAL`-scope vectors). The **Research Agent** (`meta-llama/Llama-3.3-70B-Instruct-Turbo`, configurable) retrieves all chunks via semantic search, produces refined `LOCAL` chunks vetted for factual accuracy, **and synthesizes a `refined_context` summary** — a condensed, self-contained research brief persisted to the `render_jobs` table by the orchestrator.
+Tavily web search enriches the topic with live results (ingested as `LOCAL`-scope vectors with `source_type: "WEB_SEARCH"` metadata). The orchestrator advances to `RETRIEVAL`.
 
-### 4. Source Fact-Check (`FACT_CHECKING_RESEARCH`)
-**MVP: Passthrough** — auto-advances to `SCRIPTING`. The Red Team at Step 6 catches issues downstream.
+### 4. Context Retrieval & Synthesis (`RETRIEVAL`)
+The **Research Agent** (`meta-llama/Llama-3.3-70B-Instruct-Turbo`, configurable) retrieves all chunks via semantic search, produces refined `LOCAL` chunks vetted for factual accuracy, **and synthesizes a `refined_context` summary** — a condensed, self-contained research brief persisted to the `render_jobs` table by the orchestrator.
+
+The **ContextBuilder** (`app/services/context_builder.py`) then performs a structured RAG query combining the topic with `story_directives` (target_audience, tone, angle) against both `RAW-CONTEXT` and `LOCAL` scopes. Results are enriched with `topic_relevance` labels (HIGH ≥ 0.75, MEDIUM ≥ 0.5, LOW) and `source_type` metadata, then formatted into `evidence_sections` — a text block injected into the Copywriter/Optimizer agent prompts. The full `AssembledContext` (narrative_summary, evidence_sections, raw_chunks) is persisted as a JSONB column on `render_jobs`.
+
+A retry mechanism (`retrieval_retry_count`, max `retrieval_retry_max` = 3) ensures that if `assembled_context` is missing when SCRIPTING begins, the job loops back to RETRIEVAL instead of failing.
 
 ### 5. Script & Storyboard (`SCRIPTING`)
-The **Copywriter Agent** (`meta-llama/Llama-3.3-70B-Instruct-Turbo`, temp=0.7, configurable) receives the **`refined_context`** from the orchestrator (not the raw vector store). This curated context ensures a bounded, consistent input regardless of chunk count or embedding noise. The agent drafts a retention-optimized script + visual storyboard.
+The **Copywriter Agent** (`meta-llama/Llama-3.3-70B-Instruct-Turbo`, temp=0.7, configurable) receives the **`refined_context`** + **`evidence_sections`** (from the AssembledContext) + **`story_directives`** (target_audience, tone, angle) from the orchestrator (not the raw vector store). This curated, evidence-rich context ensures a bounded, consistent input regardless of chunk count or embedding noise, and grounds the script in verifiable source material. The agent drafts a retention-optimized script + visual storyboard.
 
-On revision (when Red Team rejects claims), the **Script Optimizer Agent** (`meta-llama/Llama-3.3-70B-Instruct-Turbo`, temp=0.3, configurable) receives only the failed claims and patches them surgically — preserving the rest of the script.
+When evidence_sections is empty (e.g., ContextBuilder retrieved zero chunks), the agent receives a fallback message `"No additional evidence was retrieved"` and proceeds with `refined_context` alone.
+
+On revision (when Red Team rejects claims), the **Script Optimizer Agent** (`meta-llama/Llama-3.3-70B-Instruct-Turbo`, temp=0.3, configurable) receives the same `evidence_sections` and `story_directives` alongside the failed claims and patches them surgically — preserving the rest of the script.
 
 ### 6. Red Team Evaluation (`FACT_CHECKING_SCRIPT`)
 The critical step. The **Red Team Agent** (`meta-llama/Llama-3.3-70B-Instruct-Turbo`, temp=0.0, configurable) uses a three-pass evaluation with `.with_structured_output()`:
@@ -165,8 +174,8 @@ uv run pytest tests/ -v          # Run all tests
 docker compose exec api pytest tests/ -v
 
 # Run by marker
-uv run pytest -m unit            # Unit tests only (9 files, ~100 tests)
-uv run pytest -m agent           # Agent tests only (7 files, ~41 tests)
+uv run pytest -m unit            # Unit tests only (9 files, 168 tests)
+uv run pytest -m agent           # Agent tests only (9 files, 50 tests)
 uv run pytest -m eval            # Eval benchmarks
 uv run pytest -m golden          # Golden dataset validation
 uv run pytest -m integration     # Integration tests (format branching, CI-only)
@@ -219,6 +228,8 @@ Optional `.env` overrides (all default to via Together AI unless `gemini-` prefi
 | `FORMATTER_TEMPERATURE` | `0.3` | Blog/Carousel formatter temperature |
 | `MAX_RED_TEAM_REVISIONS` | `3` | Max revision loops before human escalation |
 | `SIMILARITY_THRESHOLD` | `0.75` | Vector search cosine similarity cutoff |
+| `CONTEXT_BUILDER_TOP_K` | `10` | Number of chunks retrieved by ContextBuilder |
+| `RETRIEVAL_RETRY_MAX` | `3` | Max retries for assembled_context before failing |
 | `SYNTHID_WATERMARK_ENABLED` | `True` | SynthID flag (no implementation yet) |
 | `WORKER_POLL_INTERVAL_SECONDS` | `5` | QueueWorker poll interval |
 | `WORKER_LOCK_TIMEOUT_MINUTES` | `15` | Stuck job recovery timeout |
@@ -249,7 +260,7 @@ content-factory/                  # Nx workspace root
 │   │   │   core/config.py        # pydantic-settings, reads .env (database_url — required, eval model configs)
 │   │   │   api/routes.py         # /api/v1/jobs/ endpoints + health check
 │   │   │   db/
-│   │   │     models.py           # SQLAlchemy models (factory schema)
+│   │   │     models.py           # SQLAlchemy models (factory schema) — RenderJob with refined_context, research_confidence, citation_index, assembled_context (JSONB), retrieval_retry_count
 │   │   │     session.py          # async engine + session factory (settings.database_url)
 │   │   │     crud.py             # query helpers + queue operations
 │   │   │   schemas/
@@ -260,6 +271,7 @@ content-factory/                  # Nx workspace root
 │   │   │     vector_store.py     # pgvector ingestion & semantic search
 │   │   │     chunking.py         # Markdown text splitter
 │   │   │     web_search.py       # TavilySearchService
+│   │   │     context_builder.py  # RAG query composition, evidence formatting, AssembledContext
 │   │   │     format_validator.py # FormatValidator → BlogValidator, CarouselValidator
 │   │   │   workers/
 │   │   │     orchestrator.py     # Agentic state machine
@@ -306,11 +318,11 @@ The project uses pytest with `asyncio_mode = "auto"` and five custom markers:
 
 | Marker | Scope | Files |
 |--------|-------|-------|
-| `unit` | Core logic — chunking, config, CRUD, routes, queue worker, vector store, formatter harness, format validator | `tests/unit/` (9 files, ~100 tests) |
-| `agent` | Agent behavior — research, copywriter, red team, asset studio, optimizer, blog formatter, carousel formatter | `tests/agents/` (7 files, ~41 tests) |
+| `unit` | Core logic — chunking, config, CRUD, routes, queue worker, vector store, context builder, formatter harness, format validator | `tests/unit/` (9 files, 168 tests) |
+| `agent` | Agent behavior — research, copywriter, red team, asset studio, optimizer, blog formatter, carousel formatter, video formatter | `tests/agents/` (9 files, 50 tests) |
 | `eval` | Outcome evals with LLM-as-Judge scoring across pipeline stages | `tests/evals/` (4 test files, 34 parametrized cases) |
 | `golden` | Trajectory validation against golden dataset | `tests/golden/` (23+ cases across 6 categories) |
-| `integration` | End-to-end orchestrator flows | `tests/integration/` (CI-only) |
+| `integration` | End-to-end orchestrator flows with RETRIEVAL phase, retry logic, evidence context passing | `tests/integration/` (60+ tests, CI-only) |
 
 ### Outcome Eval Test Matrix
 
@@ -343,11 +355,11 @@ docker-build-api (after python lint only)
 
 ### Fully Implemented (Pipeline Steps 1–9)
 
-- **Step 1 (Ingestion)** — `POST /api/v1/jobs/` creates a PENDING RenderJob
-- **Step 2 (Extraction)** — `MarkdownTextSplitter` chunks raw_text into RAW-CONTEXT scope vectors
-- **Step 3 (Deep Research)** — Tavily web search + ResearchAgent produces refined LOCAL chunks **and a `refined_context` summary** (prompt chaining pattern)
-- **Step 4 (Source Fact-Check)** — Passthrough; Red Team catches issues downstream
-- **Step 5 (Scripting)** — CopywriterAgent receives `refined_context` from orchestrator (no direct vector store access). On revision, `ScriptOptimizerAgent` surgically patches failed claims instead of full re-draft
+- **Step 1 (Ingestion)** — `POST /api/v1/jobs/` creates a PENDING RenderJob with `ResearchInputs`, `StoryDirectives`, `format_type`, and `platform`
+- **Step 2 (Extraction)** — `MarkdownTextSplitter` chunks raw_text into RAW-CONTEXT scope vectors (with `source_type: "USER_PROVIDED"` metadata)
+- **Step 3 (Deep Research / Web Enrichment)** — Tavily web search ingests live results as LOCAL-scope vectors (with `source_type: "WEB_SEARCH"` metadata). Advances to RETRIEVAL.
+- **Step 4 (Context Retrieval & Synthesis)** — ResearchAgent produces `refined_context`, `research_confidence`, and `citation_index`. **ContextBuilder** then performs a structured RAG query (topic + story_directives) against RAW-CONTEXT + LOCAL scopes, producing an `AssembledContext` (narrative_summary + evidence_sections + raw_chunks) persisted as JSONB. Retry mechanism (max 3) for missing context.
+- **Step 5 (Scripting)** — CopywriterAgent receives `refined_context`, `evidence_sections` (from AssembledContext), and `story_directives` (target_audience, tone, angle) from orchestrator. On revision, `ScriptOptimizerAgent` surgically patches failed claims with the same evidence context instead of full re-draft.
 - **Step 6 (Red Team)** — RedTeamAgent audits script claims with three-pass evaluation, persists verdicts, configurable max revision loops
 - **Step 7 (Format Output)** — BlogFormatterAgent and CarouselFormatterAgent produce structured blog/carousel outputs via Plan-then-Execute two-phase LLM calls. Wrapped in `FormatterHarness` with doom loop detection. Platform-aware validation (Twitter 280, LinkedIn 700, Instagram 2200 character limits). Branches by `format_type`: `video` skips, `blog`/`carousel` format then complete, `all` runs both in parallel then continues to asset generation
 - **Step 8 (Asset Generation)** — AssetStudioAgent generates prompts (mocked `s3://` URL)
@@ -358,10 +370,11 @@ docker-build-api (after python lint only)
 - **Nx Monorepo** — Backend (`apps/api/`), Frontend (`apps/web/`), Shared types (`libs/shared-types/`)
 - **Next.js Frontend** — App Router with shadcn/ui, React Query, Zustand; Docker-ready with standalone output
 - **Postgres-backed Queue** — `QueueWorker` with `asyncio.create_task` + `FOR UPDATE SKIP LOCKED` + crash recovery
-- **Web Search Enrichment** — Tavily results ingested as LOCAL-scope vectors before research
-- **Prompt Chaining (Semantic Memory)** — `refined_context` column on `render_jobs`; orchestrator mediates context between Research → Copywriter agents
+- **Web Search Enrichment** — Tavily results ingested as LOCAL-scope vectors with `source_type: "WEB_SEARCH"` metadata
+- **Context Builder (Structured RAG)** — `ContextBuilder` service (`app/services/context_builder.py`) composes a multi-field query from `topic` + `story_directives`, retrieves from both RAW-CONTEXT and LOCAL scopes, enriches chunks with `topic_relevance` labels, and formats evidence sections for prompt injection. `AssembledContext` persisted as JSONB on `render_jobs`.
+- **Prompt Chaining + Evidence Injection** — Orchestrator mediates Research → ContextBuilder → Copywriter pipeline: `refined_context` (research summary) + `evidence_sections` (retrieved chunks) + `story_directives` (audience/tone/angle) are injected into agent prompts. Copywriter and Optimizer both receive the same evidence context.
 - **Evaluator-Optimizer Pattern** — Configurable models/temperatures via env vars for both Red Team and Optimizer agents
-- **Test Suite** — Unit (~100) + agent (~41) + integration tests with CI pipeline via GitHub Actions
+- **Test Suite** — Unit (168) + agent (50) + integration (60+) tests with CI pipeline via GitHub Actions
 - **Eval Infrastructure** — LLM-as-Judge scoring (judge.py), deterministic assertions, rubrics, golden dataset (23+ cases), 4 outcome test files with 34 parametrized cases
 - **Multi-provider LLM** — Routing via model name prefix: `gemini-*` → Google GenAI SDK, all others → Together AI (OpenAI-compatible). All production agents default to Together AI (`meta-llama/Llama-3.3-70B-Instruct-Turbo`). Configurable per-stage via env vars. Embeddings always use `models/gemini-embedding-001` (Gemini). Eval suite uses separate `eval_*` model configs.
 - **Multi-Format Output** — Blog and carousel formatters with Plan-then-Execute two-phase LLM calls, `FormatterHarness` generate-validate-retry with doom loop detection, platform-aware validation (per-slide character limits)

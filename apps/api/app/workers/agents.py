@@ -458,9 +458,9 @@ class RedTeamAgent(BaseAgent):
                 metadata={"model": self.model_name},
             )
 
-        # Filter claims by guardrail extract_categories if configured
+        # Filter claims by guardrail claim_categories if configured
         if guardrail_config and extracted.claims:
-            allowed = set(guardrail_config.extract_categories)
+            allowed = set(guardrail_config.claim_categories)
             extracted.claims = [
                 c for c in extracted.claims if c.claim_category in allowed
             ]

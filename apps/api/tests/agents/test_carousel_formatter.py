@@ -57,21 +57,21 @@ def _carousel_output():
             CarouselSlide(
                 slide_number=1,
                 text="Did you know BRICS nations are reshaping global finance?",
-                visual_prompt="World map with BRICS highlighted",
+                visual_description="World map with BRICS highlighted",
                 hook_type="question",
                 sources_used=[_UUID_1],
             ),
             CarouselSlide(
                 slide_number=2,
                 text="BRICS GDP grew 3.2% in 2024, outpacing expectations.",
-                visual_prompt="GDP growth chart",
+                visual_description="GDP growth chart",
                 hook_type="statistic",
                 sources_used=[_UUID_2],
             ),
             CarouselSlide(
                 slide_number=3,
                 text="Follow for more global economic insights!",
-                visual_prompt="Subscribe CTA card",
+                visual_description="Subscribe CTA card",
                 hook_type="cta",
                 sources_used=[],
             ),
@@ -132,7 +132,7 @@ async def test_carousel_sets_empty_char_limit_violations(multi_chain_mock):
 
 
 @pytest.mark.agent
-async def test_carousel_includes_visual_prompts(multi_chain_mock):
+async def test_carousel_includes_visual_descriptions(multi_chain_mock):
     agent = _make_agent()
     plan = _carousel_plan()
     output = _carousel_output()
@@ -142,9 +142,9 @@ async def test_carousel_includes_visual_prompts(multi_chain_mock):
         result = await agent._execute(context)
 
     for slide in result.payload["slides"]:
-        assert "visual_prompt" in slide
-        assert isinstance(slide["visual_prompt"], str)
-        assert len(slide["visual_prompt"]) > 0
+        assert "visual_description" in slide
+        assert isinstance(slide["visual_description"], str)
+        assert len(slide["visual_description"]) > 0
 
 
 @pytest.mark.agent

@@ -68,7 +68,6 @@ def sample_job_payload():
             "target_audience": "Investors",
             "guardrail_strictness": "High",
         },
-        "strict_compliance_mode": True,
         "platform": "youtube",
     }
 

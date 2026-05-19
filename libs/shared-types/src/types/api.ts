@@ -121,7 +121,7 @@ export interface components {
          * AssetTypeEnum
          * @enum {string}
          */
-        AssetTypeEnum: "VISUAL_VEO" | "AUDIO_LYRIA" | "VOICEOVER" | "SUBTITLE_JSON" | "DATA_CHART";
+        AssetTypeEnum: "CAROUSEL_SLIDE" | "VISUAL_VEO" | "AUDIO_LYRIA" | "VOICEOVER" | "SUBTITLE_JSON" | "DATA_CHART";
         /** BlogFormatPayload */
         BlogFormatPayload: {
             /**
@@ -190,8 +190,8 @@ export interface components {
             slide_number: number;
             /** Text */
             text: string;
-            /** Visual Prompt */
-            visual_prompt: string;
+            /** Visual Description */
+            visual_description: string;
             /** Hook Type */
             hook_type: string;
             /** Sources Used */
@@ -257,12 +257,6 @@ export interface components {
             research_inputs: components["schemas"]["ResearchInputs"];
             story_directives?: components["schemas"]["StoryDirectives"];
             /**
-             * Strict Compliance Mode
-             * @description Enforce rigorous fact-checking
-             * @default true
-             */
-            strict_compliance_mode: boolean;
-            /**
              * @description Output format: all, video, blog, or carousel
              * @default all
              */
@@ -293,8 +287,6 @@ export interface components {
             /** Topic */
             topic: string;
             status: components["schemas"]["JobStatusEnum"];
-            /** Strict Compliance Mode */
-            strict_compliance_mode: boolean;
             /** @default all */
             format_type: components["schemas"]["FormatTypeEnum"] | null;
             platform?: components["schemas"]["PlatformEnum"] | null;
@@ -436,6 +428,12 @@ export interface components {
              * @default High
              */
             guardrail_strictness: string;
+            /**
+             * Uncertain Pass Through
+             * @description When True, UNCERTAIN verdicts pass through without soft-fail (High profile only)
+             * @default false
+             */
+            uncertain_pass_through: boolean;
             /**
              * Tone
              * @description Desired narrative tone (e.g., urgent, analytical, hopeful)

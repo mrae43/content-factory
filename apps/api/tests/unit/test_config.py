@@ -101,3 +101,60 @@ class TestSettings:
         assert s.similarity_threshold == 0.9
         assert s.worker_poll_interval_seconds == 10
         assert s.worker_lock_timeout_minutes == 30
+
+
+@pytest.mark.unit
+class TestGetGuardrailConfig:
+    def test_high_profile_defaults(self):
+        from app.core.guardrails import get_guardrail_config, GuardrailStrictness
+
+        cfg = get_guardrail_config(GuardrailStrictness.High)
+        assert cfg.uncertain_is_soft_fail is True
+        assert cfg.requires_human_review is True
+
+    def test_high_profile_with_uncertain_pass_through(self):
+        from app.core.guardrails import get_guardrail_config, GuardrailStrictness
+
+        cfg = get_guardrail_config(
+            GuardrailStrictness.High, uncertain_pass_through=True
+        )
+        assert cfg.uncertain_is_soft_fail is False
+        assert cfg.requires_human_review is True
+
+    def test_low_profile_unchanged(self):
+        from app.core.guardrails import get_guardrail_config, GuardrailStrictness
+
+        cfg = get_guardrail_config(GuardrailStrictness.Low)
+        assert cfg.uncertain_is_soft_fail is False
+        assert cfg.requires_human_review is False
+        assert cfg.similarity_threshold == 0.65
+
+    def test_medium_profile_unchanged(self):
+        from app.core.guardrails import get_guardrail_config, GuardrailStrictness
+
+        cfg = get_guardrail_config(GuardrailStrictness.Medium)
+        assert cfg.uncertain_is_soft_fail is False
+        assert cfg.requires_human_review is False
+        assert cfg.similarity_threshold == 0.72
+
+    def test_low_with_uncertain_pass_through_warns(self):
+        from app.core.guardrails import get_guardrail_config, GuardrailStrictness
+
+        import warnings
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            cfg = get_guardrail_config(
+                GuardrailStrictness.Low, uncertain_pass_through=True
+            )
+            assert len(w) == 1
+            assert "uncertain_pass_through=True has no effect" in str(w[0].message)
+        assert cfg.requires_human_review is False
+
+    def test_invalid_strictness_raises_value_error(self):
+        from app.core.guardrails import get_guardrail_config
+
+        import pytest
+
+        with pytest.raises(ValueError, match="Unknown guardrail strictness"):
+            get_guardrail_config("Invalid")  # type: ignore

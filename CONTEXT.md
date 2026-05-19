@@ -50,7 +50,7 @@ A text-only rendering of a Story in blog format. Produced by the Layout Desk fro
 
 A media artifact that must be rendered from a blueprint. Two sub-types, both produced by a two-stage pipeline (Layout Desk plans the structure, Production Studio renders the media):
 
-- **Carousel Slide Deck** — a sequence of composited slide images (graphic design + text), targeted at Instagram/TikTok. The Layout Desk produces a slide outline with per-slide text and visual prompts; the Production Studio renders each slide into an image.
+- **Carousel Slide Deck** — a sequence of composited slides (HTML layout + SVG graphics), targeted at Instagram/TikTok. The Layout Desk produces a slide outline with per-slide text and visual prompts; the Production Studio renders each slide into browser-displayable HTML (frontend-rendered from structured data — no image export in MVP).
 - **Video** — a rendered motion picture with scenes, narration, and audio. The Layout Desk produces a scene outline; the Production Studio renders each scene and assembles the final video.
 
 _Avoid_: Calling a Carousel a "Format Output" — it's a Visual Asset that gets rendered, not formatted.
@@ -133,4 +133,15 @@ Each Story passes through editorial desks in sequence. The canonical outward-fac
 The target social media platform for a Story. Determines which formats are available and
 per-character limits for carousel content. Supported platforms: Twitter/X, LinkedIn,
 Instagram, TikTok, YouTube. Platform is required at creation time (platform-first policy).
+
+## Carousel Slide
+
+A single slide in a Carousel Slide Deck. Contains:
+- **slide_number** — ordinal position in the deck
+- **text** — the slide's body content
+- **visual_description** — a text caption describing the visual element (icon/graphic) on the slide; displayed as a subdued subtitle. Replaces the earlier `visual_prompt` concept (which described a generated image — no longer applicable).
+- **hook_type** — the rhetorical hook category (question, statistic, quote, visual, story, cta)
+- **sources_used** — research chunk UUIDs cited on this slide
+
+_Avoid_: Calling it a "Visual Asset" — the Carousel Slide Deck is the Asset; a single slide is a component of it.
 

@@ -104,10 +104,10 @@ function NewJobForm() {
         story_directives: {
           target_audience: targetAudience,
           guardrail_strictness: guardrailStrictness,
+          uncertain_pass_through: false,
           tone: tone || undefined,
           angle: angle || undefined,
         },
-        strict_compliance_mode: true,
         format_type: formatType as "all" | "video" | "blog" | "carousel",
         platform: platform as "twitter" | "linkedin" | "instagram" | "youtube" | "tiktok",
       });

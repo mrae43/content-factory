@@ -110,7 +110,8 @@ class PreContextInput(BaseModel):
 class CaseInput(BaseModel):
     topic: str = Field(..., min_length=1, max_length=500)
     pre_context: PreContextInput
-    strict_compliance_mode: bool = Field(True)
+
+    model_config = ConfigDict(extra="ignore")
 
 
 # ==========================================

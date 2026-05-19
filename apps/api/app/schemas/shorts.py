@@ -72,6 +72,7 @@ class FormatTypeEnum(str, Enum):
 
 
 class AssetTypeEnum(str, Enum):
+    CAROUSEL_SLIDE = "CAROUSEL_SLIDE"
     VISUAL_VEO = "VISUAL_VEO"
     AUDIO_LYRIA = "AUDIO_LYRIA"
     VOICEOVER = "VOICEOVER"
@@ -151,7 +152,13 @@ class StoryDirectives(BaseModel):
         "General", description="e.g., Academics, TikTok, Investors"
     )
     guardrail_strictness: str = Field(
-        "High", description="Defines how aggressively the Red Team operates"
+        "High",
+        pattern="^(Low|Medium|High)$",
+        description="Defines how aggressively the Red Team operates",
+    )
+    uncertain_pass_through: bool = Field(
+        False,
+        description="When True, UNCERTAIN verdicts pass through without soft-fail (High profile only)",
     )
     tone: Optional[str] = Field(
         None, description="Desired narrative tone (e.g., urgent, analytical, hopeful)"
@@ -220,11 +227,6 @@ class JobCreateRequest(BaseModel):
     )
     research_inputs: ResearchInputs
     story_directives: StoryDirectives = Field(default_factory=StoryDirectives)
-    strict_compliance_mode: bool = (
-        Field(  # TODO: remove — absorbed into guardrail_strictness
-            True, description="Enforce rigorous fact-checking"
-        )
-    )
     format_type: FormatTypeEnum = Field(
         FormatTypeEnum.ALL,
         description="Output format: all, video, blog, or carousel",
@@ -319,7 +321,6 @@ class RenderJobResponse(BaseModel):
     id: UUID
     topic: str
     status: JobStatusEnum
-    strict_compliance_mode: bool  # TODO: remove — absorbed into guardrail_strictness
     format_type: Optional[FormatTypeEnum] = FormatTypeEnum.ALL
     platform: Optional[PlatformEnum] = None
     final_video_url: Optional[str]
