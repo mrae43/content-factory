@@ -22,16 +22,31 @@ def _mock_build_script_context():
     )
 
 
+def _canned_assembled_context_dict():
+    """Return a canned AssembledContext dict for setting on mock_job.assembled_context."""
+    return {
+        "narrative_summary": "Test research summary.",
+        "evidence_sections": "## Retrieved Evidence\n\nChunk 1: test evidence.",
+        "raw_chunks": [{"id": "chunk-1", "content": "test evidence"}],
+    }
+
+
 @pytest.mark.integration
 class TestTransitionFactCheckingResearch:
-    async def test_should_pass_through_to_scripting(self, mock_db_session, mock_job):
+    async def test_should_log_warning_and_forward_to_scripting(
+        self, mock_db_session, mock_job
+    ):
         mock_job.status = JobStatusEnum.FACT_CHECKING_RESEARCH
 
-        with patch(
-            "app.workers.orchestrator.update_job_status", new_callable=AsyncMock
-        ) as mock_update:
+        with (
+            patch("app.workers.orchestrator.logger") as mock_logger,
+            patch(
+                "app.workers.orchestrator.update_job_status", new_callable=AsyncMock
+            ) as mock_update,
+        ):
             await execute_state_transition(mock_db_session, mock_job)
 
+            mock_logger.warning.assert_called_once()
             mock_update.assert_awaited_once_with(
                 mock_db_session, mock_job.id, JobStatusEnum.SCRIPTING
             )
@@ -234,12 +249,11 @@ class TestTransitionPending:
 
 @pytest.mark.integration
 class TestTransitionResearching:
-    async def test_should_search_web_ingest_and_run_research_agent(
+    async def test_should_search_web_and_ingest(
         self,
         mock_db_session,
         mock_job,
         mock_vector_store,
-        agent_result_success,
     ):
         mock_job.status = JobStatusEnum.RESEARCHING
         web_results = [
@@ -248,22 +262,12 @@ class TestTransitionResearching:
                 "url": "https://example.com/brics",
             }
         ]
-        result = agent_result_success(
-            payload={
-                "chunks": ["research chunk"],
-                "refined_context": "BRICS nations are developing a new payment system...",
-            }
-        )
 
         with (
             patch("app.workers.orchestrator._web_search_service") as mock_web,
             patch(
                 "app.workers.orchestrator.ContentFactoryVectorStore",
                 return_value=mock_vector_store,
-            ),
-            patch(
-                "app.workers.orchestrator.ResearchAgent",
-                return_value=_mock_agent_class(result).return_value,
             ),
             patch(
                 "app.workers.orchestrator.update_job_status", new_callable=AsyncMock
@@ -283,7 +287,7 @@ class TestTransitionResearching:
             assert meta["urls"] == ["https://example.com/brics"]
             assert meta["search_depth"] == "basic"
             mock_update.assert_awaited_once_with(
-                mock_db_session, mock_job.id, JobStatusEnum.FACT_CHECKING_RESEARCH
+                mock_db_session, mock_job.id, JobStatusEnum.RETRIEVAL
             )
 
     async def test_should_proceed_without_web_results(
@@ -291,25 +295,14 @@ class TestTransitionResearching:
         mock_db_session,
         mock_job,
         mock_vector_store,
-        agent_result_success,
     ):
         mock_job.status = JobStatusEnum.RESEARCHING
-        result = agent_result_success(
-            payload={
-                "chunks": ["chunk"],
-                "refined_context": "Summary of research findings",
-            }
-        )
 
         with (
             patch("app.workers.orchestrator._web_search_service") as mock_web,
             patch(
                 "app.workers.orchestrator.ContentFactoryVectorStore",
                 return_value=mock_vector_store,
-            ),
-            patch(
-                "app.workers.orchestrator.ResearchAgent",
-                return_value=_mock_agent_class(result).return_value,
             ),
             patch(
                 "app.workers.orchestrator.update_job_status", new_callable=AsyncMock
@@ -326,7 +319,7 @@ class TestTransitionResearching:
             ]
             assert len(local_ingests) == 0
             mock_update.assert_awaited_once_with(
-                mock_db_session, mock_job.id, JobStatusEnum.FACT_CHECKING_RESEARCH
+                mock_db_session, mock_job.id, JobStatusEnum.RETRIEVAL
             )
 
     async def test_should_filter_web_results_with_empty_content(
@@ -334,7 +327,6 @@ class TestTransitionResearching:
         mock_db_session,
         mock_job,
         mock_vector_store,
-        agent_result_success,
     ):
         mock_job.status = JobStatusEnum.RESEARCHING
         web_results = [
@@ -342,22 +334,12 @@ class TestTransitionResearching:
             {"content": "", "url": "https://b.com"},
             {"content": "Also valid", "url": "https://c.com"},
         ]
-        result = agent_result_success(
-            payload={
-                "chunks": ["chunk"],
-                "refined_context": "Filtered web content summary",
-            }
-        )
 
         with (
             patch("app.workers.orchestrator._web_search_service") as mock_web,
             patch(
                 "app.workers.orchestrator.ContentFactoryVectorStore",
                 return_value=mock_vector_store,
-            ),
-            patch(
-                "app.workers.orchestrator.ResearchAgent",
-                return_value=_mock_agent_class(result).return_value,
             ),
             patch("app.workers.orchestrator.update_job_status", new_callable=AsyncMock),
         ):
@@ -376,19 +358,75 @@ class TestTransitionResearching:
                 "Also valid",
             ]
 
-    async def test_should_fail_when_research_agent_returns_error(
-        self, mock_db_session, mock_job, mock_vector_store
+
+@pytest.mark.integration
+class TestTransitionRetrieval:
+    async def test_should_run_research_agent_and_build_context(
+        self,
+        mock_db_session,
+        mock_job,
+        mock_vector_store,
+        agent_result_success,
     ):
-        mock_job.status = JobStatusEnum.RESEARCHING
+        mock_job.status = JobStatusEnum.RETRIEVAL
+        result = agent_result_success(
+            payload={
+                "refined_context": "BRICS research summary from synthesis.",
+                "citation_index": [{"source": "example.com", "relevance": 0.9}],
+            },
+            reasoning="Done",
+            confidence=0.85,
+        )
+
+        with (
+            patch(
+                "app.workers.orchestrator.ContentFactoryVectorStore",
+                return_value=mock_vector_store,
+            ),
+            patch(
+                "app.workers.orchestrator.ResearchAgent",
+                return_value=_mock_agent_class(result).return_value,
+            ),
+            patch(
+                "app.workers.orchestrator._build_script_context",
+                new_callable=AsyncMock,
+                return_value=AssembledContext(
+                    narrative_summary="Test research.",
+                    evidence_sections="## Retrieved Evidence\n\nChunk 1: evidence.",
+                    raw_chunks=[{"id": "chunk-1", "content": "evidence"}],
+                ),
+            ),
+            patch(
+                "app.workers.orchestrator.update_job_status", new_callable=AsyncMock
+            ) as mock_update,
+        ):
+            await execute_state_transition(mock_db_session, mock_job)
+
+            assert mock_job.refined_context == "BRICS research summary from synthesis."
+            assert mock_job.research_confidence == 0.85
+            assert mock_job.citation_index == [
+                {"source": "example.com", "relevance": 0.9}
+            ]
+            assert mock_job.assembled_context is not None
+            mock_update.assert_awaited_once_with(
+                mock_db_session, mock_job.id, JobStatusEnum.SCRIPTING
+            )
+
+    async def test_should_handle_research_failure(
+        self,
+        mock_db_session,
+        mock_job,
+        mock_vector_store,
+    ):
+        mock_job.status = JobStatusEnum.RETRIEVAL
         error_result = AgentResult(
             status=AgentActionStatus.ERROR,
             payload={},
-            reasoning="No context found",
+            reasoning="No research context available",
             confidence_score=0.0,
         )
 
         with (
-            patch("app.workers.orchestrator._web_search_service") as mock_web,
             patch(
                 "app.workers.orchestrator.ContentFactoryVectorStore",
                 return_value=mock_vector_store,
@@ -404,8 +442,6 @@ class TestTransitionResearching:
                 "app.workers.orchestrator.update_job_status", new_callable=AsyncMock
             ) as mock_update,
         ):
-            mock_web.search = AsyncMock(return_value=[])
-
             await execute_state_transition(mock_db_session, mock_job)
 
             mock_log.assert_awaited_once()
@@ -413,34 +449,44 @@ class TestTransitionResearching:
                 mock_db_session, mock_job.id, JobStatusEnum.FAILED
             )
 
-    async def test_should_fail_when_research_agent_raises_exception(
-        self, mock_db_session, mock_job, mock_vector_store
+    async def test_should_continue_on_context_builder_failure(
+        self,
+        mock_db_session,
+        mock_job,
+        mock_vector_store,
+        agent_result_success,
     ):
-        mock_job.status = JobStatusEnum.RESEARCHING
-        mock_agent = AsyncMock()
-        mock_agent.run = AsyncMock(side_effect=RuntimeError("API timeout"))
+        mock_job.status = JobStatusEnum.RETRIEVAL
+        result = agent_result_success(
+            payload={
+                "refined_context": "Research summary.",
+            },
+        )
 
         with (
-            patch("app.workers.orchestrator._web_search_service") as mock_web,
             patch(
                 "app.workers.orchestrator.ContentFactoryVectorStore",
                 return_value=mock_vector_store,
             ),
-            patch("app.workers.orchestrator.ResearchAgent", return_value=mock_agent),
             patch(
-                "app.workers.orchestrator.log_error", new_callable=AsyncMock
-            ) as mock_log,
+                "app.workers.orchestrator.ResearchAgent",
+                return_value=_mock_agent_class(result).return_value,
+            ),
+            patch(
+                "app.workers.orchestrator._build_context_from_service",
+                new_callable=AsyncMock,
+                side_effect=Exception("DB connection lost"),
+            ),
             patch(
                 "app.workers.orchestrator.update_job_status", new_callable=AsyncMock
             ) as mock_update,
         ):
-            mock_web.search = AsyncMock(return_value=[])
-
             await execute_state_transition(mock_db_session, mock_job)
 
-            mock_log.assert_awaited_once()
+            assert mock_job.assembled_context is not None
+            assert mock_job.assembled_context["evidence_sections"] == ""
             mock_update.assert_awaited_once_with(
-                mock_db_session, mock_job.id, JobStatusEnum.FAILED
+                mock_db_session, mock_job.id, JobStatusEnum.SCRIPTING
             )
 
 
@@ -455,10 +501,10 @@ class TestTransitionScripting:
         agent_result_success,
     ):
         mock_job.status = JobStatusEnum.SCRIPTING
+        mock_job.assembled_context = _canned_assembled_context_dict()
         result = agent_result_success(payload={"script_content": "New script content"})
 
         with (
-            _mock_build_script_context(),
             patch(
                 "app.workers.orchestrator.CopywriterAgent",
                 return_value=_mock_agent_class(result).return_value,
@@ -497,11 +543,11 @@ class TestTransitionScripting:
         agent_result_success,
     ):
         mock_job.status = JobStatusEnum.SCRIPTING
+        mock_job.assembled_context = _canned_assembled_context_dict()
         mock_script.version = 2
         result = agent_result_success(payload={"script_content": "Revised script"})
 
         with (
-            _mock_build_script_context(),
             patch(
                 "app.workers.orchestrator.CopywriterAgent",
                 return_value=_mock_agent_class(result).return_value,
@@ -535,6 +581,7 @@ class TestTransitionScripting:
         agent_result_success,
     ):
         mock_job.status = JobStatusEnum.SCRIPTING
+        mock_job.assembled_context = _canned_assembled_context_dict()
         mock_script.feedback_history = ["Needs more data", "Add sources"]
         mock_agent_instance = AsyncMock()
         mock_agent_instance.run = AsyncMock(
@@ -544,7 +591,6 @@ class TestTransitionScripting:
         )
 
         with (
-            _mock_build_script_context(),
             patch(
                 "app.workers.orchestrator.CopywriterAgent",
                 return_value=mock_agent_instance,
@@ -578,6 +624,7 @@ class TestTransitionScripting:
         agent_result_success,
     ):
         mock_job.status = JobStatusEnum.SCRIPTING
+        mock_job.assembled_context = _canned_assembled_context_dict()
         mock_script.feedback_history = [
             {"source": "human_editor", "feedback": "Tone too aggressive"}
         ]
@@ -587,7 +634,6 @@ class TestTransitionScripting:
         )
 
         with (
-            _mock_build_script_context(),
             patch(
                 "app.workers.orchestrator.CopywriterAgent",
                 return_value=mock_agent_instance,
@@ -616,6 +662,7 @@ class TestTransitionScripting:
         mock_vector_store,
     ):
         mock_job.status = JobStatusEnum.SCRIPTING
+        mock_job.assembled_context = _canned_assembled_context_dict()
         error_result = AgentResult(
             status=AgentActionStatus.ERROR,
             payload={},
@@ -624,7 +671,6 @@ class TestTransitionScripting:
         )
 
         with (
-            _mock_build_script_context(),
             patch(
                 "app.workers.orchestrator.CopywriterAgent",
                 return_value=_mock_agent_class(error_result).return_value,
@@ -650,8 +696,53 @@ class TestTransitionScripting:
 
 
 @pytest.mark.integration
+class TestTransitionScriptingFallback:
+    async def test_should_retry_when_assembled_context_missing(
+        self, mock_db_session, mock_job
+    ):
+        mock_job.status = JobStatusEnum.SCRIPTING
+        mock_job.assembled_context = None
+        mock_job.retrieval_retry_count = 0
+
+        with (
+            patch(
+                "app.workers.orchestrator.update_job_status", new_callable=AsyncMock
+            ) as mock_update,
+        ):
+            await execute_state_transition(mock_db_session, mock_job)
+
+            assert mock_job.retrieval_retry_count == 1
+            mock_update.assert_awaited_once_with(
+                mock_db_session, mock_job.id, JobStatusEnum.RETRIEVAL
+            )
+
+    async def test_should_raise_descriptive_error_after_max_retries(
+        self, mock_db_session, mock_job
+    ):
+        mock_job.status = JobStatusEnum.SCRIPTING
+        mock_job.assembled_context = None
+        mock_job.retrieval_retry_count = 3
+
+        with (
+            patch(
+                "app.workers.orchestrator.log_error", new_callable=AsyncMock
+            ) as mock_log,
+            patch(
+                "app.workers.orchestrator.update_job_status", new_callable=AsyncMock
+            ) as mock_update,
+        ):
+            await execute_state_transition(mock_db_session, mock_job)
+
+            mock_log.assert_awaited_once()
+            assert "assembled_context still None after" in mock_log.call_args[0][2]
+            mock_update.assert_awaited_once_with(
+                mock_db_session, mock_job.id, JobStatusEnum.FAILED
+            )
+
+
+@pytest.mark.integration
 class TestTransitionScriptingEvidence:
-    async def test_evidence_flows_from_builder_to_agent_context(
+    async def test_evidence_flows_from_assembled_context_to_agent_context(
         self,
         mock_db_session,
         mock_job,
@@ -659,6 +750,11 @@ class TestTransitionScriptingEvidence:
         agent_result_success,
     ):
         mock_job.status = JobStatusEnum.SCRIPTING
+        mock_job.assembled_context = {
+            "narrative_summary": "Research summary.",
+            "evidence_sections": "## Retrieved Evidence\n\nChunk 1: key fact.",
+            "raw_chunks": [],
+        }
         result = agent_result_success(
             payload={"script_content": "Evidence-driven script"}
         )
@@ -666,15 +762,6 @@ class TestTransitionScriptingEvidence:
         mock_agent_instance.run = AsyncMock(return_value=result)
 
         with (
-            patch(
-                "app.workers.orchestrator._build_script_context",
-                new_callable=AsyncMock,
-                return_value=AssembledContext(
-                    narrative_summary="Research summary.",
-                    evidence_sections="## Retrieved Evidence\n\nChunk 1: key fact.",
-                    raw_chunks=[],
-                ),
-            ),
             patch(
                 "app.workers.orchestrator.CopywriterAgent",
                 return_value=mock_agent_instance,
@@ -697,7 +784,7 @@ class TestTransitionScriptingEvidence:
             ctx = call_kwargs["context"]
             assert "Chunk 1: key fact." in ctx["evidence_sections"]
 
-    async def test_degradation_when_builder_fails(
+    async def test_degradation_when_builder_failed_in_retrieval(
         self,
         mock_db_session,
         mock_job,
@@ -706,23 +793,23 @@ class TestTransitionScriptingEvidence:
     ):
         mock_job.status = JobStatusEnum.SCRIPTING
         mock_job.refined_context = ""
+        mock_job.assembled_context = {
+            "narrative_summary": "",
+            "evidence_sections": "",
+            "raw_chunks": [],
+        }
         result = agent_result_success(payload={"script_content": "Fallback script"})
         mock_agent_instance = AsyncMock()
         mock_agent_instance.run = AsyncMock(return_value=result)
 
         with (
             patch(
-                "app.workers.orchestrator.build_script_context",
-                new_callable=AsyncMock,
-                side_effect=Exception("DB connection lost"),
+                "app.workers.orchestrator.CopywriterAgent",
+                return_value=mock_agent_instance,
             ),
             patch(
                 "app.workers.orchestrator.ContentFactoryVectorStore",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "app.workers.orchestrator.CopywriterAgent",
-                return_value=mock_agent_instance,
+                return_value=mock_vector_store,
             ),
             patch(
                 "app.workers.orchestrator.get_latest_script", new_callable=AsyncMock
@@ -747,6 +834,11 @@ class TestTransitionScriptingEvidence:
         agent_result_success,
     ):
         mock_job.status = JobStatusEnum.SCRIPTING
+        mock_job.assembled_context = {
+            "narrative_summary": "Summary.",
+            "evidence_sections": "## Retrieved Evidence\n\nChunk 1: the evidence.",
+            "raw_chunks": [],
+        }
         mock_script.feedback_history = [
             {
                 "feedback_type": "structured_claims",
@@ -772,15 +864,6 @@ class TestTransitionScriptingEvidence:
         mock_agent_instance.run = AsyncMock(return_value=result)
 
         with (
-            patch(
-                "app.workers.orchestrator._build_script_context",
-                new_callable=AsyncMock,
-                return_value=AssembledContext(
-                    narrative_summary="Summary.",
-                    evidence_sections="## Retrieved Evidence\n\nChunk 1: the evidence.",
-                    raw_chunks=[],
-                ),
-            ),
             patch(
                 "app.workers.orchestrator.ScriptOptimizerAgent",
                 return_value=mock_agent_instance,
@@ -1327,12 +1410,11 @@ class TestOrchestratorErrorHandling:
     async def test_should_log_phase_in_error(
         self, mock_db_session, mock_job, mock_vector_store
     ):
-        mock_job.status = JobStatusEnum.RESEARCHING
+        mock_job.status = JobStatusEnum.RETRIEVAL
         mock_agent = AsyncMock()
         mock_agent.run = AsyncMock(side_effect=RuntimeError("API error"))
 
         with (
-            patch("app.workers.orchestrator._web_search_service") as mock_web,
             patch(
                 "app.workers.orchestrator.ContentFactoryVectorStore",
                 return_value=mock_vector_store,
@@ -1343,12 +1425,10 @@ class TestOrchestratorErrorHandling:
             ) as mock_log,
             patch("app.workers.orchestrator.update_job_status", new_callable=AsyncMock),
         ):
-            mock_web.search = AsyncMock(return_value=[])
-
             await execute_state_transition(mock_db_session, mock_job)
 
             phase = mock_log.call_args[1].get("phase") or mock_log.call_args[0][3]
-            assert phase == str(JobStatusEnum.RESEARCHING)
+            assert phase == str(JobStatusEnum.RETRIEVAL)
 
     async def test_should_handle_unrecognized_status(self, mock_db_session, mock_job):
         mock_job.status = "UNKNOWN_STATUS"
@@ -1406,7 +1486,7 @@ class TestOrchestratorMultiStep:
             return_value=AssembledContext(
                 narrative_summary="Test research summary.",
                 evidence_sections="## Retrieved Evidence\n\nChunk 1: test evidence.",
-                raw_chunks=[],
+                raw_chunks=[{"id": "chunk-1", "content": "test evidence"}],
             ),
         )
         builder_patch.start()
@@ -1496,11 +1576,8 @@ class TestOrchestratorMultiStep:
 
             transitions = [
                 (JobStatusEnum.PENDING, JobStatusEnum.RESEARCHING),
-                (JobStatusEnum.RESEARCHING, JobStatusEnum.FACT_CHECKING_RESEARCH),
-                (
-                    JobStatusEnum.FACT_CHECKING_RESEARCH,
-                    JobStatusEnum.SCRIPTING,
-                ),
+                (JobStatusEnum.RESEARCHING, JobStatusEnum.RETRIEVAL),
+                (JobStatusEnum.RETRIEVAL, JobStatusEnum.SCRIPTING),
                 (JobStatusEnum.SCRIPTING, JobStatusEnum.FACT_CHECKING_SCRIPT),
                 (
                     JobStatusEnum.FACT_CHECKING_SCRIPT,

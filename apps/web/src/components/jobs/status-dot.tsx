@@ -6,7 +6,7 @@ interface StatusDotProps {
 const statusConfig: Record<string, { color: string; label: string }> = {
   PENDING: { color: "bg-muted-foreground", label: "Queued" },
   RESEARCHING: { color: "bg-warning", label: "Research Desk" },
-  FACT_CHECKING_RESEARCH: { color: "bg-warning", label: "Source Verification" },
+  RETRIEVAL: { color: "bg-warning", label: "Retrieval Desk" },
   SCRIPTING: { color: "bg-info", label: "Writer's Desk" },
   FACT_CHECKING_SCRIPT: { color: "bg-info", label: "Fact-Check Desk" },
   FORMATTING: { color: "bg-accent-purple", label: "Layout Desk" },

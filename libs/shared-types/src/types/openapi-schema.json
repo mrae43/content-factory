@@ -642,6 +642,7 @@
         "enum": [
           "PENDING",
           "RESEARCHING",
+          "RETRIEVAL",
           "FACT_CHECKING_RESEARCH",
           "SCRIPTING",
           "FACT_CHECKING_SCRIPT",

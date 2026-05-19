@@ -6,7 +6,7 @@ import type { ScriptResponse, FactCheckClaimResponse, AssetResponse } from "@con
 const pipelineStages = [
   "PENDING",
   "RESEARCHING",
-  "FACT_CHECKING_RESEARCH",
+  "RETRIEVAL",
   "SCRIPTING",
   "FACT_CHECKING_SCRIPT",
   "FORMATTING",
@@ -16,7 +16,7 @@ const pipelineStages = [
 const deskConfig: Record<string, { name: string; color: string }> = {
   PENDING: { name: "Assignment Queue", color: "bg-muted-foreground" },
   RESEARCHING: { name: "Research Desk", color: "bg-warning" },
-  FACT_CHECKING_RESEARCH: { name: "Source Verification", color: "bg-warning" },
+  RETRIEVAL: { name: "Retrieval Desk", color: "bg-warning" },
   SCRIPTING: { name: "Writer's Desk", color: "bg-info" },
   FACT_CHECKING_SCRIPT: { name: "Fact-Check Desk", color: "bg-info" },
   FORMATTING: { name: "Layout Desk", color: "bg-accent-purple" },
@@ -90,6 +90,7 @@ interface TimelineNodeProps {
     updated_at: string;
     refined_context?: string | null;
     research_confidence?: number | null;
+    citation_index?: Record<string, unknown>[] | null;
     pre_context?: Record<string, unknown> | null;
     scripts?: ScriptResponse[];
     assets?: AssetResponse[];
@@ -126,25 +127,49 @@ function TimelineNode({ stage, state, isLast, job }: TimelineNodeProps) {
   if (stage === "RESEARCHING") {
     if (isCompleted || isActive) {
       summaryText = isCompleted
-        ? `Completed \u00B7 ${job.refined_context ? "Research summary available" : "No summary"}`
-        : "Gathering sources\u2026";
-      if (job.refined_context) {
-        outputContent = (
-          <div className="mt-3 rounded-md bg-muted p-4 space-y-3">
-            <p className="text-sm leading-relaxed whitespace-pre-wrap">{job.refined_context}</p>
-            {job.research_confidence !== null && job.research_confidence !== undefined && (
-              <p className="text-xs text-muted-foreground border-t border-border pt-3">
-                Confidence: {(job.research_confidence * 100).toFixed(0)}%
-              </p>
-            )}
-          </div>
-        );
-      }
+        ? "Completed \u00B7 Web search results ingested"
+        : "Searching the web\u2026";
     }
   }
 
-  if (stage === "FACT_CHECKING_RESEARCH") {
-    summaryText = isCompleted ? "Passthrough \u00B7 <1s" : isActive ? "Verifying\u2026" : "";
+  if (stage === "RETRIEVAL") {
+    const citationCount = Array.isArray(job.citation_index) ? job.citation_index.length : 0;
+    summaryText = isCompleted
+      ? `Completed \u00B7 Research synthesis ready${citationCount > 0 ? ` \u00B7 ${citationCount} source(s)` : ""}`
+      : isActive
+        ? "Synthesizing research\u2026"
+        : "";
+    if (isCompleted && job.refined_context) {
+      outputContent = (
+        <div className="mt-3 rounded-md bg-muted p-4 space-y-3">
+          <p className="text-sm leading-relaxed whitespace-pre-wrap">{job.refined_context}</p>
+          {(job.research_confidence !== null && job.research_confidence !== undefined) && (
+            <p className="text-xs text-muted-foreground border-t border-border pt-3">
+              Confidence: {(job.research_confidence * 100).toFixed(0)}%
+            </p>
+          )}
+          {citationCount > 0 && (
+            <div className="border-t border-border pt-3 space-y-1.5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Citations ({citationCount})
+              </p>
+              <ul className="space-y-1">
+                {job.citation_index!.map((citation, ci) => {
+                  const text = typeof citation === "string" ? citation : (citation.relevance_summary ?? citation.title ?? citation.url ?? "") as string;
+                  if (!text) return null;
+                  return (
+                    <li key={ci} className="text-xs text-muted-foreground flex items-start gap-1.5">
+                      <span className="inline-block h-1 w-1 shrink-0 mt-1.5 rounded-full bg-primary/40" />
+                      {text}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </div>
+      );
+    }
   }
 
   if (stage === "SCRIPTING") {
@@ -419,6 +444,7 @@ interface EditorialTimelineProps {
     updated_at: string;
     refined_context?: string | null;
     research_confidence?: number | null;
+    citation_index?: Record<string, unknown>[] | null;
     pre_context?: Record<string, unknown> | null;
     scripts?: ScriptResponse[];
     assets?: AssetResponse[];

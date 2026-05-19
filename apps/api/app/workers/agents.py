@@ -267,7 +267,7 @@ class CopywriterAgent(BaseAgent):
                         "script should be framed. Tailor vocabulary, narrative voice, complexity, and perspective to "
                         "match these directives.\n\n"
                         "## RULES\n"
-                        "1. ZERO HALLUCATION: Every claim must trace to the refined_context or retrieved_evidence.\n"
+                        "1. ZERO HALLUCINATION: Every claim must trace to the refined_context or retrieved_evidence.\n"
                         "2. Write a clean narrative script (500-800 words) with no format-specific structure.\n"
                         "3. Open with a strong hook — a surprising fact, provocative question, or bold statement.\n"
                         "4. Build a clear narrative arc: hook → context → depth → payoff.\n"

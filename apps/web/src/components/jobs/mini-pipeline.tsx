@@ -6,7 +6,7 @@ interface MiniPipelineProps {
 const pipelineStages = [
   "PENDING",
   "RESEARCHING",
-  "FACT_CHECKING_RESEARCH",
+  "RETRIEVAL",
   "SCRIPTING",
   "FACT_CHECKING_SCRIPT",
   "FORMATTING",
@@ -16,7 +16,7 @@ const pipelineStages = [
 const deskLabels: Record<string, string> = {
   PENDING: "Queued",
   RESEARCHING: "Research",
-  FACT_CHECKING_RESEARCH: "Verify",
+  RETRIEVAL: "Retrieve",
   SCRIPTING: "Writing",
   FACT_CHECKING_SCRIPT: "Fact-Check",
   FORMATTING: "Layout",

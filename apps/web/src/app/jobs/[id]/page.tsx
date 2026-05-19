@@ -484,7 +484,7 @@ function ActiveOutput({ job }: { job: RenderJobResponse }) {
   }
 
   if (
-    (status === "RESEARCHING" || status === "FACT_CHECKING_RESEARCH") &&
+    (status === "RESEARCHING" || status === "RETRIEVAL") &&
     job.refined_context
   ) {
     return (
@@ -502,7 +502,7 @@ function ActiveOutput({ job }: { job: RenderJobResponse }) {
     );
   }
 
-  if (status === "RESEARCHING" || status === "FACT_CHECKING_RESEARCH") {
+  if (status === "RESEARCHING" || status === "RETRIEVAL") {
     return (
       <div className="rounded-lg border border-border p-6 text-center space-y-2">
         <p className="font-heading text-base font-semibold text-muted-foreground">

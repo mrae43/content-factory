@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 const statusStyles: Record<string, string> = {
   PENDING: "bg-warning/15 text-warning",
   RESEARCHING: "bg-info/15 text-info",
-  FACT_CHECKING_RESEARCH: "bg-info/15 text-info",
+  RETRIEVAL: "bg-info/15 text-info",
   SCRIPTING: "bg-accent-purple/15 text-accent-purple",
   FACT_CHECKING_SCRIPT: "bg-accent-orange/15 text-accent-orange",
   FORMATTING: "bg-accent-teal/15 text-accent-teal",
@@ -16,7 +16,7 @@ const statusStyles: Record<string, string> = {
 const statusLabels: Record<string, string> = {
   PENDING: "Queued",
   RESEARCHING: "Researching",
-  FACT_CHECKING_RESEARCH: "Verifying Research",
+  RETRIEVAL: "Retrieving Evidence",
   SCRIPTING: "Writing Script",
   FACT_CHECKING_SCRIPT: "Checking Script",
   FORMATTING: "Formatting",

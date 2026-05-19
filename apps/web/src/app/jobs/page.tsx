@@ -28,7 +28,7 @@ const editorialFilters: {
     statuses: [
       "PENDING",
       "RESEARCHING",
-      "FACT_CHECKING_RESEARCH",
+      "RETRIEVAL",
       "SCRIPTING",
       "FACT_CHECKING_SCRIPT",
       "FORMATTING",
@@ -128,7 +128,7 @@ export default function JobsPage() {
         [
           "PENDING",
           "RESEARCHING",
-          "FACT_CHECKING_RESEARCH",
+          "RETRIEVAL",
           "SCRIPTING",
           "FACT_CHECKING_SCRIPT",
           "FORMATTING",
