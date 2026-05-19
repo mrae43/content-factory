@@ -6,22 +6,27 @@ The central unit of work flowing through the pipeline. Represented in the databa
 
 ## Research
 
-The first value-adding phase of the pipeline. Performed by the Research Desk. Two sub-phases:
+The first value-adding phase of the pipeline. Performed by the Research Desk. Web search only: TavilySearch on the Story's topic. Results are chunked, embedded (Gemini 768-dim, cosine), and ingested into the vector store as `LOCAL`-scope chunks with `source_type: WEB_SEARCH`. Produces no narrative output — synthesis is handled by the Retrieval Desk.
 
-- **Indexing** — source materials (user-provided URLs, raw text) and web search results are chunked, embedded (Gemini 768-dim, cosine), and stored in the vector store. This is the retrieval layer.
-- **Synthesis** — the vector store is queried against the Story's topic; retrieved chunks are fed to an LLM to produce a **Refined Context** (800–1500 word synthesis) and a **research_confidence** score (float 0.0–1.0). Both are persisted on the Story — the Refined Context is consumed by downstream desks, and research_confidence signals whether the pipeline should warn an editor before scripting begins.
-
-_Ancillary term:_ **Research Chunks** — the individual vectorized text fragments stored in pgvector, tagged with a **source_type** enum (`USER_PROVIDED` from user-supplied URLs/raw text, `WEB_SEARCH` from Tavily results, `INFERRED` from the Research Agent's own Synthesis), and a **scope** (`RAW-CONTEXT` for user-provided material, `LOCAL` for web results and refined chunks). source_type controls epistemic weight during fact-checking; scope controls lifecycle (LOCAL chunks are cleaned up after completion).
+_Ancillary term:_ **Research Chunks** — the individual vectorized text fragments stored in pgvector, tagged with a **source_type** enum (`USER_PROVIDED` from user-supplied URLs/raw text, `WEB_SEARCH` from Tavily results, `INFERRED` from the Retrieval Desk's synthesis), and a **scope** (`RAW-CONTEXT` for user-provided material, `LOCAL` for web results and refined chunks). source_type controls epistemic weight during fact-checking; scope controls lifecycle (LOCAL chunks are cleaned up after completion).
 
 Each chunk carries enrichment metadata: **similarity_score** (cosine distance from the retrieval query), **topic_relevance** (categorical: `HIGH | MEDIUM | LOW`, derived from the score), and optionally **source_authority** (a signal from domain reputation — deferred).
 
+## Retrieval
+
+The second phase, performed by the Retrieval Desk. Owns all pre-scripting evidence assembly. Three sequential steps:
+
+1. **Synthesis** — the ResearchAgent queries the vector store (semantic search over all `RAW-CONTEXT` and `LOCAL` scopes) and feeds retrieved chunks to an LLM to produce a **Refined Context** (800–1500 word narrative), a **Citation Index**, and refined `INFERRED` chunks that are re-ingested into the vector store.
+2. **Context Assembly** — the Context Builder performs a fresh semantic search against all scopes, enriches retrieved chunks with `similarity_score` and `topic_relevance`, and produces an `AssembledContext` (narrative summary + formatted evidence sections + raw chunk payloads).
+3. **Persistence** — the `AssembledContext` and `Citation Index` are persisted on the Story's `RenderJob` row for consumption by the Writer's Desk.
+
 ## Context Builder
 
-A component in the orchestrator that runs after Research completes and before the CopywriterAgent is invoked. It performs a fresh semantic search against the vector store (using the Story's early context as query), retrieves top-k chunks with full payloads (text + similarity_score + meta), and assembles the context structure that the CopywriterAgent receives — alongside the Refined Context and Story Directives.
+A component that runs inside the RETRIEVAL phase. It performs a fresh semantic search against all chunk scopes (composite query from topic + Story Directives), enriches retrieved chunks with `similarity_score` and `topic_relevance`, and produces the `AssembledContext` that the CopywriterAgent receives (narrative summary + evidence sections + raw chunk payloads). The result is persisted on the Story's `RenderJob` row and reused across the Fact-Check Loop — it is not rebuilt on each optimizer iteration.
 
 ## Citation Index
 
-A structured sidecar attached to the Story alongside the Refined Context after Synthesis. Maps claim fragments (or synthesis passages) to their source URLs and Research Chunk IDs. Enables the Fact-Check Loop to trace any claim to its origin — without re-searching the vector store. Not embedded in the Refined Context text itself.
+A structured sidecar attached to the Story alongside the Refined Context after the Retrieval Desk's Synthesis step. Maps claim fragments (or synthesis passages) to their source URLs and Research Chunk IDs. Enables the Fact-Check Loop to trace any claim to its origin — without re-searching the vector store. Not embedded in the Refined Context text itself.
 
 ## Research Inputs
 
@@ -111,10 +116,10 @@ A generated media file associated with a Story. Produced by the Production Studi
 Each Story passes through editorial desks in sequence. The canonical outward-facing names (used in UI, user communication) and their backing enum values:
 
 | Desk (Outward) | Enum Value | Terminal? |
-|---|---|---|
+|---|---|---|---|
 | Queued | `PENDING` | No |
 | Research Desk | `RESEARCHING` | No |
-| Source Verification | `FACT_CHECKING_RESEARCH` | No |
+| Retrieval Desk | `RETRIEVAL` | No |
 | Writer's Desk | `SCRIPTING` | No |
 | Fact-Check Desk | `FACT_CHECKING_SCRIPT` | No |
 | Layout Desk | `FORMATTING` | No |
