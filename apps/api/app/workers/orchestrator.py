@@ -71,7 +71,13 @@ async def execute_state_transition(db: AsyncSession, job) -> None:
         elif job.status == JobStatusEnum.RESEARCHING:
             await _transition_researching(db, job)
 
+        elif job.status == JobStatusEnum.RETRIEVAL:
+            await _transition_retrieval(db, job)
+
         elif job.status == JobStatusEnum.FACT_CHECKING_RESEARCH:
+            logger.warning(
+                f"Legacy state FACT_CHECKING_RESEARCH for Job {job.id} — forwarding to SCRIPTING"
+            )
             await update_job_status(db, job.id, JobStatusEnum.SCRIPTING)
 
         elif job.status == JobStatusEnum.SCRIPTING:
@@ -159,6 +165,12 @@ async def _transition_researching(db: AsyncSession, job) -> None:
                 },
             )
 
+    await update_job_status(db, job.id, JobStatusEnum.RETRIEVAL)
+
+
+async def _transition_retrieval(db: AsyncSession, job) -> None:
+    vector_store = ContentFactoryVectorStore(db)
+
     researcher = ResearchAgent(
         model_name=settings.research_model,
         temperature=settings.research_temperature,
@@ -188,9 +200,13 @@ async def _transition_researching(db: AsyncSession, job) -> None:
             job.citation_index = citation_index
 
         await db.commit()
-        await update_job_status(db, job.id, JobStatusEnum.FACT_CHECKING_RESEARCH)
     else:
         raise Exception(f"Research failed: {result.reasoning}")
+
+    assembled = await _build_script_context(db, job)
+    job.assembled_context = assembled.model_dump()
+    await db.commit()
+    await update_job_status(db, job.id, JobStatusEnum.SCRIPTING)
 
 
 async def _build_script_context(db: AsyncSession, job) -> AssembledContext:
@@ -222,7 +238,19 @@ async def _build_script_context(db: AsyncSession, job) -> AssembledContext:
 
 
 async def _transition_scripting(db: AsyncSession, job) -> None:
-    assembled = await _build_script_context(db, job)
+    if not job.assembled_context:
+        retry_count = (job.retrieval_retry_count or 0) + 1
+        if retry_count > settings.retrieval_retry_max:
+            raise Exception(
+                f"assembled_context still None after {retry_count} "
+                f"RETRIEVAL attempts for Job {job.id}"
+            )
+        job.retrieval_retry_count = retry_count
+        await db.commit()
+        await update_job_status(db, job.id, JobStatusEnum.RETRIEVAL)
+        return
+
+    assembled = AssembledContext(**job.assembled_context)
     evidence_sections = assembled.evidence_sections
 
     latest_script = await get_latest_script(db, job.id)
