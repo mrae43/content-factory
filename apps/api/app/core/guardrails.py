@@ -1,5 +1,14 @@
-from dataclasses import dataclass, field
-from typing import List
+import dataclasses
+from dataclasses import dataclass
+from enum import Enum
+from typing import Tuple
+import warnings
+
+
+class GuardrailStrictness(str, Enum):
+    Low = "Low"
+    Medium = "Medium"
+    High = "High"
 
 
 @dataclass(frozen=True)
@@ -7,68 +16,74 @@ class GuardrailConfig:
     similarity_threshold: float = 0.75
     top_k_per_claim: int = 5
     uncertain_is_soft_fail: bool = False
-    extract_categories: List[str] = field(
-        default_factory=lambda: [
-            "statistic",
-            "attribution",
-            "chronological",
-            "causal",
-            "comparative",
-        ]
+    requires_human_review: bool = False
+    claim_categories: Tuple[str, ...] = (
+        "statistic",
+        "attribution",
+        "chronological",
+        "causal",
+        "comparative",
     )
-    max_revision_cycles: int = 3
 
 
-GUARDRAIL_PROFILES = {
-    "Low": GuardrailConfig(
+GUARDRAIL_PROFILES: dict[GuardrailStrictness, GuardrailConfig] = {
+    GuardrailStrictness.Low: GuardrailConfig(
         similarity_threshold=0.65,
         top_k_per_claim=3,
         uncertain_is_soft_fail=False,
-        extract_categories=["statistic", "attribution"],
-        max_revision_cycles=2,
+        requires_human_review=False,
+        claim_categories=("statistic", "attribution"),
     ),
-    "Medium": GuardrailConfig(
+    GuardrailStrictness.Medium: GuardrailConfig(
         similarity_threshold=0.72,
         top_k_per_claim=5,
         uncertain_is_soft_fail=False,
-        extract_categories=[
+        requires_human_review=False,
+        claim_categories=(
             "statistic",
             "attribution",
             "chronological",
             "causal",
-        ],
-        max_revision_cycles=3,
+        ),
     ),
-    "High": GuardrailConfig(
+    GuardrailStrictness.High: GuardrailConfig(
         similarity_threshold=0.75,
         top_k_per_claim=5,
         uncertain_is_soft_fail=False,
-        extract_categories=[
+        requires_human_review=True,
+        claim_categories=(
             "statistic",
             "attribution",
             "chronological",
             "causal",
             "comparative",
-        ],
-        max_revision_cycles=3,
+        ),
     ),
 }
 
 
-# TODO: Collapse strict_compliance_mode into High profile.
-#   - High profile should set uncertain_is_soft_fail=True.
-#   - Remove strict_compliance_mode parameter from this function.
-#   - Callers use guardrail_strictness as the single knob.
 def get_guardrail_config(
-    strictness: str, strict_compliance_mode: bool
+    strictness: GuardrailStrictness, uncertain_pass_through: bool = False
 ) -> GuardrailConfig:
-    base = GUARDRAIL_PROFILES.get(strictness, GUARDRAIL_PROFILES["High"])
-    if strict_compliance_mode:
-        return GuardrailConfig(
-            similarity_threshold=base.similarity_threshold,
-            top_k_per_claim=base.top_k_per_claim,
-            uncertain_is_soft_fail=True,
-            extract_categories=base.extract_categories,
-            max_revision_cycles=base.max_revision_cycles,
+    if strictness not in GUARDRAIL_PROFILES:
+        raise ValueError(f"Unknown guardrail strictness: {strictness}")
+
+    base = GUARDRAIL_PROFILES[strictness]
+
+    if strictness == GuardrailStrictness.High:
+        if uncertain_pass_through:
+            return base
+        return _replace(base, uncertain_is_soft_fail=True)
+
+    if uncertain_pass_through:
+        warnings.warn(
+            f"uncertain_pass_through=True has no effect for {strictness.value} profile. "
+            f"Only High profile supports uncertain_pass_through.",
+            stacklevel=2,
         )
+
     return base
+
+
+def _replace(config: GuardrailConfig, **kwargs) -> GuardrailConfig:
+    return dataclasses.replace(config, **kwargs)
