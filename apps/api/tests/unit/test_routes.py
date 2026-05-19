@@ -12,6 +12,7 @@ from app.schemas.shorts import (
     JobStatusEnum,
     PlatformEnum,
     FormatTypeEnum,
+    StoryDirectives,
     resolve_formats,
 )
 
@@ -21,7 +22,6 @@ def make_mock_job(**overrides):
         "id": uuid4(),
         "topic": "BRICS De-dollarization 2025",
         "status": JobStatusEnum.PENDING,
-        "strict_compliance_mode": True,
         "final_video_url": None,
         "refined_context": None,
         "error_log": None,
@@ -140,7 +140,6 @@ class TestCreateRenderJob:
         data = resp.json()
         assert data["status"] == "PENDING"
         assert data["topic"] == "BRICS De-dollarization 2025"
-        assert data["strict_compliance_mode"] is True
         assert "id" in data
         assert data["final_video_url"] is None
         assert data["error_log"] is None
@@ -379,3 +378,27 @@ class TestResolveFormats:
     def test_invalid_format_on_tiktok_raises(self):
         with pytest.raises(ValueError, match="not valid for platform"):
             resolve_formats(PlatformEnum.TIKTOK, FormatTypeEnum.BLOG)
+
+
+@pytest.mark.unit
+class TestStoryDirectives:
+    def test_uncertain_pass_through_defaults_to_false(self):
+        directives = StoryDirectives()
+        assert directives.uncertain_pass_through is False
+
+    def test_uncertain_pass_through_serializes_in_json(self):
+        directives = StoryDirectives(uncertain_pass_through=True)
+        dumped = directives.model_dump(mode="json")
+        assert dumped["uncertain_pass_through"] is True
+
+        reloaded = StoryDirectives(**dumped)
+        assert reloaded.uncertain_pass_through is True
+
+    def test_uncertain_pass_through_false_omitted_in_json_default(self):
+        directives = StoryDirectives()
+        dumped = directives.model_dump(mode="json", exclude_unset=True)
+        assert "uncertain_pass_through" not in dumped
+
+        with_defaults = StoryDirectives()
+        full = with_defaults.model_dump(mode="json")
+        assert full["uncertain_pass_through"] is False
