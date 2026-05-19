@@ -38,7 +38,6 @@ async def create_render_job(
         new_job = RenderJob(
             topic=request.topic,
             pre_context=pre_context,
-            strict_compliance_mode=request.strict_compliance_mode,  # TODO: remove — absorbed into guardrail_strictness
             format_type=request.format_type.value,
             platform=request.platform.value,
             status=JobStatusEnum.PENDING,
