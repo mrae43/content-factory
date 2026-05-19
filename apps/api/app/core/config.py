@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     eval_judge_model: str = "Qwen/Qwen3-235B-A22B-Instruct-2507-tput"
     eval_judge_temperature: float = 0.0
 
+    # Context Builder
+    context_builder_top_k: int = 10
+
     # Queue Worker
     worker_poll_interval_seconds: int = 5
     worker_lock_timeout_minutes: int = 15
