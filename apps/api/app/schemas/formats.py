@@ -53,7 +53,7 @@ class BlogFormatPayload(BaseModel):
 class CarouselSlide(BaseModel):
     slide_number: int
     text: str
-    visual_prompt: str
+    visual_description: str
     hook_type: str
     sources_used: List[UUID] = Field(default_factory=list)
 

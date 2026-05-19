@@ -60,9 +60,9 @@ export function CarouselViewer({ payload, platform }: CarouselViewerProps) {
             {slide.text}
           </p>
 
-          {slide.visual_prompt && (
+          {slide.visual_description && (
             <p className="text-xs italic text-muted-foreground">
-              Visual: {slide.visual_prompt}
+              {slide.visual_description}
             </p>
           )}
 

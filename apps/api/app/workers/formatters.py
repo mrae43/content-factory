@@ -184,7 +184,7 @@ CAROUSEL_FORMATTER_SYSTEM = (
     "   - LinkedIn: 700 chars per slide\n"
     "   - Instagram: 2200 chars per slide\n"
     "   - Default (no platform): 500 chars per slide\n"
-    "4. Include a visual_prompt for each slide describing what to display.\n"
+    "4. Include a visual_description for each slide — a caption describing the visual element.\n"
     "5. hook_type per slide: question, statistic, quote, visual, story, cta\n"
     "6. sources_used: list ResearchChunk UUIDs cited per slide.\n"
     "7. First slide must hook the reader (question or bold statement).\n"
@@ -202,7 +202,7 @@ CAROUSEL_FORMATTER_HUMAN = (
     "<verified_claims>\n{verified_claims}\n</verified_claims>\n\n"
     "<platform>\n{platform}\n</platform>\n\n"
     "<correction_hint>\n{correction_hint}\n</correction_hint>\n\n"
-    "Follow the plan's slide sequence and purposes. Generate the full carousel with visual prompts."
+    "Follow the plan's slide sequence and purposes. Generate the full carousel with visual descriptions."
 )
 
 VIDEO_PLAN_SYSTEM = (

@@ -72,6 +72,7 @@ class FormatTypeEnum(str, Enum):
 
 
 class AssetTypeEnum(str, Enum):
+    CAROUSEL_SLIDE = "CAROUSEL_SLIDE"
     VISUAL_VEO = "VISUAL_VEO"
     AUDIO_LYRIA = "AUDIO_LYRIA"
     VOICEOVER = "VOICEOVER"
