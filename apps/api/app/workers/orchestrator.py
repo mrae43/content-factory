@@ -50,7 +50,7 @@ from app.schemas.shorts import (
 )
 from app.services.context_builder import build as _build_context_from_service
 from app.core.config import settings
-from app.core.guardrails import get_guardrail_config
+from app.core.guardrails import get_guardrail_config, GuardrailStrictness
 
 logger = logging.getLogger("factory.orchestrator")
 
@@ -367,9 +367,19 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
     latest_script = latest_script_obj.content if latest_script_obj else ""
 
     pre_context = job.pre_context or {}
+    try:
+        strictness = GuardrailStrictness(
+            pre_context.get("guardrail_strictness", "High")
+        )
+    except ValueError:
+        logger.warning(
+            f"Invalid guardrail_strictness '{pre_context.get('guardrail_strictness')}' "
+            f"for Job {job.id} — falling back to High"
+        )
+        strictness = GuardrailStrictness.High
     guardrail_cfg = get_guardrail_config(
-        strictness=pre_context.get("guardrail_strictness", "High"),
-        strict_compliance_mode=job.strict_compliance_mode,  # TODO: remove strict_compliance_mode arg after collapsing into High profile
+        strictness=strictness,
+        uncertain_pass_through=pre_context.get("uncertain_pass_through", False),
     )
 
     agent_context = {
@@ -394,17 +404,14 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
         if claims_data and latest_script_obj:
             await save_fact_check_claims(db, latest_script_obj.id, claims_data)
 
-        # TODO: when strict_compliance_mode is collapsed into High profile,
-        #       `is_approved = False + HUMAN_REVIEW_NEEDED` becomes the High-profile path.
-        #       Non-High profiles go straight to FORMATTING.
         if latest_script_obj:
-            if job.strict_compliance_mode:
+            if guardrail_cfg.requires_human_review:
                 latest_script_obj.is_approved = False
                 await db.commit()
                 logger.info(
                     f"Red Team Approved for Job {job.id}. "
                     f"{len(claims_data)} claims persisted. "
-                    f"Strict compliance mode: awaiting human review."
+                    f"High profile: awaiting human review."
                 )
                 await update_job_status(db, job.id, JobStatusEnum.HUMAN_REVIEW_NEEDED)
             else:
