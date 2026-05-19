@@ -4,9 +4,22 @@ from uuid import uuid4
 
 from app.workers.agents import AgentActionStatus, AgentResult
 from app.workers.harness import HarnessResult
-from app.schemas.shorts import JobStatusEnum
+from app.schemas.shorts import JobStatusEnum, AssembledContext
 from app.workers.orchestrator import execute_state_transition
 from tests.integration.conftest import _mock_agent_class
+
+
+def _mock_build_script_context():
+    """Patch orchestrator._build_script_context to return a canned AssembledContext."""
+    return patch(
+        "app.workers.orchestrator._build_script_context",
+        new_callable=AsyncMock,
+        return_value=AssembledContext(
+            narrative_summary="Test research summary.",
+            evidence_sections="## Retrieved Evidence\n\nChunk 1: test evidence.",
+            raw_chunks=[{"id": "chunk-1", "content": "test evidence"}],
+        ),
+    )
 
 
 @pytest.mark.integration
@@ -445,6 +458,7 @@ class TestTransitionScripting:
         result = agent_result_success(payload={"script_content": "New script content"})
 
         with (
+            _mock_build_script_context(),
             patch(
                 "app.workers.orchestrator.CopywriterAgent",
                 return_value=_mock_agent_class(result).return_value,
@@ -487,6 +501,7 @@ class TestTransitionScripting:
         result = agent_result_success(payload={"script_content": "Revised script"})
 
         with (
+            _mock_build_script_context(),
             patch(
                 "app.workers.orchestrator.CopywriterAgent",
                 return_value=_mock_agent_class(result).return_value,
@@ -529,6 +544,7 @@ class TestTransitionScripting:
         )
 
         with (
+            _mock_build_script_context(),
             patch(
                 "app.workers.orchestrator.CopywriterAgent",
                 return_value=mock_agent_instance,
@@ -549,6 +565,9 @@ class TestTransitionScripting:
 
             call_kwargs = mock_agent_instance.run.call_args.kwargs
             assert call_kwargs["context"]["feedback"] == "Add sources"
+            assert (
+                "Chunk 1: test evidence." in call_kwargs["context"]["evidence_sections"]
+            )
 
     async def test_should_handle_dict_feedback_history(
         self,
@@ -568,6 +587,7 @@ class TestTransitionScripting:
         )
 
         with (
+            _mock_build_script_context(),
             patch(
                 "app.workers.orchestrator.CopywriterAgent",
                 return_value=mock_agent_instance,
@@ -604,6 +624,7 @@ class TestTransitionScripting:
         )
 
         with (
+            _mock_build_script_context(),
             patch(
                 "app.workers.orchestrator.CopywriterAgent",
                 return_value=_mock_agent_class(error_result).return_value,
@@ -626,6 +647,161 @@ class TestTransitionScripting:
             mock_update.assert_awaited_once_with(
                 mock_db_session, mock_job.id, JobStatusEnum.FAILED
             )
+
+
+@pytest.mark.integration
+class TestTransitionScriptingEvidence:
+    async def test_evidence_flows_from_builder_to_agent_context(
+        self,
+        mock_db_session,
+        mock_job,
+        mock_vector_store,
+        agent_result_success,
+    ):
+        mock_job.status = JobStatusEnum.SCRIPTING
+        result = agent_result_success(
+            payload={"script_content": "Evidence-driven script"}
+        )
+        mock_agent_instance = AsyncMock()
+        mock_agent_instance.run = AsyncMock(return_value=result)
+
+        with (
+            patch(
+                "app.workers.orchestrator._build_script_context",
+                new_callable=AsyncMock,
+                return_value=AssembledContext(
+                    narrative_summary="Research summary.",
+                    evidence_sections="## Retrieved Evidence\n\nChunk 1: key fact.",
+                    raw_chunks=[],
+                ),
+            ),
+            patch(
+                "app.workers.orchestrator.CopywriterAgent",
+                return_value=mock_agent_instance,
+            ),
+            patch(
+                "app.workers.orchestrator.ContentFactoryVectorStore",
+                return_value=mock_vector_store,
+            ),
+            patch(
+                "app.workers.orchestrator.get_latest_script", new_callable=AsyncMock
+            ) as mock_get_script,
+            patch("app.workers.orchestrator.save_script", new_callable=AsyncMock),
+            patch("app.workers.orchestrator.update_job_status", new_callable=AsyncMock),
+        ):
+            mock_get_script.return_value = None
+
+            await execute_state_transition(mock_db_session, mock_job)
+
+            call_kwargs = mock_agent_instance.run.call_args.kwargs
+            ctx = call_kwargs["context"]
+            assert "Chunk 1: key fact." in ctx["evidence_sections"]
+
+    async def test_degradation_when_builder_fails(
+        self,
+        mock_db_session,
+        mock_job,
+        mock_vector_store,
+        agent_result_success,
+    ):
+        mock_job.status = JobStatusEnum.SCRIPTING
+        mock_job.refined_context = ""
+        result = agent_result_success(payload={"script_content": "Fallback script"})
+        mock_agent_instance = AsyncMock()
+        mock_agent_instance.run = AsyncMock(return_value=result)
+
+        with (
+            patch(
+                "app.workers.orchestrator.build_script_context",
+                new_callable=AsyncMock,
+                side_effect=Exception("DB connection lost"),
+            ),
+            patch(
+                "app.workers.orchestrator.ContentFactoryVectorStore",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "app.workers.orchestrator.CopywriterAgent",
+                return_value=mock_agent_instance,
+            ),
+            patch(
+                "app.workers.orchestrator.get_latest_script", new_callable=AsyncMock
+            ) as mock_get_script,
+            patch("app.workers.orchestrator.save_script", new_callable=AsyncMock),
+            patch("app.workers.orchestrator.update_job_status", new_callable=AsyncMock),
+        ):
+            mock_get_script.return_value = None
+
+            await execute_state_transition(mock_db_session, mock_job)
+
+            call_kwargs = mock_agent_instance.run.call_args.kwargs
+            ctx = call_kwargs["context"]
+            assert ctx["evidence_sections"] == ""
+
+    async def test_optimizer_receives_same_evidence_context(
+        self,
+        mock_db_session,
+        mock_job,
+        mock_vector_store,
+        mock_script,
+        agent_result_success,
+    ):
+        mock_job.status = JobStatusEnum.SCRIPTING
+        mock_script.feedback_history = [
+            {
+                "feedback_type": "structured_claims",
+                "failed_claims": [
+                    {
+                        "claim_text": "GDP grew 15%",
+                        "verdict": "UNSUPPORTED",
+                        "confidence": 0.3,
+                        "evidence_text": "",
+                    }
+                ],
+                "overall_reasoning": "Bad claim",
+                "revision_number": 1,
+            }
+        ]
+        result = agent_result_success(
+            payload={
+                "script_content": "Patched script",
+                "patch_summary": "Fixed claim",
+            }
+        )
+        mock_agent_instance = AsyncMock()
+        mock_agent_instance.run = AsyncMock(return_value=result)
+
+        with (
+            patch(
+                "app.workers.orchestrator._build_script_context",
+                new_callable=AsyncMock,
+                return_value=AssembledContext(
+                    narrative_summary="Summary.",
+                    evidence_sections="## Retrieved Evidence\n\nChunk 1: the evidence.",
+                    raw_chunks=[],
+                ),
+            ),
+            patch(
+                "app.workers.orchestrator.ScriptOptimizerAgent",
+                return_value=mock_agent_instance,
+            ),
+            patch(
+                "app.workers.orchestrator.ContentFactoryVectorStore",
+                return_value=mock_vector_store,
+            ),
+            patch(
+                "app.workers.orchestrator.get_latest_script", new_callable=AsyncMock
+            ) as mock_get_script,
+            patch("app.workers.orchestrator.save_script", new_callable=AsyncMock),
+            patch("app.workers.orchestrator.update_job_status", new_callable=AsyncMock),
+        ):
+            mock_get_script.return_value = mock_script
+
+            await execute_state_transition(mock_db_session, mock_job)
+
+            call_kwargs = mock_agent_instance.run.call_args.kwargs
+            ctx = call_kwargs["context"]
+            assert "Chunk 1: the evidence." in ctx["evidence_sections"]
 
 
 @pytest.mark.integration
@@ -1224,6 +1400,17 @@ class TestOrchestratorMultiStep:
             confidence_score=0.9,
         )
 
+        builder_patch = patch(
+            "app.workers.orchestrator._build_script_context",
+            new_callable=AsyncMock,
+            return_value=AssembledContext(
+                narrative_summary="Test research summary.",
+                evidence_sections="## Retrieved Evidence\n\nChunk 1: test evidence.",
+                raw_chunks=[],
+            ),
+        )
+        builder_patch.start()
+
         with (
             patch(
                 "app.workers.orchestrator.process_extraction_job",
@@ -1339,6 +1526,8 @@ class TestOrchestratorMultiStep:
             await execute_state_transition(mock_db_session, mock_job)
             mock_cleanup.assert_awaited_once_with(mock_job.id, mock_db_session)
 
+        builder_patch.stop()
+
     async def test_revision_loop_with_eventual_approval(
         self,
         mock_db_session,
@@ -1386,6 +1575,7 @@ class TestOrchestratorMultiStep:
         script_v2.feedback_history = []
 
         with (
+            _mock_build_script_context(),
             patch(
                 "app.workers.orchestrator.RedTeamAgent",
                 return_value=_mock_agent_class(revision_result).return_value,

@@ -230,6 +230,13 @@ class CopywriterAgent(BaseAgent):
                 confidence_score=0.0,
             )
 
+        evidence_sections = context.get("evidence_sections", "")
+        evidence_prompt = (
+            evidence_sections
+            if evidence_sections
+            else "No additional evidence was retrieved. Rely solely on the refined_context."
+        )
+
         story_directives = context.get("story_directives", {})
         target_audience = story_directives.get("target_audience", "General")
         tone = story_directives.get("tone", "")
@@ -246,14 +253,21 @@ class CopywriterAgent(BaseAgent):
                         "You are the Lead Scriptwriter for the AI Content Factory. Your mission is to write a compelling, "
                         "format-agnostic master narrative script.\n\n"
                         "## YOUR INPUT\n"
-                        "You receive a `refined_context` — a comprehensive research summary vetted and synthesized by the "
-                        "research team. This is your SOLE source of truth. Do NOT introduce facts not present in the "
-                        "refined_context.\n\n"
+                        "You receive two sources of information:\n"
+                        "1. `refined_context` — a comprehensive research summary synthesizing all retrieved evidence into a "
+                        "single coherent narrative.\n"
+                        "2. `retrieved_evidence` — raw evidence chunks retrieved from the knowledge base, each annotated "
+                        "with similarity score and source type.\n\n"
+                        "The `retrieved_evidence` is your PRIMARY source for factual claims. "
+                        "The `refined_context` provides narrative structure and context.\n"
+                        "Cross-reference both sources. If a claim appears in the refined_context but is absent from or "
+                        "contradicted by the retrieved_evidence, prefer the retrieved_evidence.\n"
+                        "Do NOT introduce facts not present in either source.\n\n"
                         "You also receive `story_directives` — target_audience, tone, and angle — that guide how the "
                         "script should be framed. Tailor vocabulary, narrative voice, complexity, and perspective to "
                         "match these directives.\n\n"
                         "## RULES\n"
-                        "1. ZERO HALLUCINATION: Every claim must trace to the refined_context.\n"
+                        "1. ZERO HALLUCATION: Every claim must trace to the refined_context or retrieved_evidence.\n"
                         "2. Write a clean narrative script (500-800 words) with no format-specific structure.\n"
                         "3. Open with a strong hook — a surprising fact, provocative question, or bold statement.\n"
                         "4. Build a clear narrative arc: hook → context → depth → payoff.\n"
@@ -274,6 +288,7 @@ class CopywriterAgent(BaseAgent):
                         "Write a master narrative script for the following topic.\n\n"
                         "<topic>\n{topic}\n</topic>\n\n"
                         "<refined_context>\n{refined_context}\n</refined_context>\n\n"
+                        "<retrieved_evidence>\n{evidence_sections}\n</retrieved_evidence>\n\n"
                         "<story_directives>\n{story_directives}\n</story_directives>\n\n"
                         "<feedback>\n{feedback}\n</feedback>\n\n"
                         "First, analyze the narrative arc step-by-step, considering the story_directives. "
@@ -288,6 +303,7 @@ class CopywriterAgent(BaseAgent):
             {
                 "topic": topic,
                 "refined_context": refined_context,
+                "evidence_sections": evidence_prompt,
                 "story_directives": story_directives_text,
                 "feedback": feedback,
             }

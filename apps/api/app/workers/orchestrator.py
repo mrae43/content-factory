@@ -42,11 +42,13 @@ from app.workers.formatters import (
 from app.workers.harness import FormatterHarness
 from app.schemas.shorts import (
     JobStatusEnum,
+    AssembledContext,
     next_status_after_fact_check,
     resolve_formats,
     FormatTypeEnum,
     PlatformEnum,
 )
+from app.services.context_builder import build as build_script_context
 from app.core.config import settings
 from app.core.guardrails import get_guardrail_config
 
@@ -191,7 +193,38 @@ async def _transition_researching(db: AsyncSession, job) -> None:
         raise Exception(f"Research failed: {result.reasoning}")
 
 
+async def _build_script_context(db: AsyncSession, job) -> AssembledContext:
+    try:
+        vector_store = ContentFactoryVectorStore(db)
+        pre_context = job.pre_context or {}
+        story_directives = {
+            "target_audience": pre_context.get("target_audience", "General"),
+            "tone": pre_context.get("tone", ""),
+            "angle": pre_context.get("angle", ""),
+        }
+        return await build_script_context(
+            topic=job.topic,
+            story_directives=story_directives,
+            refined_context=job.refined_context or "",
+            vector_store=vector_store,
+            job_id=job.id,
+            top_k=settings.context_builder_top_k,
+        )
+    except Exception:
+        logger.exception(
+            f"ContextBuilder failed for Job {job.id} — continuing with empty evidence"
+        )
+        return AssembledContext(
+            narrative_summary=job.refined_context or "",
+            evidence_sections="",
+            raw_chunks=[],
+        )
+
+
 async def _transition_scripting(db: AsyncSession, job) -> None:
+    assembled = await _build_script_context(db, job)
+    evidence_sections = assembled.evidence_sections
+
     latest_script = await get_latest_script(db, job.id)
 
     if latest_script and latest_script.feedback_history:
@@ -202,7 +235,13 @@ async def _transition_scripting(db: AsyncSession, job) -> None:
             and last_feedback.get("feedback_type") == "structured_claims"
         ):
             failed_claims = last_feedback.get("failed_claims", [])
-            await _run_optimizer(db, job, latest_script, failed_claims)
+            await _run_optimizer(
+                db,
+                job,
+                latest_script,
+                failed_claims,
+                evidence_sections=evidence_sections,
+            )
             return
         else:
             revision_feedback = (
@@ -210,13 +249,23 @@ async def _transition_scripting(db: AsyncSession, job) -> None:
                 if isinstance(last_feedback, str)
                 else last_feedback.get("feedback", "")
             )
-            await _run_copywriter(db, job, feedback=revision_feedback)
+            await _run_copywriter(
+                db,
+                job,
+                feedback=revision_feedback,
+                evidence_sections=evidence_sections,
+            )
             return
 
-    await _run_copywriter(db, job)
+    await _run_copywriter(db, job, evidence_sections=evidence_sections)
 
 
-async def _run_copywriter(db: AsyncSession, job, feedback: str = "") -> None:
+async def _run_copywriter(
+    db: AsyncSession,
+    job,
+    feedback: str = "",
+    evidence_sections: str = "",
+) -> None:
     copywriter = CopywriterAgent(
         model_name=settings.copywriter_model,
         temperature=settings.copywriter_temperature,
@@ -226,6 +275,7 @@ async def _run_copywriter(db: AsyncSession, job, feedback: str = "") -> None:
         "job_id": job.id,
         "topic": job.topic,
         "refined_context": job.refined_context or "",
+        "evidence_sections": evidence_sections,
         "story_directives": {
             "target_audience": pre_context.get("target_audience", "General"),
             "tone": pre_context.get("tone", ""),
@@ -245,7 +295,11 @@ async def _run_copywriter(db: AsyncSession, job, feedback: str = "") -> None:
 
 
 async def _run_optimizer(
-    db: AsyncSession, job, latest_script, failed_claims: list
+    db: AsyncSession,
+    job,
+    latest_script,
+    failed_claims: list,
+    evidence_sections: str = "",
 ) -> None:
     optimizer = ScriptOptimizerAgent(
         model_name=settings.optimizer_model,
@@ -257,6 +311,7 @@ async def _run_optimizer(
         "script_content": latest_script.content,
         "failed_claims": failed_claims,
         "refined_context": job.refined_context or "",
+        "evidence_sections": evidence_sections,
         "story_directives": {
             "target_audience": pre_context.get("target_audience", "General"),
             "tone": pre_context.get("tone", ""),
