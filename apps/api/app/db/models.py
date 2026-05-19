@@ -100,9 +100,6 @@ class RenderJob(Base):
     pre_context = Column(JSONB, nullable=False, server_default="{}")
 
     status = Column(JobStatusEnum, nullable=False, server_default="PENDING")
-    strict_compliance_mode = Column(
-        Boolean, default=True, nullable=False
-    )  # TODO: remove — absorbed into guardrail_strictness + High profile
 
     # Step 8: Final outputs
     final_video_url = Column(String, nullable=True)
