@@ -131,7 +131,10 @@ BLOG_FORMATTER_SYSTEM = (
     "7. Tags: use the plan's suggested tags, adjust if needed (3-8 tags).\n"
     "8. call_to_action: follow the plan's CTA direction.\n"
     "9. Write in an authoritative but accessible tone.\n"
-    "10. Structure: 4-8 sections with clear headings."
+    "10. Structure: 4-8 sections with clear headings.\n"
+    "11. CRITICAL: Do NOT mention key_takeaway, word_count, or sources_used "
+    "inside the body text. These fields are displayed separately in the UI — "
+    "including them inline creates redundancy."
 )
 
 BLOG_FORMATTER_HUMAN = (
