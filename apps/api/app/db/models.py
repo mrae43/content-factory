@@ -38,6 +38,7 @@ Base = declarative_base()
 JobStatusEnum = ENUM(
     "PENDING",
     "RESEARCHING",
+    "RETRIEVAL",
     "FACT_CHECKING_RESEARCH",
     "SCRIPTING",
     "FACT_CHECKING_SCRIPT",
@@ -108,6 +109,8 @@ class RenderJob(Base):
     refined_context = Column(Text, nullable=True)
     research_confidence = Column(Float, nullable=True)
     citation_index = Column(JSONB, nullable=True)
+    assembled_context = Column(JSONB, nullable=True)
+    retrieval_retry_count = Column(Integer, nullable=False, server_default="0")
     error_log = Column(JSONB, nullable=True)
 
     format_type = Column(String, nullable=False, server_default="all")
