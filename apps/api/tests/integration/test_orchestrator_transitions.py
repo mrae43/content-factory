@@ -712,7 +712,7 @@ class TestTransitionScriptingEvidence:
 
         with (
             patch(
-                "app.workers.orchestrator.build_script_context",
+                "app.workers.orchestrator._build_context_from_service",
                 new_callable=AsyncMock,
                 side_effect=Exception("DB connection lost"),
             ),

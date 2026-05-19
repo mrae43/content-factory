@@ -48,7 +48,7 @@ from app.schemas.shorts import (
     FormatTypeEnum,
     PlatformEnum,
 )
-from app.services.context_builder import build as build_script_context
+from app.services.context_builder import build as _build_context_from_service
 from app.core.config import settings
 from app.core.guardrails import get_guardrail_config
 
@@ -202,7 +202,7 @@ async def _build_script_context(db: AsyncSession, job) -> AssembledContext:
             "tone": pre_context.get("tone", ""),
             "angle": pre_context.get("angle", ""),
         }
-        return await build_script_context(
+        return await _build_context_from_service(
             topic=job.topic,
             story_directives=story_directives,
             refined_context=job.refined_context or "",
