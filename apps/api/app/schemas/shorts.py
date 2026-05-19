@@ -42,6 +42,7 @@ class JobStatusEnum(str, Enum):
     # Editorial desk names (used in UI/outward-facing):
     #   PENDING              → Queued
     #   RESEARCHING          → Research Desk
+    #   RETRIEVAL            → Retrieval Desk
     #   FACT_CHECKING_RESEARCH → Source Verification
     #   SCRIPTING            → Writer's Desk
     #   FACT_CHECKING_SCRIPT → Fact-Check Desk
@@ -52,6 +53,7 @@ class JobStatusEnum(str, Enum):
     #   HUMAN_REVIEW_NEEDED  → Your Review
     PENDING = "PENDING"
     RESEARCHING = "RESEARCHING"
+    RETRIEVAL = "RETRIEVAL"
     FACT_CHECKING_RESEARCH = "FACT_CHECKING_RESEARCH"
     SCRIPTING = "SCRIPTING"
     FACT_CHECKING_SCRIPT = "FACT_CHECKING_SCRIPT"
