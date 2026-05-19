@@ -190,8 +190,8 @@ export interface components {
             slide_number: number;
             /** Text */
             text: string;
-            /** Visual Prompt */
-            visual_prompt: string;
+            /** Visual Description */
+            visual_description: string;
             /** Hook Type */
             hook_type: string;
             /** Sources Used */

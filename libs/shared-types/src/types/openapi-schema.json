@@ -482,9 +482,9 @@
             "type": "string",
             "title": "Text"
           },
-          "visual_prompt": {
+          "visual_description": {
             "type": "string",
-            "title": "Visual Prompt"
+            "title": "Visual Description"
           },
           "hook_type": {
             "type": "string",
@@ -503,7 +503,7 @@
         "required": [
           "slide_number",
           "text",
-          "visual_prompt",
+          "visual_description",
           "hook_type"
         ],
         "title": "CarouselSlide"
