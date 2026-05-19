@@ -20,6 +20,8 @@ def mock_job():
     job.format_type = "video"
     job.platform = "youtube"
     job.strict_compliance_mode = False
+    job.retrieval_retry_count = 0
+    job.assembled_context = None
     return job
 
 
