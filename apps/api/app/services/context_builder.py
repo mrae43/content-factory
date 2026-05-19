@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from uuid import UUID
 
 from app.services.vector_store import ContentFactoryVectorStore
@@ -61,9 +61,7 @@ async def build(
     top_k: int = 10,
 ) -> AssembledContext:
     query = _compose_query(topic, story_directives)
-    logger.info(
-        f"ContextBuilder query for job {job_id}: {query!r} (top_k={top_k})"
-    )
+    logger.info(f"ContextBuilder query for job {job_id}: {query!r} (top_k={top_k})")
 
     retrieved = await vector_store.semantic_search(
         query=query,

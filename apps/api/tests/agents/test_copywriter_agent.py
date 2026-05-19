@@ -114,7 +114,10 @@ async def test_passes_evidence_sections_to_prompt(
     assert result.status == AgentActionStatus.SUCCESS
     call_args = mock_ainvoke.call_args
     invoked_input = call_args[0][0]
-    assert "Chunk 1 (similarity: 0.95): IMF confirms 3.2% growth." in invoked_input["evidence_sections"]
+    assert (
+        "Chunk 1 (similarity: 0.95): IMF confirms 3.2% growth."
+        in invoked_input["evidence_sections"]
+    )
 
 
 @pytest.mark.agent
