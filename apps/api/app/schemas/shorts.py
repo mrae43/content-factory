@@ -181,6 +181,21 @@ class FailedClaim(BaseModel):
     )
 
 
+class AssembledContext(BaseModel):
+    """Context Builder output: narrative summary + formatted evidence for agent injection."""
+
+    narrative_summary: str = Field(
+        description="refined_context verbatim — unchanged research narrative"
+    )
+    evidence_sections: str = Field(
+        description="Formatted text block with retrieved chunks, scores, and source_type for prompt injection"
+    )
+    raw_chunks: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Full payload of retrieved chunks for future structured use (Option B)",
+    )
+
+
 class OptimizerFeedbackEntry(BaseModel):
     feedback_type: str = Field(
         default="structured_claims", description="Discriminator for feedback format"
