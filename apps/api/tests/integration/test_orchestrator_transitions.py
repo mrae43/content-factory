@@ -898,6 +898,7 @@ class TestTransitionFactCheckingScript:
         agent_result_success,
     ):
         mock_job.status = JobStatusEnum.FACT_CHECKING_SCRIPT
+        mock_job.pre_context["guardrail_strictness"] = "Medium"
         claims_data = [
             {
                 "claim_text": "BRICS announced new system",
@@ -953,6 +954,7 @@ class TestTransitionFactCheckingScript:
         agent_result_success,
     ):
         mock_job.status = JobStatusEnum.FACT_CHECKING_SCRIPT
+        mock_job.pre_context["guardrail_strictness"] = "Medium"
         result = agent_result_success(payload={"claims": [], "verdict": "SUPPORTED"})
 
         with (
@@ -983,6 +985,119 @@ class TestTransitionFactCheckingScript:
             assert mock_script.is_approved is True
             mock_update.assert_awaited_once_with(
                 mock_db_session, mock_job.id, JobStatusEnum.FORMATTING
+            )
+
+    async def test_high_profile_requires_human_review(
+        self,
+        mock_db_session,
+        mock_job,
+        mock_vector_store,
+        mock_script,
+        agent_result_success,
+    ):
+        mock_job.status = JobStatusEnum.FACT_CHECKING_SCRIPT
+        mock_job.pre_context["guardrail_strictness"] = "High"
+        claims_data = [
+            {
+                "claim_text": "BRICS announced new system",
+                "verdict": "SUPPORTED",
+                "confidence": 0.95,
+                "evidence_text": "BRICS nations announced...",
+                "evidence_references": [str(uuid4())],
+            }
+        ]
+        result = agent_result_success(
+            payload={"claims": claims_data, "verdict": "SUPPORTED"}
+        )
+
+        with (
+            patch(
+                "app.workers.orchestrator.RedTeamAgent",
+                return_value=_mock_agent_class(result).return_value,
+            ),
+            patch(
+                "app.workers.orchestrator.ContentFactoryVectorStore",
+                return_value=mock_vector_store,
+            ),
+            patch(
+                "app.workers.orchestrator.get_latest_script", new_callable=AsyncMock
+            ) as mock_get_script,
+            patch(
+                "app.workers.orchestrator.save_fact_check_claims",
+                new_callable=AsyncMock,
+            ) as mock_save_claims,
+            patch(
+                "app.workers.orchestrator.update_job_status", new_callable=AsyncMock
+            ) as mock_update,
+        ):
+            mock_get_script.return_value = mock_script
+
+            await execute_state_transition(mock_db_session, mock_job)
+
+            mock_save_claims.assert_awaited_once_with(
+                mock_db_session, mock_script.id, claims_data
+            )
+            assert mock_script.is_approved is False
+            mock_db_session.commit.assert_awaited()
+            mock_update.assert_awaited_once_with(
+                mock_db_session, mock_job.id, JobStatusEnum.HUMAN_REVIEW_NEEDED
+            )
+
+    async def test_high_profile_with_uncertain_pass_through_requires_human_review(
+        self,
+        mock_db_session,
+        mock_job,
+        mock_vector_store,
+        mock_script,
+        agent_result_success,
+    ):
+        mock_job.status = JobStatusEnum.FACT_CHECKING_SCRIPT
+        mock_job.pre_context["guardrail_strictness"] = "High"
+        mock_job.pre_context["uncertain_pass_through"] = True
+        claims_data = [
+            {
+                "claim_text": "BRICS announced new system",
+                "verdict": "SUPPORTED",
+                "confidence": 0.95,
+                "evidence_text": "BRICS nations announced...",
+                "evidence_references": [str(uuid4())],
+            }
+        ]
+        result = agent_result_success(
+            payload={"claims": claims_data, "verdict": "SUPPORTED"}
+        )
+
+        with (
+            patch(
+                "app.workers.orchestrator.RedTeamAgent",
+                return_value=_mock_agent_class(result).return_value,
+            ),
+            patch(
+                "app.workers.orchestrator.ContentFactoryVectorStore",
+                return_value=mock_vector_store,
+            ),
+            patch(
+                "app.workers.orchestrator.get_latest_script", new_callable=AsyncMock
+            ) as mock_get_script,
+            patch(
+                "app.workers.orchestrator.save_fact_check_claims",
+                new_callable=AsyncMock,
+            ) as mock_save_claims,
+            patch(
+                "app.workers.orchestrator.update_job_status", new_callable=AsyncMock
+            ) as mock_update,
+        ):
+            mock_get_script.return_value = mock_script
+
+            await execute_state_transition(mock_db_session, mock_job)
+
+            mock_save_claims.assert_awaited_once_with(
+                mock_db_session, mock_script.id, claims_data
+            )
+            assert mock_script.is_approved is False
+            mock_db_session.commit.assert_awaited()
+            mock_update.assert_awaited_once_with(
+                mock_db_session, mock_job.id, JobStatusEnum.HUMAN_REVIEW_NEEDED
             )
 
     async def test_should_reject_and_loop_to_scripting(
