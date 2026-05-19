@@ -35,6 +35,7 @@ async def test_returns_success_with_patched_script(
         "script_content": "BRICS GDP grew 15% last year. This is a big deal.",
         "failed_claims": SAMPLE_FAILED_CLAIMS,
         "refined_context": SAMPLE_REFINED_CONTEXT,
+        "evidence_sections": "## Retrieved Evidence\n\nChunk 1 (similarity: 0.92, source: WEB_SEARCH, relevance: HIGH):\nBRICS GDP grew 3.2% in 2024 according to IMF.\n",
         "story_directives": {
             "target_audience": "Investors",
             "tone": "analytical",
@@ -55,6 +56,7 @@ async def test_returns_success_with_patched_script(
     assert "Target Audience: Investors" in invoked_input["story_directives"]
     assert "Tone: analytical" in invoked_input["story_directives"]
     assert "Angle: economic risks" in invoked_input["story_directives"]
+    assert "BRICS GDP grew 3.2%" in invoked_input["evidence_sections"]
 
 
 @pytest.mark.agent
@@ -99,6 +101,7 @@ async def test_chain_receives_formatted_claims(
         "script_content": "BRICS GDP grew 15% last year.",
         "failed_claims": SAMPLE_FAILED_CLAIMS,
         "refined_context": SAMPLE_REFINED_CONTEXT,
+        "evidence_sections": "## Retrieved Evidence\n\nChunk 1 (similarity: 0.92): IMF data.",
     }
 
     with chain_mock(optimizer_schema_output) as mock_ainvoke:
@@ -111,6 +114,34 @@ async def test_chain_receives_formatted_claims(
     assert "UNSUPPORTED" in invoked_input["failed_claims"]
     assert invoked_input["original_script"] == "BRICS GDP grew 15% last year."
     assert invoked_input["refined_context"] == SAMPLE_REFINED_CONTEXT
+    assert "Chunk 1 (similarity: 0.92): IMF data." in invoked_input["evidence_sections"]
+
+
+@pytest.mark.agent
+async def test_handles_empty_evidence_sections(
+    optimizer_schema_output,
+    chain_mock,
+):
+    agent = _make_agent()
+    context = {
+        "script_content": "BRICS GDP grew 15% last year.",
+        "failed_claims": SAMPLE_FAILED_CLAIMS,
+        "refined_context": SAMPLE_REFINED_CONTEXT,
+        "evidence_sections": "",
+        "story_directives": {
+            "target_audience": "General",
+            "tone": "neutral",
+            "angle": "",
+        },
+    }
+
+    with chain_mock(optimizer_schema_output) as mock_ainvoke:
+        result = await agent._execute(context)
+
+    assert result.status == AgentActionStatus.SUCCESS
+    call_args = mock_ainvoke.call_args
+    invoked_input = call_args[0][0]
+    assert "No additional evidence was retrieved" in invoked_input["evidence_sections"]
 
 
 def test_format_failed_claims_single():
