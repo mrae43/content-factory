@@ -242,3 +242,43 @@ def multi_chain_mock():
         )
 
     return _make
+
+
+@pytest.fixture
+def carousel_slides():
+    return [
+        {
+            "slide_number": 1,
+            "visual_description": "Chart of BRICS GDP growth",
+            "text": "GDP grew 3.2%",
+        },
+        {
+            "slide_number": 2,
+            "visual_description": "Map of BRICS nations highlighted",
+            "text": "Nine nations now",
+        },
+        {
+            "slide_number": 3,
+            "visual_description": "Infographic payment system flow",
+            "text": "New payment system",
+        },
+    ]
+
+
+@pytest.fixture
+def carousel_format_payload(carousel_slides):
+    return {
+        "slides": carousel_slides,
+        "thread_title": "BRICS: The New World Order",
+        "hashtags": ["#BRICS", "#Economics"],
+        "cta_slide": "Follow for more insights",
+    }
+
+
+@pytest.fixture
+def carousel_image_context(job_id, carousel_format_payload):
+    return {
+        "job_id": job_id,
+        "format_payload": carousel_format_payload,
+        "platform": "instagram",
+    }

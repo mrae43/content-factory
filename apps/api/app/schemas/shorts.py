@@ -176,8 +176,9 @@ class AssetRenderMeta(BaseModel):
     synthid_watermark: Optional[str] = Field(
         None, description="Google SynthID signature for compliance"
     )
-    prompt_used: Optional[str] = Field(
-        None, description="The exact Veo/Lyria prompt used"
+    prompt_used: Optional[str] = Field(None, description="The exact prompt used")
+    failure_reason: Optional[str] = Field(
+        None, description="Reason for asset generation failure, if any"
     )
 
 

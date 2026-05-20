@@ -34,6 +34,7 @@ from app.workers.agents import (
     AgentActionStatus,
 )
 from app.workers.optimizer import ScriptOptimizerAgent
+from app.workers.carousel_image_agent import CarouselImageAgent
 from app.workers.formatters import (
     BlogFormatterAgent,
     CarouselFormatterAgent,
@@ -463,31 +464,60 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
 
 async def _transition_asset_generation(db: AsyncSession, job) -> None:
     video_script = await get_latest_format_script(db, job.id, "VIDEO")
+    carousel_script = await get_latest_format_script(db, job.id, "CAROUSEL")
 
-    if not video_script or not video_script.format_payload:
+    if not video_script and not carousel_script:
         raise Exception(
             f"Cannot proceed to ASSET_GENERATION for Job {job.id}: "
-            f"no approved VIDEO format script with payload found."
+            f"no approved format script with payload found (checked VIDEO, CAROUSEL)."
         )
 
-    studio_context: Dict[str, Any] = {"job_id": job.id}
-    format_payload = video_script.format_payload
-    studio_context["scenes"] = format_payload.get("scenes", [])
-    studio_context["visual_style"] = format_payload.get("visual_style", "")
-    studio_context["script_content"] = video_script.content
+    any_success = False
 
-    studio = AssetStudioAgent(
-        model_name=settings.asset_model,
-        temperature=settings.asset_temperature,
-    )
-    result = await studio.run(context=studio_context)
+    # --- Video asset generation ---
+    if video_script and video_script.format_payload:
+        studio_context: Dict[str, Any] = {"job_id": job.id}
+        fmt = video_script.format_payload
+        studio_context["scenes"] = fmt.get("scenes", [])
+        studio_context["visual_style"] = fmt.get("visual_style", "")
+        studio_context["script_content"] = video_script.content
 
-    if result.status == AgentActionStatus.ERROR:
-        await log_error(db, job.id, result.reasoning, phase="ASSET_GENERATION")
-        return
+        studio = AssetStudioAgent(
+            model_name=settings.asset_model,
+            temperature=settings.asset_temperature,
+        )
+        result = await studio.run(context=studio_context)
 
-    if result.status == AgentActionStatus.SUCCESS:
-        job.final_video_url = result.payload["video_url"]
+        if result.status == AgentActionStatus.SUCCESS:
+            job.final_video_url = result.payload["video_url"]
+            any_success = True
+        elif result.status == AgentActionStatus.ERROR:
+            await log_error(
+                db, job.id, result.reasoning, phase="VIDEO_ASSET_GENERATION"
+            )
+
+    # --- Carousel image generation ---
+    if carousel_script and carousel_script.format_payload:
+        agent = CarouselImageAgent()
+        context: Dict[str, Any] = {
+            "job_id": job.id,
+            "format_payload": carousel_script.format_payload,
+            "platform": job.platform or "instagram",
+        }
+        carousel_result = await agent.run(context)
+
+        if carousel_result.status == AgentActionStatus.SUCCESS:
+            carousel_script.format_payload = carousel_result.payload["format_payload"]
+            any_success = True
+        else:
+            await log_error(
+                db,
+                job.id,
+                carousel_result.reasoning,
+                phase="CAROUSEL_IMAGE_GENERATION",
+            )
+
+    if any_success:
         await db.commit()
         await update_job_status(db, job.id, JobStatusEnum.COMPLETED)
 
@@ -556,7 +586,10 @@ def _build_format_content(format_type: str, payload: dict) -> str:
 def _next_status_after_formatting(
     resolved_formats: list[FormatTypeEnum],
 ) -> JobStatusEnum:
-    if FormatTypeEnum.VIDEO in resolved_formats:
+    if (
+        FormatTypeEnum.VIDEO in resolved_formats
+        or FormatTypeEnum.CAROUSEL in resolved_formats
+    ):
         return JobStatusEnum.ASSET_GENERATION
     return JobStatusEnum.COMPLETED
 

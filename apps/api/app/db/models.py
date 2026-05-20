@@ -53,6 +53,7 @@ JobStatusEnum = ENUM(
 )
 
 AssetTypeEnum = ENUM(
+    "CAROUSEL_SLIDE",
     "VISUAL_VEO",
     "AUDIO_LYRIA",
     "VOICEOVER",
