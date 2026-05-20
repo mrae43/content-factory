@@ -87,11 +87,13 @@ export function CarouselViewer({ payload, platform }: CarouselViewerProps) {
         )}
       </div>
 
-      {payload.slides.map((slide) => (
+      <div
+        className="max-w-sm md:max-w-md mx-auto"
+        style={{ aspectRatio }}
+      >
         <div
-          key={slide.slide_number}
-          className={`relative rounded-lg border p-5 space-y-3 ${
-            isCta(slide.slide_number)
+          className={`h-full rounded-lg border p-5 flex flex-col space-y-3 ${
+            isCtaSlide
               ? "border-primary/30 bg-primary/5"
               : "border-border bg-card"
           }`}
@@ -100,14 +102,14 @@ export function CarouselViewer({ payload, platform }: CarouselViewerProps) {
             <span className="font-heading text-2xl font-bold text-primary leading-none">
               {String(slide.slide_number).padStart(2, "0")}
             </span>
-            {slide.hook_type && (
-              <span className="inline-flex items-center rounded-[4px] bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-primary">
-                {slide.hook_type}
-              </span>
-            )}
+            <IconComponent
+              className={`h-5 w-5 ${
+                isCtaSlide ? "text-primary" : "text-muted-foreground"
+              }`}
+            />
           </div>
 
-          <p className="text-[15px] leading-[1.6] whitespace-pre-wrap">
+          <p className="text-[15px] leading-[1.6] whitespace-pre-wrap flex-1">
             {slide.text}
           </p>
 
@@ -117,28 +119,19 @@ export function CarouselViewer({ payload, platform }: CarouselViewerProps) {
             </p>
           )}
 
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-            {slide.sources_used && slide.sources_used.length > 0 ? (
-              <p className="text-xs text-muted-foreground">
-                Sources: {slide.sources_used.join(", ")}
-              </p>
-            ) : (
-              <span />
-            )}
-            <span
-              className={`text-xs tabular-nums ${
-                slide.text.length >= limit
-                  ? "text-destructive font-semibold"
-                  : slide.text.length >= limit * 0.9
-                    ? "text-warning"
-                    : "text-muted-foreground"
-              }`}
-            >
-              {slide.text.length} / {limit}
-            </span>
-          </div>
+          <span
+            className={`text-xs tabular-nums self-end ${
+              slide.text.length >= limit
+                ? "text-destructive font-semibold"
+                : slide.text.length >= limit * 0.9
+                  ? "text-warning"
+                  : "text-muted-foreground"
+            }`}
+          >
+            {slide.text.length} / {limit}
+          </span>
         </div>
-      ))}
+      </div>
 
       {payload.cta_slide && (
         <div className="rounded-lg border border-primary/30 bg-primary/5 p-5">
