@@ -45,7 +45,29 @@ const ASPECT_RATIO_MAP: Record<string, string> = {
 
 export function CarouselViewer({ payload, platform }: CarouselViewerProps) {
   const limit = (platform && charLimits[platform]) ?? 500;
-  const isCta = (slideNum: number) => slideNum === payload.slides.length;
+  const slides = payload.slides;
+  const totalSlides = slides.length;
+
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  const goPrev = () => setCurrentIndex((i) => Math.max(0, i - 1));
+  const goNext = () => setCurrentIndex((i) => Math.min(totalSlides - 1, i + 1));
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") goPrev();
+      if (e.key === "ArrowRight") goNext();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  const slide = slides[currentIndex];
+  if (!slide) return null;
+
+  const isCtaSlide = currentIndex === totalSlides - 1 && slide.hook_type === "cta";
+  const IconComponent = HOOK_TYPE_ICON_MAP[slide.hook_type] ?? FileText;
+  const aspectRatio = ASPECT_RATIO_MAP[platform ?? ""] ?? "4/5";
 
   return (
     <div className="space-y-4">
