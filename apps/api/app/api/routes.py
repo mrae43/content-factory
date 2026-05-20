@@ -16,7 +16,9 @@ from app.schemas.shorts import (
 )
 from app.db.models import RenderJob, Script
 from app.db.session import get_db
-from app.db.crud import list_render_jobs as crud_list_jobs
+from app.db.crud import list_render_jobs as crud_list_jobs, get_latest_format_script
+from app.workers.carousel_image_agent import CarouselImageAgent
+from app.workers.agents import AgentActionStatus
 
 logger = logging.getLogger(__name__)
 
@@ -181,3 +183,49 @@ async def approve_script(
         job = result.unique().scalar_one()
 
     return job
+
+
+@router.post(
+    "/{job_id}/regenerate-assets",
+    status_code=status.HTTP_200_OK,
+)
+async def regenerate_assets(
+    job_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = (
+        select(RenderJob)
+        .options(selectinload(RenderJob.scripts))
+        .filter(RenderJob.id == job_id)
+    )
+    result = await db.execute(stmt)
+    job = result.unique().scalar_one_or_none()
+
+    if not job:
+        raise HTTPException(status_code=404, detail="RenderJob not found")
+
+    carousel_script = await get_latest_format_script(db, job_id, "CAROUSEL")
+
+    if not carousel_script or not carousel_script.format_payload:
+        raise HTTPException(
+            status_code=400,
+            detail="No carousel format script found to regenerate assets for",
+        )
+
+    agent = CarouselImageAgent()
+    context = {
+        "job_id": job.id,
+        "format_payload": carousel_script.format_payload,
+        "platform": job.platform or "instagram",
+    }
+    carousel_result = await agent.run(context)
+
+    if carousel_result.status == AgentActionStatus.SUCCESS:
+        carousel_script.format_payload = carousel_result.payload["format_payload"]
+        await db.commit()
+        return carousel_result.payload["format_payload"]
+
+    raise HTTPException(
+        status_code=500,
+        detail=f"Asset regeneration failed: {carousel_result.reasoning}",
+    )

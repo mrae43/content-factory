@@ -45,6 +45,19 @@ export function useCreateJob() {
   });
 }
 
+export function useRegenerateAssets(jobId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiClient(`/api/v1/jobs/${jobId}/regenerate-assets`, {
+        method: "POST",
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["jobs", jobId] });
+    },
+  });
+}
+
 export function useApproveScript(jobId: string) {
   const queryClient = useQueryClient();
   return useMutation({

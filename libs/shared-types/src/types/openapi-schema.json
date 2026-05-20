@@ -213,6 +213,47 @@
         }
       }
     },
+    "/api/v1/jobs/{job_id}/regenerate-assets": {
+      "post": {
+        "tags": [
+          "Content Factory"
+        ],
+        "summary": "Regenerate Assets",
+        "operationId": "regenerate_assets_api_v1_jobs__job_id__regenerate_assets_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/": {
       "get": {
         "summary": "Health Check",
@@ -278,7 +319,19 @@
               }
             ],
             "title": "Prompt Used",
-            "description": "The exact Veo/Lyria prompt used"
+            "description": "The exact prompt used"
+          },
+          "failure_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Reason",
+            "description": "Reason for asset generation failure, if any"
           }
         },
         "type": "object",
@@ -498,6 +551,17 @@
             },
             "type": "array",
             "title": "Sources Used"
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
           }
         },
         "type": "object",

@@ -205,7 +205,7 @@ class TestTransitionFormattingCarousel:
             assert save_call.kwargs["format_type"] == "CAROUSEL"
             assert save_call.kwargs["is_approved"] is True
             mock_update.assert_awaited_once_with(
-                mock_db_session, mock_job.id, JobStatusEnum.COMPLETED
+                mock_db_session, mock_job.id, JobStatusEnum.ASSET_GENERATION
             )
 
 
@@ -477,9 +477,9 @@ class TestTransitionAssetGenerationMissingVideoScript:
         ):
             await execute_state_transition(mock_db_session, mock_job)
 
-            mock_get_script.assert_awaited_once_with(
-                mock_db_session, mock_job.id, "VIDEO"
-            )
+            assert mock_get_script.await_count == 2
+            mock_get_script.assert_any_await(mock_db_session, mock_job.id, "VIDEO")
+            mock_get_script.assert_any_await(mock_db_session, mock_job.id, "CAROUSEL")
             mock_log.assert_awaited_once()
             mock_update.assert_awaited_once_with(
                 mock_db_session, mock_job.id, JobStatusEnum.FAILED
@@ -510,7 +510,7 @@ class TestNextStatusAfterFormatting:
         "resolved_formats,expected",
         [
             ([FormatTypeEnum.BLOG], JobStatusEnum.COMPLETED),
-            ([FormatTypeEnum.CAROUSEL], JobStatusEnum.COMPLETED),
+            ([FormatTypeEnum.CAROUSEL], JobStatusEnum.ASSET_GENERATION),
             ([FormatTypeEnum.VIDEO], JobStatusEnum.ASSET_GENERATION),
             (
                 [FormatTypeEnum.VIDEO, FormatTypeEnum.BLOG],
