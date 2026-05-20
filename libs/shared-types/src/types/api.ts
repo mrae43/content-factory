@@ -56,6 +56,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/jobs/{job_id}/regenerate-assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Regenerate Assets */
+        post: operations["regenerate_assets_api_v1_jobs__job_id__regenerate_assets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/": {
         parameters: {
             query?: never;
@@ -93,9 +110,14 @@ export interface components {
             synthid_watermark?: string | null;
             /**
              * Prompt Used
-             * @description The exact Veo/Lyria prompt used
+             * @description The exact prompt used
              */
             prompt_used?: string | null;
+            /**
+             * Failure Reason
+             * @description Reason for asset generation failure, if any
+             */
+            failure_reason?: string | null;
         };
         /**
          * AssetResponse
@@ -196,6 +218,8 @@ export interface components {
             hook_type: string;
             /** Sources Used */
             sources_used?: string[];
+            /** Image Url */
+            image_url?: string | null;
         };
         /**
          * FactCheckClaimResponse
@@ -632,6 +656,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RenderJobResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    regenerate_assets_api_v1_jobs__job_id__regenerate_assets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
