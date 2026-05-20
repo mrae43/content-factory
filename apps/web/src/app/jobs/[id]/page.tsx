@@ -1,6 +1,6 @@
 "use client";
 
-import { useJobDetail, useApproveScript } from "@/hooks/use-jobs";
+import { useJobDetail, useApproveScript, useRegenerateAssets } from "@/hooks/use-jobs";
 import { use, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
 import type {
@@ -161,7 +161,7 @@ function JobDetailContent({
     if (job.status === "COMPLETED") {
       return (
         <div className="space-y-4">
-          <FormatTabs formatScripts={formatScripts} platform={job.platform} />
+          <FormatTabs formatScripts={formatScripts} platform={job.platform} jobId={jobId} />
         </div>
       );
     }
@@ -291,10 +291,14 @@ function FailedSection({ job }: { job: RenderJobResponse }) {
 function FormatTabs({
   formatScripts,
   platform,
+  jobId,
 }: {
   formatScripts: ScriptResponse[];
   platform: string | null | undefined;
+  jobId?: string;
 }) {
+  const regenerateMutation = useRegenerateAssets(jobId ?? "");
+
   if (formatScripts.length === 0) {
     return (
       <div className="rounded-lg border border-border p-6 text-center">
@@ -307,13 +311,29 @@ function FormatTabs({
 
   if (formatScripts.length === 1) {
     const s = formatScripts[0];
+    const isCarousel = s.format_type === "CAROUSEL";
     return (
       <div className="rounded-lg border border-border">
-        <div className="border-b border-border bg-muted/30 px-4 py-2">
+        <div className="border-b border-border bg-muted/30 px-4 py-2 flex items-center justify-between">
           <span className="font-heading text-sm font-semibold">
             {(s.format_type ?? "").charAt(0).toUpperCase() +
               (s.format_type ?? "").slice(1).toLowerCase()}
           </span>
+          {isCarousel && jobId && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={regenerateMutation.isPending}
+              onClick={() =>
+                regenerateMutation.mutate(undefined, {
+                  onSuccess: () => toast.success("Images regenerated"),
+                  onError: () => toast.error("Image regeneration failed"),
+                })
+              }
+            >
+              {regenerateMutation.isPending ? "Regenerating\u2026" : "Regenerate Images"}
+            </Button>
+          )}
         </div>
         <div className="p-5">
           {renderFormatViewer(
@@ -343,20 +363,40 @@ function FormatTabs({
         ))}
       </TabsList>
       </div>
-      {formatScripts.map((s: ScriptResponse) => (
-        <TabsContent
-          key={s.id}
-          value={s.format_type ?? `fmt-${s.id}`}
-        >
-          <div className="rounded-lg border border-border p-5">
-            {renderFormatViewer(
-              s.format_type ?? "",
-              s.format_payload as Record<string, unknown>,
-              platform
-            )}
-          </div>
-        </TabsContent>
-      ))}
+      {formatScripts.map((s: ScriptResponse) => {
+        const isCarousel = s.format_type === "CAROUSEL";
+        return (
+          <TabsContent
+            key={s.id}
+            value={s.format_type ?? `fmt-${s.id}`}
+          >
+            <div className="rounded-lg border border-border p-5">
+              {isCarousel && jobId && (
+                <div className="flex justify-end mb-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={regenerateMutation.isPending}
+                    onClick={() =>
+                      regenerateMutation.mutate(undefined, {
+                        onSuccess: () => toast.success("Images regenerated"),
+                        onError: () => toast.error("Image regeneration failed"),
+                      })
+                    }
+                  >
+                    {regenerateMutation.isPending ? "Regenerating\u2026" : "Regenerate Images"}
+                  </Button>
+                </div>
+              )}
+              {renderFormatViewer(
+                s.format_type ?? "",
+                s.format_payload as Record<string, unknown>,
+                platform
+              )}
+            </div>
+          </TabsContent>
+        );
+      })}
     </Tabs>
   );
 }
@@ -546,7 +586,7 @@ function ActiveOutput({ job }: { job: RenderJobResponse }) {
 
   if (status === "FORMATTING") {
     if (formatScripts.length > 0) {
-      return <FormatTabs formatScripts={formatScripts} platform={job.platform} />;
+      return <FormatTabs formatScripts={formatScripts} platform={job.platform} jobId={job.id} />;
     }
     return (
       <div className="rounded-lg border border-border p-6 text-center">
