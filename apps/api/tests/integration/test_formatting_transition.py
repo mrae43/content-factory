@@ -510,7 +510,7 @@ class TestNextStatusAfterFormatting:
         "resolved_formats,expected",
         [
             ([FormatTypeEnum.BLOG], JobStatusEnum.COMPLETED),
-            ([FormatTypeEnum.CAROUSEL], JobStatusEnum.COMPLETED),
+            ([FormatTypeEnum.CAROUSEL], JobStatusEnum.ASSET_GENERATION),
             ([FormatTypeEnum.VIDEO], JobStatusEnum.ASSET_GENERATION),
             (
                 [FormatTypeEnum.VIDEO, FormatTypeEnum.BLOG],

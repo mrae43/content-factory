@@ -1493,6 +1493,68 @@ class TestTransitionAssetGeneration:
             assert mock_job.final_video_url is None
             mock_update.assert_not_awaited()
 
+    async def test_should_generate_carousel_images_and_update_payload(
+        self,
+        mock_db_session,
+        mock_job,
+    ):
+        mock_job.status = JobStatusEnum.ASSET_GENERATION
+        mock_job.platform = "instagram"
+
+        carousel_script = MagicMock()
+        carousel_script.format_payload = {
+            "slides": [
+                {
+                    "slide_number": 1,
+                    "text": "Slide text",
+                    "visual_description": "Test visual",
+                }
+            ]
+        }
+        carousel_script.content = "Carousel content"
+
+        carousel_result = AgentResult(
+            status=AgentActionStatus.SUCCESS,
+            payload={
+                "format_payload": {
+                    "slides": [
+                        {
+                            "slide_number": 1,
+                            "text": "Slide text",
+                            "visual_description": "Test visual",
+                            "image_url": "/static/carousel_images/job_slide_01.png",
+                        }
+                    ]
+                }
+            },
+            reasoning="Generated images for 1/1 slides",
+            confidence_score=1.0,
+        )
+
+        with (
+            patch(
+                "app.workers.orchestrator.get_latest_format_script",
+                new_callable=AsyncMock,
+            ) as mock_get_format_script,
+            patch(
+                "app.workers.orchestrator.CarouselImageAgent",
+                return_value=MagicMock(run=AsyncMock(return_value=carousel_result)),
+            ),
+            patch(
+                "app.workers.orchestrator.update_job_status", new_callable=AsyncMock
+            ) as mock_update,
+        ):
+            mock_get_format_script.side_effect = [None, carousel_script]
+            await execute_state_transition(mock_db_session, mock_job)
+
+            assert carousel_script.format_payload["slides"][0]["image_url"] == (
+                "/static/carousel_images/job_slide_01.png"
+            )
+            mock_db_session.commit.assert_awaited()
+            mock_update.assert_awaited_once_with(
+                mock_db_session, mock_job.id, JobStatusEnum.COMPLETED
+            )
+
 
 @pytest.mark.integration
 class TestOrchestratorErrorHandling:
