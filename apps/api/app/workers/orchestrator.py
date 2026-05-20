@@ -34,6 +34,7 @@ from app.workers.agents import (
     AgentActionStatus,
 )
 from app.workers.optimizer import ScriptOptimizerAgent
+from app.workers.carousel_image_agent import CarouselImageAgent
 from app.workers.formatters import (
     BlogFormatterAgent,
     CarouselFormatterAgent,
@@ -490,6 +491,28 @@ async def _transition_asset_generation(db: AsyncSession, job) -> None:
         job.final_video_url = result.payload["video_url"]
         await db.commit()
         await update_job_status(db, job.id, JobStatusEnum.COMPLETED)
+
+    # --- Carousel image generation ---
+    carousel_script = await get_latest_format_script(db, job.id, "CAROUSEL")
+
+    if carousel_script and carousel_script.format_payload:
+        agent = CarouselImageAgent()
+        context: Dict[str, Any] = {
+            "job_id": job.id,
+            "format_payload": carousel_script.format_payload,
+            "platform": job.platform or "instagram",
+        }
+        carousel_result = await agent.run(context)
+
+        if carousel_result.status == AgentActionStatus.SUCCESS:
+            carousel_script.format_payload = carousel_result.payload["format_payload"]
+            job.final_video_url = job.final_video_url or ""
+            await db.commit()
+        else:
+            await log_error(
+                db, job.id, carousel_result.reasoning,
+                phase="CAROUSEL_IMAGE_GENERATION",
+            )
 
 
 async def _resolve_evidence_refs(
