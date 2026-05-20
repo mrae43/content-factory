@@ -54,9 +54,9 @@ const PLATFORM_OPTIONS = [
 ] as const;
 
 const STRICTNESS_OPTIONS = [
-  { value: "low", label: "Low" },
-  { value: "medium", label: "Medium" },
-  { value: "high", label: "High" },
+  { value: "Low", label: "Low" },
+  { value: "Medium", label: "Medium" },
+  { value: "High", label: "High" },
 ] as const;
 
 export default function NewJobPage() {
@@ -79,7 +79,7 @@ function NewJobForm() {
   const [formatType, setFormatType] = useState("all");
   const [platform, setPlatform] = useState("");
   const [targetAudience, setTargetAudience] = useState("general");
-  const [guardrailStrictness, setGuardrailStrictness] = useState("high");
+  const [guardrailStrictness, setGuardrailStrictness] = useState("High");
   const [tone, setTone] = useState("");
   const [angle, setAngle] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
