@@ -81,46 +81,67 @@ export function CarouselViewer({ payload, platform }: CarouselViewerProps) {
         className="max-w-sm md:max-w-md mx-auto"
         style={{ aspectRatio }}
       >
-        <div
-          className={`h-full rounded-lg border p-5 flex flex-col space-y-3 ${
-            isCtaSlide
-              ? "border-primary/30 bg-primary/5"
-              : "border-border bg-card"
-          }`}
-        >
-          <div className="flex items-start justify-between gap-3">
-            <span className="font-heading text-2xl font-bold text-primary leading-none">
-              {String(slide.slide_number).padStart(2, "0")}
-            </span>
-            <IconComponent
-              className={`h-5 w-5 ${
-                isCtaSlide ? "text-primary" : "text-muted-foreground"
-              }`}
+        {slide.image_url ? (
+          <div className="h-full rounded-lg border border-border overflow-hidden relative bg-black">
+            <img
+              src={slide.image_url}
+              alt={`Slide ${slide.slide_number}`}
+              className="h-full w-full object-contain"
             />
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4 pt-12">
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <span className="font-heading text-lg font-bold text-white leading-none">
+                  {String(slide.slide_number).padStart(2, "0")}
+                </span>
+                <IconComponent className="h-4 w-4 text-white/80" />
+              </div>
+              <p className="text-sm leading-snug text-white whitespace-pre-wrap line-clamp-3">
+                {slide.text}
+              </p>
+            </div>
           </div>
-
-          <p className="text-[15px] leading-[1.6] whitespace-pre-wrap flex-1">
-            {slide.text}
-          </p>
-
-          {slide.visual_description && (
-            <p className="text-xs italic text-muted-foreground">
-              {slide.visual_description}
-            </p>
-          )}
-
-          <span
-            className={`text-xs tabular-nums self-end ${
-              slide.text.length >= limit
-                ? "text-destructive font-semibold"
-                : slide.text.length >= limit * 0.9
-                  ? "text-warning"
-                  : "text-muted-foreground"
+        ) : (
+          <div
+            className={`h-full rounded-lg border p-5 flex flex-col space-y-3 ${
+              isCtaSlide
+                ? "border-primary/30 bg-primary/5"
+                : "border-border bg-card"
             }`}
           >
-            {slide.text.length} / {limit}
-          </span>
-        </div>
+            <div className="flex items-start justify-between gap-3">
+              <span className="font-heading text-2xl font-bold text-primary leading-none">
+                {String(slide.slide_number).padStart(2, "0")}
+              </span>
+              <IconComponent
+                className={`h-5 w-5 ${
+                  isCtaSlide ? "text-primary" : "text-muted-foreground"
+                }`}
+              />
+            </div>
+
+            <p className="text-[15px] leading-[1.6] whitespace-pre-wrap flex-1">
+              {slide.text}
+            </p>
+
+            {slide.visual_description && (
+              <p className="text-xs italic text-muted-foreground">
+                {slide.visual_description}
+              </p>
+            )}
+
+            <span
+              className={`text-xs tabular-nums self-end ${
+                slide.text.length >= limit
+                  ? "text-destructive font-semibold"
+                  : slide.text.length >= limit * 0.9
+                    ? "text-warning"
+                    : "text-muted-foreground"
+              }`}
+            >
+              {slide.text.length} / {limit}
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-center gap-4">
