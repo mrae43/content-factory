@@ -71,21 +71,7 @@ export function CarouselViewer({ payload, platform }: CarouselViewerProps) {
 
   return (
     <div className="space-y-4">
-      <div className="space-y-1">
-        <h3 className="font-heading text-lg font-semibold">{payload.thread_title}</h3>
-        {payload.hashtags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {payload.hashtags.map((h) => (
-              <span
-                key={h}
-                className="inline-flex items-center rounded-[4px] bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-primary"
-              >
-                #{h}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
+      <h3 className="font-heading text-lg font-semibold">{payload.thread_title}</h3>
 
       <div
         className="max-w-sm md:max-w-md mx-auto"
@@ -133,25 +119,44 @@ export function CarouselViewer({ payload, platform }: CarouselViewerProps) {
         </div>
       </div>
 
-      {payload.cta_slide && (
-        <div className="rounded-lg border border-primary/30 bg-primary/5 p-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-1.5">
-            Call to Action
-          </p>
-          <p className="text-sm">{payload.cta_slide}</p>
+      <div className="flex items-center justify-center gap-4">
+        <button
+          type="button"
+          onClick={goPrev}
+          disabled={currentIndex === 0}
+          className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:pointer-events-none transition-colors"
+          aria-label="Previous slide"
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+        <span className="text-sm tabular-nums text-muted-foreground min-w-[4rem] text-center">
+          {currentIndex + 1} / {totalSlides}
+        </span>
+        <button
+          type="button"
+          onClick={goNext}
+          disabled={currentIndex === totalSlides - 1}
+          className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:pointer-events-none transition-colors"
+          aria-label="Next slide"
+        >
+          <ChevronRight className="h-5 w-5" />
+        </button>
+      </div>
+
+      {payload.hashtags.length > 0 && (
+        <div className="flex flex-wrap justify-center gap-1.5">
+          {payload.hashtags.map((h) => (
+            <span
+              key={h}
+              className="inline-flex items-center rounded-[4px] bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-primary"
+            >
+              #{h}
+            </span>
+          ))}
         </div>
       )}
 
-      {payload.char_limit_violations && payload.char_limit_violations.length > 0 && (
-        <div className="rounded-md border border-warning/30 bg-warning/5 p-3 text-xs text-warning space-y-1">
-          <p className="font-semibold uppercase tracking-wide">Character Limit Warnings</p>
-          <ul className="list-disc pl-4 space-y-0.5">
-            {payload.char_limit_violations.map((v, i) => (
-              <li key={i}>{v}</li>
-            ))}
-          </ul>
-        </div>
-      )}
+
     </div>
   );
 }
