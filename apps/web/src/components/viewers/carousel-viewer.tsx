@@ -55,12 +55,16 @@ export function CarouselViewer({ payload, platform }: CarouselViewerProps) {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft") goPrev();
-      if (e.key === "ArrowRight") goNext();
+      if (e.key === "ArrowLeft") {
+        setCurrentIndex((i) => Math.max(0, i - 1));
+      }
+      if (e.key === "ArrowRight") {
+        setCurrentIndex((i) => Math.min(totalSlides - 1, i + 1));
+      }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [totalSlides]);
 
   const slide = slides[currentIndex];
   if (!slide) return null;
