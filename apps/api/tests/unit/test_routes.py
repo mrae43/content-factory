@@ -1,6 +1,6 @@
 import pytest
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 from fastapi import FastAPI
@@ -8,6 +8,7 @@ from httpx import AsyncClient, ASGITransport
 
 from app.api.routes import router
 from app.db.session import get_db
+from app.db.crud import get_latest_format_script
 from app.schemas.shorts import (
     JobStatusEnum,
     PlatformEnum,
@@ -15,6 +16,8 @@ from app.schemas.shorts import (
     StoryDirectives,
     resolve_formats,
 )
+from app.workers.carousel_image_agent import CarouselImageAgent
+from app.workers.agents import AgentActionStatus, AgentResult
 
 
 def make_mock_job(**overrides):
@@ -402,3 +405,134 @@ class TestStoryDirectives:
         with_defaults = StoryDirectives()
         full = with_defaults.model_dump(mode="json")
         assert full["uncertain_pass_through"] is False
+
+
+@pytest.mark.unit
+class TestRegenerateAssets:
+    async def test_should_regenerate_carousel_images_and_return_payload(
+        self, client, mock_db
+    ):
+        job = make_mock_job(
+            platform="instagram",
+        )
+        mock_script = make_mock_script(
+            format_type="CAROUSEL",
+            format_payload={
+                "slides": [
+                    {
+                        "slide_number": 1,
+                        "text": "Slide 1",
+                        "visual_description": "A sunset",
+                    }
+                ]
+            },
+        )
+
+        mock_result_1 = MagicMock()
+        mock_result_1.unique.return_value.scalar_one_or_none.return_value = job
+        mock_result_2 = MagicMock()
+        mock_result_2.unique.return_value.scalar_one.return_value = job
+        mock_db.execute.side_effect = [mock_result_1, mock_result_2]
+
+        agent_result = AgentResult(
+            status=AgentActionStatus.SUCCESS,
+            payload={
+                "format_payload": {
+                    "slides": [
+                        {
+                            "slide_number": 1,
+                            "text": "Slide 1",
+                            "visual_description": "A sunset",
+                            "image_url": "/static/carousel_images/abc_slide_01.png",
+                        }
+                    ]
+                }
+            },
+            reasoning="Generated images for 1/1 slides",
+            confidence_score=1.0,
+        )
+
+        with (
+            patch(
+                "app.api.routes.get_latest_format_script",
+                new_callable=AsyncMock,
+                return_value=mock_script,
+            ),
+            patch(
+                "app.api.routes.CarouselImageAgent",
+                return_value=MagicMock(run=AsyncMock(return_value=agent_result)),
+            ),
+        ):
+            resp = await client.post(
+                f"/api/v1/jobs/{job.id}/regenerate-assets"
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "slides" in data
+        assert data["slides"][0]["image_url"] == "/static/carousel_images/abc_slide_01.png"
+
+    async def test_should_return_404_when_job_not_found(self, client, mock_db):
+        mock_result = MagicMock()
+        mock_result.unique.return_value.scalar_one_or_none.return_value = None
+        mock_db.execute.return_value = mock_result
+
+        resp = await client.post(f"/api/v1/jobs/{uuid4()}/regenerate-assets")
+
+        assert resp.status_code == 404
+
+    async def test_should_return_400_when_no_carousel_script(self, client, mock_db):
+        job = make_mock_job()
+        mock_result = MagicMock()
+        mock_result.unique.return_value.scalar_one_or_none.return_value = job
+        mock_db.execute.return_value = mock_result
+
+        with (
+            patch(
+                "app.api.routes.get_latest_format_script",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+        ):
+            resp = await client.post(
+                f"/api/v1/jobs/{job.id}/regenerate-assets"
+            )
+
+        assert resp.status_code == 400
+        assert "No carousel format script" in resp.json()["detail"]
+
+    async def test_should_return_500_when_agent_fails(self, client, mock_db):
+        job = make_mock_job(platform="instagram")
+        mock_script = make_mock_script(
+            format_type="CAROUSEL",
+            format_payload={"slides": [{"slide_number": 1, "text": "Slide 1"}]},
+        )
+
+        mock_result = MagicMock()
+        mock_result.unique.return_value.scalar_one_or_none.return_value = job
+        mock_db.execute.return_value = mock_result
+
+        agent_result = AgentResult(
+            status=AgentActionStatus.ERROR,
+            payload={},
+            reasoning="Image generation service unavailable",
+            confidence_score=0.0,
+        )
+
+        with (
+            patch(
+                "app.api.routes.get_latest_format_script",
+                new_callable=AsyncMock,
+                return_value=mock_script,
+            ),
+            patch(
+                "app.api.routes.CarouselImageAgent",
+                return_value=MagicMock(run=AsyncMock(return_value=agent_result)),
+            ),
+        ):
+            resp = await client.post(
+                f"/api/v1/jobs/{job.id}/regenerate-assets"
+            )
+
+        assert resp.status_code == 500
+        assert "Asset regeneration failed" in resp.json()["detail"]
