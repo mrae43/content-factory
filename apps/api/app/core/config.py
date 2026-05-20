@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     image_model: str = "black-forest-labs/FLUX.1-schnell"
     image_gen_max_retries: int = 3
     image_gen_timeout_seconds: int = 30
+    image_storage_path: str = "static/carousel_images"
+    storage_backend: str = "local"
 
     # Eval Model Configuration (Together AI)
     eval_research_model: str = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
