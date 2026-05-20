@@ -76,10 +76,12 @@ async def test_honours_platform_arg():
 @pytest.mark.agent
 async def test_returns_error_when_no_slides():
     agent = _make_agent()
-    result = await agent.run({
-        "job_id": uuid4(),
-        "format_payload": {"slides": []},
-    })
+    result = await agent.run(
+        {
+            "job_id": uuid4(),
+            "format_payload": {"slides": []},
+        }
+    )
 
     assert result.status == AgentActionStatus.ERROR
     assert "No slides" in result.reasoning
@@ -88,10 +90,12 @@ async def test_returns_error_when_no_slides():
 @pytest.mark.agent
 async def test_returns_error_when_format_payload_not_a_dict():
     agent = _make_agent()
-    result = await agent.run({
-        "job_id": uuid4(),
-        "format_payload": "not-a-dict",
-    })
+    result = await agent.run(
+        {
+            "job_id": uuid4(),
+            "format_payload": "not-a-dict",
+        }
+    )
 
     assert result.status == AgentActionStatus.ERROR
     assert "must be a dict" in result.reasoning
@@ -101,10 +105,12 @@ async def test_returns_error_when_format_payload_not_a_dict():
 async def test_partial_failure_still_succeeds():
     jid = uuid4()
     mock_gen = MagicMock()
-    mock_gen.generate = AsyncMock(side_effect=[
-        MagicMock(success=True, image_bytes=b"ok", failure_reason=None),
-        MagicMock(success=False, image_bytes=None, failure_reason="API error"),
-    ])
+    mock_gen.generate = AsyncMock(
+        side_effect=[
+            MagicMock(success=True, image_bytes=b"ok", failure_reason=None),
+            MagicMock(success=False, image_bytes=None, failure_reason="API error"),
+        ]
+    )
     mock_store = MagicMock()
     mock_store.upload_image.return_value = "/static/ok.png"
 
@@ -130,7 +136,9 @@ async def test_returns_error_when_all_slides_fail():
     jid = uuid4()
     mock_gen = MagicMock()
     mock_gen.generate = AsyncMock(
-        return_value=MagicMock(success=False, image_bytes=None, failure_reason="API error")
+        return_value=MagicMock(
+            success=False, image_bytes=None, failure_reason="API error"
+        )
     )
 
     agent = _make_agent(mock_image_service=mock_gen)
@@ -193,10 +201,12 @@ async def test_filename_includes_job_id():
 async def test_metadata_tracks_failures():
     jid = uuid4()
     mock_gen = MagicMock()
-    mock_gen.generate = AsyncMock(side_effect=[
-        MagicMock(success=True, image_bytes=b"a", failure_reason=None),
-        MagicMock(success=False, image_bytes=None, failure_reason="Rate limited"),
-    ])
+    mock_gen.generate = AsyncMock(
+        side_effect=[
+            MagicMock(success=True, image_bytes=b"a", failure_reason=None),
+            MagicMock(success=False, image_bytes=None, failure_reason="Rate limited"),
+        ]
+    )
     mock_store = MagicMock()
 
     agent = _make_agent(mock_image_service=mock_gen, mock_storage=mock_store)

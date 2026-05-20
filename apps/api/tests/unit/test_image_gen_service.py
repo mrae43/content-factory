@@ -60,7 +60,10 @@ class TestImageGenHelpers:
 class TestImageGenResult:
     def test_success_result(self):
         result = ImageGenResult(
-            success=True, image_bytes=b"data", width=1080, height=1350,
+            success=True,
+            image_bytes=b"data",
+            width=1080,
+            height=1350,
             prompt_used="test prompt",
         )
         assert result.success is True
@@ -69,7 +72,9 @@ class TestImageGenResult:
 
     def test_failure_result(self):
         result = ImageGenResult(
-            success=False, failure_reason="API error", prompt_used="test prompt",
+            success=False,
+            failure_reason="API error",
+            prompt_used="test prompt",
         )
         assert result.success is False
         assert result.image_bytes is None
@@ -91,7 +96,9 @@ class TestImageGenerationServiceInit:
     def test_explicit_overrides(self):
         with patch("app.services.image_gen.settings"):
             service = ImageGenerationService(
-                model="custom-model", max_retries=5, timeout_seconds=60,
+                model="custom-model",
+                max_retries=5,
+                timeout_seconds=60,
             )
             assert service.model == "custom-model"
             assert service.max_retries == 5
@@ -103,7 +110,9 @@ class TestImageGenerationService:
     @pytest.fixture
     def service(self):
         return ImageGenerationService(
-            model="test-model", max_retries=2, timeout_seconds=30,
+            model="test-model",
+            max_retries=2,
+            timeout_seconds=30,
         )
 
     @pytest.fixture
@@ -120,7 +129,9 @@ class TestImageGenerationService:
         else:
             mock_resp.raise_for_status = MagicMock(
                 side_effect=aiohttp.ClientResponseError(
-                    request_info=MagicMock(), history=(), status=status,
+                    request_info=MagicMock(),
+                    history=(),
+                    status=status,
                 ),
             )
         return mock_resp
@@ -135,7 +146,11 @@ class TestImageGenerationService:
         return _MockSession(post_cm)
 
     def _make_success_response(self, b64_str=None, width=1080, height=1350):
-        data = {"data": [{"b64_json": b64_str or _dummy_b64(), "width": width, "height": height}]}
+        data = {
+            "data": [
+                {"b64_json": b64_str or _dummy_b64(), "width": width, "height": height}
+            ]
+        }
         return self._make_response(data)
 
     # --- Success ---
@@ -147,7 +162,9 @@ class TestImageGenerationService:
         session = self._make_session(cm)
         mock_aiohttp.return_value = session
 
-        result = await service.generate("A chart showing GDP growth", platform="instagram")
+        result = await service.generate(
+            "A chart showing GDP growth", platform="instagram"
+        )
 
         assert result.success is True
         assert result.image_bytes is not None
@@ -158,7 +175,9 @@ class TestImageGenerationService:
         assert _STYLE_ENRICHMENT in result.prompt_used
 
     @pytest.mark.asyncio
-    async def test_generate_lenient_when_no_dimensions_returned(self, service, mock_aiohttp):
+    async def test_generate_lenient_when_no_dimensions_returned(
+        self, service, mock_aiohttp
+    ):
         resp = self._make_response(
             {"data": [{"b64_json": _dummy_b64()}]},
         )
@@ -195,7 +214,9 @@ class TestImageGenerationService:
     # --- Retry / error recovery ---
 
     @pytest.mark.asyncio
-    async def test_generate_retries_on_timeout_then_succeeds(self, service, mock_aiohttp):
+    async def test_generate_retries_on_timeout_then_succeeds(
+        self, service, mock_aiohttp
+    ):
         fail_cm = AsyncMock()
         fail_cm.__aenter__ = AsyncMock(side_effect=asyncio.TimeoutError())
         fail_cm.__aexit__ = AsyncMock(return_value=None)
@@ -213,7 +234,9 @@ class TestImageGenerationService:
         assert mock_aiohttp.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_generate_retries_on_http_error_then_succeeds(self, service, mock_aiohttp):
+    async def test_generate_retries_on_http_error_then_succeeds(
+        self, service, mock_aiohttp
+    ):
         fail_resp = self._make_response({"error": "server error"}, status=500)
         fail_cm = self._make_post_cm(fail_resp)
 
@@ -230,7 +253,9 @@ class TestImageGenerationService:
         assert mock_aiohttp.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_generate_retries_on_connection_error_then_succeeds(self, service, mock_aiohttp):
+    async def test_generate_retries_on_connection_error_then_succeeds(
+        self, service, mock_aiohttp
+    ):
         fail_cm = AsyncMock()
         fail_cm.__aenter__ = AsyncMock(
             side_effect=aiohttp.ClientError("Connection refused"),
@@ -305,7 +330,9 @@ class TestImageGenerationService:
         result = await service.generate("Test", platform="instagram")
 
         assert result.success is False
-        assert "1024" in result.failure_reason or "small" in result.failure_reason.lower()
+        assert (
+            "1024" in result.failure_reason or "small" in result.failure_reason.lower()
+        )
 
     @pytest.mark.asyncio
     async def test_generate_dimension_mismatch(self, service, mock_aiohttp):
@@ -334,7 +361,9 @@ class TestImageGenerationService:
         assert "empty" in result.failure_reason.lower()
 
     def test_validate_response_data_not_a_list(self, service):
-        result = service._validate_response({"data": "not_a_list"}, 1080, 1350, "prompt")
+        result = service._validate_response(
+            {"data": "not_a_list"}, 1080, 1350, "prompt"
+        )
         assert result.success is False
 
     def test_validate_response_data_empty_list(self, service):

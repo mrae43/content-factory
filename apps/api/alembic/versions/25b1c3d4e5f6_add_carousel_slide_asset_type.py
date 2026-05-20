@@ -18,9 +18,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.execute(
-        "ALTER TYPE factory.asset_type ADD VALUE IF NOT EXISTS 'CAROUSEL_SLIDE'"
-    )
+    op.execute("ALTER TYPE factory.asset_type ADD VALUE IF NOT EXISTS 'CAROUSEL_SLIDE'")
 
 
 def downgrade() -> None:

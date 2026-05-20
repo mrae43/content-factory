@@ -247,9 +247,21 @@ def multi_chain_mock():
 @pytest.fixture
 def carousel_slides():
     return [
-        {"slide_number": 1, "visual_description": "Chart of BRICS GDP growth", "text": "GDP grew 3.2%"},
-        {"slide_number": 2, "visual_description": "Map of BRICS nations highlighted", "text": "Nine nations now"},
-        {"slide_number": 3, "visual_description": "Infographic payment system flow", "text": "New payment system"},
+        {
+            "slide_number": 1,
+            "visual_description": "Chart of BRICS GDP growth",
+            "text": "GDP grew 3.2%",
+        },
+        {
+            "slide_number": 2,
+            "visual_description": "Map of BRICS nations highlighted",
+            "text": "Nine nations now",
+        },
+        {
+            "slide_number": 3,
+            "visual_description": "Infographic payment system flow",
+            "text": "New payment system",
+        },
     ]
 
 

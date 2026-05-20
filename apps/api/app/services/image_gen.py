@@ -71,24 +71,31 @@ class ImageGenerationService:
             except asyncio.TimeoutError:
                 logger.warning(
                     "Image gen timeout (attempt %d/%d) for: %s",
-                    attempt, self.max_retries, prompt[:60],
+                    attempt,
+                    self.max_retries,
+                    prompt[:60],
                 )
                 last_exception = asyncio.TimeoutError("HTTP timeout")
             except aiohttp.ClientResponseError as e:
                 logger.warning(
                     "Image gen HTTP %d (attempt %d/%d) for: %s",
-                    e.status, attempt, self.max_retries, prompt[:60],
+                    e.status,
+                    attempt,
+                    self.max_retries,
+                    prompt[:60],
                 )
                 last_exception = e
             except aiohttp.ClientError as e:
                 logger.warning(
                     "Image gen connection error (attempt %d/%d): %s",
-                    attempt, self.max_retries, e,
+                    attempt,
+                    self.max_retries,
+                    e,
                 )
                 last_exception = e
 
             if attempt < self.max_retries:
-                await asyncio.sleep(2 ** attempt)
+                await asyncio.sleep(2**attempt)
 
         return ImageGenResult(
             success=False,
@@ -139,7 +146,11 @@ class ImageGenerationService:
         prompt: str,
     ) -> ImageGenResult:
         result_data = data.get("data")
-        if not result_data or not isinstance(result_data, list) or len(result_data) == 0:
+        if (
+            not result_data
+            or not isinstance(result_data, list)
+            or len(result_data) == 0
+        ):
             return ImageGenResult(
                 success=False,
                 failure_reason="Empty or missing data array in API response",
@@ -156,6 +167,7 @@ class ImageGenerationService:
             )
 
         import base64
+
         image_bytes = base64.b64decode(b64_json)
 
         if len(image_bytes) < 1024:

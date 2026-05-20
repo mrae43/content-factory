@@ -54,9 +54,7 @@ class CarouselImageAgent:
                 slide["image_url"] = None
                 continue
 
-            result = await self.image_service.generate(
-                visual_description, platform
-            )
+            result = await self.image_service.generate(visual_description, platform)
 
             if result.success and result.image_bytes:
                 filename = f"{job_id}_slide_{slide['slide_number']:02d}.png"
@@ -64,13 +62,17 @@ class CarouselImageAgent:
                 slide["image_url"] = url
             else:
                 slide["image_url"] = None
-                failures.append({
-                    "slide_number": slide.get("slide_number"),
-                    "reason": result.failure_reason or "Unknown error",
-                })
+                failures.append(
+                    {
+                        "slide_number": slide.get("slide_number"),
+                        "reason": result.failure_reason or "Unknown error",
+                    }
+                )
 
         success_count = len(slides) - len(failures)
-        status = AgentActionStatus.ERROR if success_count == 0 else AgentActionStatus.SUCCESS
+        status = (
+            AgentActionStatus.ERROR if success_count == 0 else AgentActionStatus.SUCCESS
+        )
 
         return AgentResult(
             status=status,

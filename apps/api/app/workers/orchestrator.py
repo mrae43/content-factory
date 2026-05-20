@@ -492,7 +492,9 @@ async def _transition_asset_generation(db: AsyncSession, job) -> None:
             job.final_video_url = result.payload["video_url"]
             any_success = True
         elif result.status == AgentActionStatus.ERROR:
-            await log_error(db, job.id, result.reasoning, phase="VIDEO_ASSET_GENERATION")
+            await log_error(
+                db, job.id, result.reasoning, phase="VIDEO_ASSET_GENERATION"
+            )
 
     # --- Carousel image generation ---
     if carousel_script and carousel_script.format_payload:
@@ -509,7 +511,9 @@ async def _transition_asset_generation(db: AsyncSession, job) -> None:
             any_success = True
         else:
             await log_error(
-                db, job.id, carousel_result.reasoning,
+                db,
+                job.id,
+                carousel_result.reasoning,
                 phase="CAROUSEL_IMAGE_GENERATION",
             )
 
@@ -582,7 +586,10 @@ def _build_format_content(format_type: str, payload: dict) -> str:
 def _next_status_after_formatting(
     resolved_formats: list[FormatTypeEnum],
 ) -> JobStatusEnum:
-    if FormatTypeEnum.VIDEO in resolved_formats or FormatTypeEnum.CAROUSEL in resolved_formats:
+    if (
+        FormatTypeEnum.VIDEO in resolved_formats
+        or FormatTypeEnum.CAROUSEL in resolved_formats
+    ):
         return JobStatusEnum.ASSET_GENERATION
     return JobStatusEnum.COMPLETED
 
