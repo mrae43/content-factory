@@ -44,14 +44,14 @@ def _valid_carousel_payload(**overrides):
             {
                 "slide_number": 1,
                 "text": "Short text",
-                "visual_prompt": "A visual",
+                "visual_description": "A visual",
                 "hook_type": "question",
                 "sources_used": [str(uuid4())],
             },
             {
                 "slide_number": 2,
                 "text": "Another short text",
-                "visual_prompt": "Another visual",
+                "visual_description": "Another visual",
                 "hook_type": "statistic",
                 "sources_used": [],
             },
@@ -234,7 +234,7 @@ class TestCarouselValidator:
                 {
                     "slide_number": 1,
                     "text": "x" * 501,
-                    "visual_prompt": "Visual",
+                    "visual_description": "Visual",
                     "hook_type": "question",
                     "sources_used": [],
                 }
@@ -254,7 +254,7 @@ class TestCarouselValidator:
                 {
                     "slide_number": 1,
                     "text": "x" * 280,
-                    "visual_prompt": "Visual",
+                    "visual_description": "Visual",
                     "hook_type": "question",
                     "sources_used": [],
                 }
@@ -272,7 +272,7 @@ class TestCarouselValidator:
                 {
                     "slide_number": 1,
                     "text": "x" * 281,
-                    "visual_prompt": "Visual",
+                    "visual_description": "Visual",
                     "hook_type": "question",
                     "sources_used": [],
                 }
@@ -292,7 +292,7 @@ class TestCarouselValidator:
                 {
                     "slide_number": 1,
                     "text": "x" * 700,
-                    "visual_prompt": "Visual",
+                    "visual_description": "Visual",
                     "hook_type": "statistic",
                     "sources_used": [],
                 }
@@ -310,7 +310,7 @@ class TestCarouselValidator:
                 {
                     "slide_number": 1,
                     "text": "x" * 701,
-                    "visual_prompt": "Visual",
+                    "visual_description": "Visual",
                     "hook_type": "statistic",
                     "sources_used": [],
                 }
@@ -329,7 +329,7 @@ class TestCarouselValidator:
                 {
                     "slide_number": 1,
                     "text": "x" * 2200,
-                    "visual_prompt": "Visual",
+                    "visual_description": "Visual",
                     "hook_type": "visual",
                     "sources_used": [],
                 }
@@ -347,7 +347,7 @@ class TestCarouselValidator:
                 {
                     "slide_number": 1,
                     "text": "x" * 2201,
-                    "visual_prompt": "Visual",
+                    "visual_description": "Visual",
                     "hook_type": "visual",
                     "sources_used": [],
                 }
@@ -366,14 +366,14 @@ class TestCarouselValidator:
                 {
                     "slide_number": 1,
                     "text": "x" * 300,
-                    "visual_prompt": "Visual",
+                    "visual_description": "Visual",
                     "hook_type": "question",
                     "sources_used": [],
                 },
                 {
                     "slide_number": 2,
                     "text": "y" * 290,
-                    "visual_prompt": "Visual",
+                    "visual_description": "Visual",
                     "hook_type": "statistic",
                     "sources_used": [],
                 },
@@ -422,7 +422,7 @@ class TestCarouselValidator:
                 {
                     "slide_number": 1,
                     "text": "x" * 2200,
-                    "visual_prompt": "Visual",
+                    "visual_description": "Visual",
                     "hook_type": "question",
                     "sources_used": [],
                 }
@@ -438,7 +438,7 @@ class TestCarouselValidator:
                 {
                     "slide_number": 1,
                     "text": "x" * 2201,
-                    "visual_prompt": "Visual",
+                    "visual_description": "Visual",
                     "hook_type": "question",
                     "sources_used": [],
                 }

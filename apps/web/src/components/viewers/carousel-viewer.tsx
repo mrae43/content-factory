@@ -1,6 +1,18 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import type { CarouselFormatPayload, PlatformEnum } from "@content-factory/shared-types";
+import {
+  HelpCircle,
+  TrendingUp,
+  Quote,
+  Image,
+  BookOpen,
+  ArrowRight,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+} from "lucide-react";
 
 interface CarouselViewerProps {
   payload: CarouselFormatPayload;
@@ -14,33 +26,64 @@ const charLimits: Record<string, number> = {
   youtube: 5000,
 };
 
+const HOOK_TYPE_ICON_MAP: Record<string, typeof HelpCircle> = {
+  question: HelpCircle,
+  statistic: TrendingUp,
+  quote: Quote,
+  visual: Image,
+  story: BookOpen,
+  cta: ArrowRight,
+};
+
+const ASPECT_RATIO_MAP: Record<string, string> = {
+  twitter: "2/3",
+  linkedin: "4/5",
+  instagram: "4/5",
+  tiktok: "9/16",
+  youtube: "16/9",
+};
+
 export function CarouselViewer({ payload, platform }: CarouselViewerProps) {
   const limit = (platform && charLimits[platform]) ?? 500;
-  const isCta = (slideNum: number) => slideNum === payload.slides.length;
+  const slides = payload.slides;
+  const totalSlides = slides.length;
+
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  const goPrev = () => setCurrentIndex((i) => Math.max(0, i - 1));
+  const goNext = () => setCurrentIndex((i) => Math.min(totalSlides - 1, i + 1));
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") {
+        setCurrentIndex((i) => Math.max(0, i - 1));
+      }
+      if (e.key === "ArrowRight") {
+        setCurrentIndex((i) => Math.min(totalSlides - 1, i + 1));
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [totalSlides]);
+
+  const slide = slides[currentIndex];
+  if (!slide) return null;
+
+  const isCtaSlide = currentIndex === totalSlides - 1 && slide.hook_type === "cta";
+  const IconComponent = HOOK_TYPE_ICON_MAP[slide.hook_type] ?? FileText;
+  const aspectRatio = ASPECT_RATIO_MAP[platform ?? ""] ?? "4/5";
 
   return (
     <div className="space-y-4">
-      <div className="space-y-1">
-        <h3 className="font-heading text-lg font-semibold">{payload.thread_title}</h3>
-        {payload.hashtags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {payload.hashtags.map((h) => (
-              <span
-                key={h}
-                className="inline-flex items-center rounded-[4px] bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-primary"
-              >
-                #{h}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
+      <h3 className="font-heading text-lg font-semibold">{payload.thread_title}</h3>
 
-      {payload.slides.map((slide) => (
+      <div
+        className="max-w-sm md:max-w-md mx-auto"
+        style={{ aspectRatio }}
+      >
         <div
-          key={slide.slide_number}
-          className={`relative rounded-lg border p-5 space-y-3 ${
-            isCta(slide.slide_number)
+          className={`h-full rounded-lg border p-5 flex flex-col space-y-3 ${
+            isCtaSlide
               ? "border-primary/30 bg-primary/5"
               : "border-border bg-card"
           }`}
@@ -49,14 +92,14 @@ export function CarouselViewer({ payload, platform }: CarouselViewerProps) {
             <span className="font-heading text-2xl font-bold text-primary leading-none">
               {String(slide.slide_number).padStart(2, "0")}
             </span>
-            {slide.hook_type && (
-              <span className="inline-flex items-center rounded-[4px] bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-primary">
-                {slide.hook_type}
-              </span>
-            )}
+            <IconComponent
+              className={`h-5 w-5 ${
+                isCtaSlide ? "text-primary" : "text-muted-foreground"
+              }`}
+            />
           </div>
 
-          <p className="text-[15px] leading-[1.6] whitespace-pre-wrap">
+          <p className="text-[15px] leading-[1.6] whitespace-pre-wrap flex-1">
             {slide.text}
           </p>
 
@@ -66,48 +109,58 @@ export function CarouselViewer({ payload, platform }: CarouselViewerProps) {
             </p>
           )}
 
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-            {slide.sources_used && slide.sources_used.length > 0 ? (
-              <p className="text-xs text-muted-foreground">
-                Sources: {slide.sources_used.join(", ")}
-              </p>
-            ) : (
-              <span />
-            )}
+          <span
+            className={`text-xs tabular-nums self-end ${
+              slide.text.length >= limit
+                ? "text-destructive font-semibold"
+                : slide.text.length >= limit * 0.9
+                  ? "text-warning"
+                  : "text-muted-foreground"
+            }`}
+          >
+            {slide.text.length} / {limit}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-center gap-4">
+        <button
+          type="button"
+          onClick={goPrev}
+          disabled={currentIndex === 0}
+          className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:pointer-events-none transition-colors"
+          aria-label="Previous slide"
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+        <span className="text-sm tabular-nums text-muted-foreground min-w-[4rem] text-center">
+          {currentIndex + 1} / {totalSlides}
+        </span>
+        <button
+          type="button"
+          onClick={goNext}
+          disabled={currentIndex === totalSlides - 1}
+          className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:pointer-events-none transition-colors"
+          aria-label="Next slide"
+        >
+          <ChevronRight className="h-5 w-5" />
+        </button>
+      </div>
+
+      {payload.hashtags.length > 0 && (
+        <div className="flex flex-wrap justify-center gap-1.5">
+          {payload.hashtags.map((h) => (
             <span
-              className={`text-xs tabular-nums ${
-                slide.text.length >= limit
-                  ? "text-destructive font-semibold"
-                  : slide.text.length >= limit * 0.9
-                    ? "text-warning"
-                    : "text-muted-foreground"
-              }`}
+              key={h}
+              className="inline-flex items-center rounded-[4px] bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-primary"
             >
-              {slide.text.length} / {limit}
+              #{h}
             </span>
-          </div>
-        </div>
-      ))}
-
-      {payload.cta_slide && (
-        <div className="rounded-lg border border-primary/30 bg-primary/5 p-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-1.5">
-            Call to Action
-          </p>
-          <p className="text-sm">{payload.cta_slide}</p>
+          ))}
         </div>
       )}
 
-      {payload.char_limit_violations && payload.char_limit_violations.length > 0 && (
-        <div className="rounded-md border border-warning/30 bg-warning/5 p-3 text-xs text-warning space-y-1">
-          <p className="font-semibold uppercase tracking-wide">Character Limit Warnings</p>
-          <ul className="list-disc pl-4 space-y-0.5">
-            {payload.char_limit_violations.map((v, i) => (
-              <li key={i}>{v}</li>
-            ))}
-          </ul>
-        </div>
-      )}
+
     </div>
   );
 }

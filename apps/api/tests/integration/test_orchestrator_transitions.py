@@ -1262,6 +1262,7 @@ class TestTransitionFactCheckingScript:
         ):
             mock_get_script.return_value = mock_script
             mock_settings.max_red_team_revisions = 2
+            mock_settings.retrieval_retry_max = 3
 
             await execute_state_transition(mock_db_session, mock_job)
 
@@ -1595,6 +1596,8 @@ class TestOrchestratorMultiStep:
             confidence_score=0.9,
         )
 
+        mock_job.pre_context = {"guardrail_strictness": "Low"}
+
         builder_patch = patch(
             "app.workers.orchestrator._build_script_context",
             new_callable=AsyncMock,
@@ -1766,6 +1769,8 @@ class TestOrchestratorMultiStep:
         script_v2.is_approved = False
         script_v2.feedback_history = []
 
+        mock_job.pre_context = {"guardrail_strictness": "Low"}
+
         with (
             _mock_build_script_context(),
             patch(
@@ -1802,6 +1807,7 @@ class TestOrchestratorMultiStep:
             patch("app.workers.orchestrator.settings") as mock_settings,
         ):
             mock_settings.max_red_team_revisions = 3
+            mock_settings.retrieval_retry_max = 3
             mock_red_team_instance_reject = AsyncMock()
             mock_red_team_instance_reject.run = AsyncMock(return_value=revision_result)
             mock_red_team_instance_approve = AsyncMock()
@@ -1836,7 +1842,7 @@ class TestOrchestratorMultiStep:
             mock_job.status = JobStatusEnum.FACT_CHECKING_SCRIPT
             await execute_state_transition(mock_db_session, mock_job)
 
-            assert script_v2.is_approved is True
+            assert script_v1.is_approved is True
 
     async def test_revision_loop_hits_max_and_escalates(
         self,
