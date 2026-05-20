@@ -56,6 +56,7 @@ class CarouselSlide(BaseModel):
     visual_description: str
     hook_type: str
     sources_used: List[UUID] = Field(default_factory=list)
+    image_url: Optional[str] = None
 
 
 class CarouselFormatPayload(BaseModel):
