@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image  from "next/image";
 import type { CarouselFormatPayload, PlatformEnum } from "@content-factory/shared-types";
 import {
   HelpCircle,
   TrendingUp,
   Quote,
-  Image,
+  Image as Img,
   BookOpen,
   ArrowRight,
   ChevronLeft,
@@ -30,7 +31,7 @@ const HOOK_TYPE_ICON_MAP: Record<string, typeof HelpCircle> = {
   question: HelpCircle,
   statistic: TrendingUp,
   quote: Quote,
-  visual: Image,
+  visual: Img,
   story: BookOpen,
   cta: ArrowRight,
 };
@@ -83,7 +84,7 @@ export function CarouselViewer({ payload, platform }: CarouselViewerProps) {
       >
         {slide.image_url ? (
           <div className="h-full rounded-lg border border-border overflow-hidden relative bg-black">
-            <img
+            <Image
               src={slide.image_url}
               alt={`Slide ${slide.slide_number}`}
               className="h-full w-full object-contain"
