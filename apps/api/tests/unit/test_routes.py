@@ -8,7 +8,6 @@ from httpx import AsyncClient, ASGITransport
 
 from app.api.routes import router
 from app.db.session import get_db
-from app.db.crud import get_latest_format_script
 from app.schemas.shorts import (
     JobStatusEnum,
     PlatformEnum,
@@ -16,7 +15,6 @@ from app.schemas.shorts import (
     StoryDirectives,
     resolve_formats,
 )
-from app.workers.carousel_image_agent import CarouselImageAgent
 from app.workers.agents import AgentActionStatus, AgentResult
 
 
@@ -463,14 +461,14 @@ class TestRegenerateAssets:
                 return_value=MagicMock(run=AsyncMock(return_value=agent_result)),
             ),
         ):
-            resp = await client.post(
-                f"/api/v1/jobs/{job.id}/regenerate-assets"
-            )
+            resp = await client.post(f"/api/v1/jobs/{job.id}/regenerate-assets")
 
         assert resp.status_code == 200
         data = resp.json()
         assert "slides" in data
-        assert data["slides"][0]["image_url"] == "/static/carousel_images/abc_slide_01.png"
+        assert (
+            data["slides"][0]["image_url"] == "/static/carousel_images/abc_slide_01.png"
+        )
 
     async def test_should_return_404_when_job_not_found(self, client, mock_db):
         mock_result = MagicMock()
@@ -494,9 +492,7 @@ class TestRegenerateAssets:
                 return_value=None,
             ),
         ):
-            resp = await client.post(
-                f"/api/v1/jobs/{job.id}/regenerate-assets"
-            )
+            resp = await client.post(f"/api/v1/jobs/{job.id}/regenerate-assets")
 
         assert resp.status_code == 400
         assert "No carousel format script" in resp.json()["detail"]
@@ -530,9 +526,7 @@ class TestRegenerateAssets:
                 return_value=MagicMock(run=AsyncMock(return_value=agent_result)),
             ),
         ):
-            resp = await client.post(
-                f"/api/v1/jobs/{job.id}/regenerate-assets"
-            )
+            resp = await client.post(f"/api/v1/jobs/{job.id}/regenerate-assets")
 
         assert resp.status_code == 500
         assert "Asset regeneration failed" in resp.json()["detail"]
