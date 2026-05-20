@@ -1,6 +1,18 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import type { CarouselFormatPayload, PlatformEnum } from "@content-factory/shared-types";
+import {
+  HelpCircle,
+  TrendingUp,
+  Quote,
+  Image,
+  BookOpen,
+  ArrowRight,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+} from "lucide-react";
 
 interface CarouselViewerProps {
   payload: CarouselFormatPayload;
@@ -12,6 +24,23 @@ const charLimits: Record<string, number> = {
   linkedin: 700,
   instagram: 2200,
   youtube: 5000,
+};
+
+const HOOK_TYPE_ICON_MAP: Record<string, typeof HelpCircle> = {
+  question: HelpCircle,
+  statistic: TrendingUp,
+  quote: Quote,
+  visual: Image,
+  story: BookOpen,
+  cta: ArrowRight,
+};
+
+const ASPECT_RATIO_MAP: Record<string, string> = {
+  twitter: "2/3",
+  linkedin: "4/5",
+  instagram: "4/5",
+  tiktok: "9/16",
+  youtube: "16/9",
 };
 
 export function CarouselViewer({ payload, platform }: CarouselViewerProps) {
