@@ -6,7 +6,6 @@ using a standalone prompt template separate from judge.py's 0.0/0.5/1.0 scale.
 """
 
 from statistics import mean
-from typing import Any
 
 from tests.evals.schemas import CachedChunkScore, SourceChunk
 
@@ -51,9 +50,7 @@ class ChunkQualityScorer:
             results.append(score)
         return results
 
-    def compute_entry_means(
-        self, scores: list[CachedChunkScore]
-    ) -> dict[str, float]:
+    def compute_entry_means(self, scores: list[CachedChunkScore]) -> dict[str, float]:
         if not scores:
             return {"relevance_mean": 0.0, "density_mean": 0.0, "coherence_mean": 0.0}
         return {
@@ -74,9 +71,7 @@ class ChunkQualityScorer:
             low_rel = sum(1 for s in scores if s.relevance < 3)
             pct = low_rel / len(scores) * 100
             if pct > LOW_RELEVANCE_WARN_PCT:
-                violations.append(
-                    f"WARNING: {pct:.0f}% chunks relevance < 3"
-                )
+                violations.append(f"WARNING: {pct:.0f}% chunks relevance < 3")
         return violations
 
     def detect_drift(
@@ -87,9 +82,7 @@ class ChunkQualityScorer:
         if not cached or not live:
             return ["insufficient data for drift detection"]
         if len(cached) != len(live):
-            return [
-                f"chunk count mismatch: cached {len(cached)} vs live {len(live)}"
-            ]
+            return [f"chunk count mismatch: cached {len(cached)} vs live {len(live)}"]
         cached_means = self.compute_entry_means(cached)
         live_means = self.compute_entry_means(live)
         flags: list[str] = []

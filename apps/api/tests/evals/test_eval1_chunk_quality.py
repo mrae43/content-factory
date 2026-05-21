@@ -27,7 +27,6 @@ QUALITY_ENTRY_IDS = [
 
 @pytest.mark.eval
 class TestChunkQuality:
-
     @pytest.mark.parametrize("quality_entry", QUALITY_ENTRY_IDS, indirect=True)
     async def test_chunk_dimension_means(
         self,
@@ -54,9 +53,7 @@ class TestChunkQuality:
             scores = await chunk_quality_scorer.score_chunks(
                 entry.topic, entry.source_chunks
             )
-            drift = chunk_quality_scorer.detect_drift(
-                entry.cached_responses, scores
-            )
+            drift = chunk_quality_scorer.detect_drift(entry.cached_responses, scores)
 
         means = chunk_quality_scorer.compute_entry_means(scores)
 
@@ -69,9 +66,7 @@ class TestChunkQuality:
         low_rel_count = sum(1 for s in scores if s.relevance < 3)
         low_rel_pct = low_rel_count / len(scores) * 100
         if low_rel_pct > 20:
-            violations.append(
-                f"WARNING: {low_rel_pct:.0f}% chunks relevance < 3"
-            )
+            violations.append(f"WARNING: {low_rel_pct:.0f}% chunks relevance < 3")
 
         baseline_recorder.record_case_score(
             entry.id,

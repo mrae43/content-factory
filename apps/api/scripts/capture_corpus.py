@@ -156,9 +156,7 @@ async def main():
     search_service = TavilySearchService()
 
     fixture = _load_fixture()
-    existing_entries = {
-        e["id"]: e for e in fixture["quality_corpus"]["entries"]
-    }
+    existing_entries = {e["id"]: e for e in fixture["quality_corpus"]["entries"]}
 
     run_id = str(uuid.uuid4())
     entry_records: list[dict] = []
@@ -200,7 +198,11 @@ async def main():
         except Exception:
             logger.exception("  LLM scoring failed for [%s]", entry_id)
             entry_records.append(
-                {"topic": topic, "chunk_count": len(source_chunks), "status": "scoring_failed"}
+                {
+                    "topic": topic,
+                    "chunk_count": len(source_chunks),
+                    "status": "scoring_failed",
+                }
             )
             continue
 
