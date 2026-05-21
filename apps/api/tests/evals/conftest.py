@@ -37,7 +37,14 @@ from tests.evals.rubrics import (
     RUBRICS,
     compute_weighted_score,
 )
-from tests.evals.schemas import GoldenCase, GoldenDataset, ResearchingCase
+from tests.evals.schemas import (
+    GoldenCase,
+    GoldenDataset,
+    QualityCorpus,
+    QualityCorpusEntry,
+    ResearchingCase,
+)
+from tests.evals.chunk_quality_scorer import ChunkQualityScorer
 
 
 def pytest_addoption(parser):
@@ -53,14 +60,20 @@ def pytest_addoption(parser):
         default=False,
         help="Run live agent calls instead of using golden reference outputs.",
     )
+    parser.addoption(
+        "--update-cache",
+        action="store_true",
+        default=False,
+        help="Update cached_judge_response in fixture from baselines.json",
+    )
 
 
 _GOLDEN_DATASET_PATH = (
     Path(__file__).resolve().parent.parent / "golden" / "golden_dataset.json"
 )
 _BASELINES_PATH = Path(__file__).resolve().parent / "baselines.json"
-_RESEARCHING_FIXTURES_PATH = (
-    Path(__file__).resolve().parent / "fixtures" / "eval1_research_coverage.json"
+_EVAL1_RESEARCH_FIXTURES_PATH = (
+    Path(__file__).resolve().parent / "fixtures" / "eval1_research.json"
 )
 
 
@@ -77,11 +90,16 @@ def _load_golden_dataset() -> List[GoldenCase]:
     return dataset.cases
 
 
+def _load_eval1_research() -> dict:
+    if not _EVAL1_RESEARCH_FIXTURES_PATH.exists():
+        return {"coverage_cases": [], "quality_corpus": None, "relevance_cases": []}
+    return json.loads(_EVAL1_RESEARCH_FIXTURES_PATH.read_text(encoding="utf-8"))
+
+
 def _load_researching_cases() -> List[ResearchingCase]:
-    if not _RESEARCHING_FIXTURES_PATH.exists():
-        return []
-    raw = json.loads(_RESEARCHING_FIXTURES_PATH.read_text(encoding="utf-8"))
-    return [ResearchingCase(**item) for item in raw]
+    data = _load_eval1_research()
+    raw_cases = data.get("coverage_cases", [])
+    return [ResearchingCase(**item) for item in raw_cases]
 
 
 def _is_live_mode(request) -> bool:
@@ -384,6 +402,35 @@ def researching_case(request) -> ResearchingCase:
             return case
     available = [c.id for c in cases]
     raise ValueError(f"Researching case '{case_id}' not found. Available: {available}")
+
+
+# ==========================================
+# 4c. CHUNK QUALITY FIXTURES (Eval 1.2)
+# ==========================================
+
+
+@pytest.fixture
+def quality_corpus() -> QualityCorpus:
+    data = _load_eval1_research()
+    qc = data.get("quality_corpus")
+    if qc is None:
+        return QualityCorpus(description="", capture_run_id="", entries=[])
+    return QualityCorpus(**qc)
+
+
+@pytest.fixture
+def quality_entry(request, quality_corpus: QualityCorpus) -> QualityCorpusEntry:
+    entry_id = request.param
+    for entry in quality_corpus.entries:
+        if entry.id == entry_id:
+            return entry
+    available = [e.id for e in quality_corpus.entries]
+    raise ValueError(f"Quality entry '{entry_id}' not found. Available: {available}")
+
+
+@pytest.fixture
+def chunk_quality_scorer(judge_llm) -> ChunkQualityScorer:
+    return ChunkQualityScorer(judge_llm=judge_llm)
 
 
 # ==========================================
