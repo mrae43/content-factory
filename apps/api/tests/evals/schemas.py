@@ -9,7 +9,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 
 # ==========================================
@@ -140,6 +140,51 @@ class ResearchingCase(BaseModel):
     expectations: ResearchingExpectations
     should_pass: bool
     inject_metadata_errors: bool = False
+
+
+# ==========================================
+# 2c. CHUNK QUALITY EVAL SCHEMAS (Eval 1.2)
+# ==========================================
+
+
+class CachedChunkScore(BaseModel):
+    relevance: int = Field(..., ge=1, le=5)
+    density: int = Field(..., ge=1, le=5)
+    coherence: int = Field(..., ge=1, le=5)
+
+
+class SourceChunk(BaseModel):
+    content: str
+    source_url: str
+
+
+class QualityCorpusEntry(BaseModel):
+    topic: str
+    description: str
+    source_chunks: list[SourceChunk]
+    cached_responses: list[CachedChunkScore]
+
+    @field_validator("cached_responses")
+    @classmethod
+    def arrays_match(cls, v, info):
+        chunks = info.data.get("source_chunks", [])
+        if len(v) != len(chunks):
+            raise ValueError("cached_responses length must match source_chunks")
+        return v
+
+
+class QualityCorpus(BaseModel):
+    description: str
+    capture_run_id: str
+    entries: list[QualityCorpusEntry]
+
+
+class Eval1ResearchFixture(BaseModel):
+    eval_version: str
+    schema_version: str
+    coverage_cases: list[ResearchingCase]
+    quality_corpus: QualityCorpus
+    relevance_cases: list[dict]
 
 
 # ==========================================
