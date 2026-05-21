@@ -422,10 +422,9 @@ def quality_corpus() -> QualityCorpus:
 def quality_entry(request, quality_corpus: QualityCorpus) -> QualityCorpusEntry:
     entry_id = request.param
     for entry in quality_corpus.entries:
-        slug = entry.topic.lower().replace(" ", "-")[:40]
-        if slug == entry_id:
+        if entry.id == entry_id:
             return entry
-    available = [e.topic.lower().replace(" ", "-")[:40] for e in quality_corpus.entries]
+    available = [e.id for e in quality_corpus.entries]
     raise ValueError(f"Quality entry '{entry_id}' not found. Available: {available}")
 
 

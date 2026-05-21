@@ -132,42 +132,49 @@
     "capture_run_id": "",
     "entries": [
       {
+        "id": "quality-brics",
         "topic": "BRICS De-dollarization and the Shift Away from USD Dominance",
         "description": "Economics — high-density financial content",
         "source_chunks": [],
         "cached_responses": []
       },
       {
+        "id": "quality-sparse-FR1",
         "topic": "Quantum Computing Breakthroughs in 2025",
         "description": "Tech/Science — expected sparse/few results (tests density edge case)",
         "source_chunks": [],
         "cached_responses": []
       },
       {
+        "id": "quality-boilerplate",
         "topic": "US Federal Reserve Interest Rate Decision Impact on Markets 2025",
         "description": "Finance/Policy — expected boilerplate/low-info results (tests density detection)",
         "source_chunks": [],
         "cached_responses": []
       },
       {
+        "id": "quality-fusion",
         "topic": "Nuclear Fusion Energy Recent Milestones and Breakthroughs",
         "description": "Energy/Science — moderate-density technical content",
         "source_chunks": [],
         "cached_responses": []
       },
       {
+        "id": "quality-ev-battery",
         "topic": "Solid-State Electric Vehicle Battery Technology Developments 2025",
         "description": "Tech/Manufacturing — mixed-density industry reporting",
         "source_chunks": [],
         "cached_responses": []
       },
       {
+        "id": "quality-space",
         "topic": "Space Exploration Key Milestones in 2025",
         "description": "Aerospace — high-interest narrative content",
         "source_chunks": [],
         "cached_responses": []
       },
       {
+        "id": "quality-ai-regulation",
         "topic": "Global AI Regulation Frameworks Comparison EU US China 2025",
         "description": "Policy/Tech — regulatory/legal domain with diverse sources",
         "source_chunks": [],

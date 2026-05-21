@@ -159,6 +159,7 @@ class SourceChunk(BaseModel):
 
 
 class QualityCorpusEntry(BaseModel):
+    id: str
     topic: str
     description: str
     source_chunks: list[SourceChunk]
