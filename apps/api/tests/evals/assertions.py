@@ -4,9 +4,12 @@ Deterministic assertion helpers for outcome eval test files.
 All functions raise AssertionError with descriptive messages on failure.
 """
 
+import math
 import re
-from typing import Any, Dict, List, Sequence, Tuple
+from collections import Counter
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 from unittest.mock import AsyncMock
+from urllib.parse import urlparse
 from uuid import uuid4
 
 from app.services.chunking import split_pre_context
@@ -183,3 +186,72 @@ def _empty_vector_store() -> AsyncMock:
     store.semantic_search.return_value = []
     store.ingest_chunks = AsyncMock(return_value=0)
     return store
+
+
+# ==========================================
+# Eval 1 Research Coverage check functions
+# Each returns None if passed, str on failure.
+# ==========================================
+
+
+def check_chunk_count(chunks: List[dict], min_count: int) -> Optional[str]:
+    if len(chunks) < min_count:
+        return f"Chunk count {len(chunks)} below minimum {min_count}"
+    return None
+
+
+def check_domain_diversity(chunks: List[dict], min_domains: int) -> Optional[str]:
+    domains = set()
+    for c in chunks:
+        url = c.get("url", "")
+        parsed = urlparse(url)
+        domain = parsed.netloc or parsed.hostname or url
+        if domain.startswith("www."):
+            domain = domain[4:]
+        domains.add(domain)
+    if len(domains) < min_domains:
+        return f"Domain count {len(domains)} below minimum {min_domains} (found: {sorted(domains)})"
+    return None
+
+
+def _tokenize(text: str) -> Counter:
+    return Counter(re.findall(r"\b\w+\b", text.lower()))
+
+
+def _cosine_similarity(a: Counter, b: Counter) -> float:
+    intersection = a & b
+    dot_product = sum(intersection.values())
+    norm_a = math.sqrt(sum(v * v for v in a.values()))
+    norm_b = math.sqrt(sum(v * v for v in b.values()))
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot_product / (norm_a * norm_b)
+
+
+def check_no_duplicates(chunks: List[dict], max_similarity: float) -> Optional[str]:
+    if len(chunks) < 2:
+        return None
+    vectors = [_tokenize(c.get("content", "")) for c in chunks]
+    for i in range(len(vectors)):
+        for j in range(i + 1, len(vectors)):
+            sim = _cosine_similarity(vectors[i], vectors[j])
+            if sim > max_similarity:
+                return (
+                    f"Duplicate detected between chunk[{i}] and chunk[{j}]: "
+                    f"cosine similarity {sim:.3f} exceeds max {max_similarity}"
+                )
+    return None
+
+
+def check_scope(chunks: List[dict], expected: str) -> Optional[str]:
+    for i, c in enumerate(chunks):
+        if c.get("scope") != expected:
+            return f"chunk[{i}] scope is '{c.get('scope')}', expected '{expected}'"
+    return None
+
+
+def check_source_type(chunks: List[dict], expected: str) -> Optional[str]:
+    for i, c in enumerate(chunks):
+        if c.get("source_type") != expected:
+            return f"chunk[{i}] source_type is '{c.get('source_type')}', expected '{expected}'"
+    return None
