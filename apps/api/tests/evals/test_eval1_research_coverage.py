@@ -24,8 +24,8 @@ from tests.evals.schemas import ResearchingCase
 
 COVERAGE_CASE_IDS = [
     "coverage-happy",
-    "coverage-sparse",
-    "coverage-duplicates",
+    "coverage-sparse-FR1",
+    "coverage-dupe-FR2",
     "coverage-single-domain",
     "coverage-wrong-metadata",
     "coverage-boundary",
