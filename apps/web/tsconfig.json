@@ -11,7 +11,6 @@
 				"name": "next"
 			}
 		],
-		"baseUrl": ".",
 		"paths": {
 			"@/*": ["./src/*"],
 			"@content-factory/shared-types": ["../../libs/shared-types/src/index.ts"],
