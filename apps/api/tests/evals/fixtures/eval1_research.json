@@ -1,0 +1,179 @@
+{
+  "eval_version": "1",
+  "schema_version": "2",
+  "coverage_cases": [
+    {
+      "id": "coverage-happy",
+      "topic": "BRICS de-dollarization efforts in 2025",
+      "description": "10 results from 5 distinct domains — all expected to pass",
+      "mock_web_results": [
+        { "content": "BRICS nations are accelerating de-dollarization through a new payment system.", "url": "https://reuters.com/brics-payment" },
+        { "content": "China and Russia lead BRICS push to settle trade in local currencies.", "url": "https://reuters.com/brics-local-currency" },
+        { "content": "The BRICS New Development Bank approved $5B in local-currency loans.", "url": "https://bloomberg.com/ndb-loans" },
+        { "content": "India proposes BRICS-wide digital currency to bypass SWIFT.", "url": "https://bloomberg.com/brics-digital" },
+        { "content": "South Africa sees BRICS membership boosting trade with Asia.", "url": "https://bloomberg.com/safrica-trade" },
+        { "content": "Saudi Arabia and UAE explore BRICS settlement mechanism.", "url": "https://ft.com/gulf-brics" },
+        { "content": "Brazil pushes for BRICS common unit of account for trade.", "url": "https://ft.com/brazil-brics-unit" },
+        { "content": "BRICS share of global reserves rises to 35% says IMF.", "url": "https://imf.org/brics-reserves" },
+        { "content": "Dedollarization accelerates as central banks diversify reserves.", "url": "https://imf.org/dedollarization-trends" },
+        { "content": "BRICS summit 2025 agenda focuses on financial independence.", "url": "https://cnbc.com/brics-summit-agenda" }
+      ],
+      "expectations": {
+        "min_chunks": 10,
+        "min_domains": 5,
+        "max_similarity": 0.75
+      },
+      "should_pass": true
+    },
+    {
+      "id": "coverage-sparse-FR1",
+      "topic": "Quantum computing breakthroughs 2025",
+      "description": "Only 3 results from 1 domain — fails chunk count and diversity (tests F-R1)",
+      "mock_web_results": [
+        { "content": "Google claims quantum supremacy with Willow chip reaching 105 qubits.", "url": "https://techcrunch.com/google-willow" },
+        { "content": "Google Willow chip solves problem in minutes that would take supercomputer millennia.", "url": "https://techcrunch.com/willow-benchmark" },
+        { "content": "Google plans commercial quantum applications by 2027.", "url": "https://techcrunch.com/google-quantum-roadmap" }
+      ],
+      "expectations": {
+        "min_chunks": 5,
+        "min_domains": 3,
+        "max_similarity": 0.75
+      },
+      "should_pass": false
+    },
+    {
+      "id": "coverage-dupe-FR2",
+      "topic": "AI regulation frameworks 2025",
+      "description": "10 results, 3 domains, 6 near-duplicates — fails duplicate check (tests F-R2)",
+      "mock_web_results": [
+        { "content": "The EU AI Act enters into force with tiered compliance requirements for high-risk systems.", "url": "https://politico.eu/eu-ai-act" },
+        { "content": "The EU AI Act is now in effect with tiered compliance requirements for high-risk AI systems.", "url": "https://politico.eu/eu-ai-act-enforcement" },
+        { "content": "EU AI Act compliance deadlines approach for high-risk AI system developers.", "url": "https://politico.eu/ai-act-deadlines" },
+        { "content": "US executive order on AI safety mandates testing before public deployment.", "url": "https://whitehouse.gov/ai-exec-order" },
+        { "content": "US AI safety order requires testing and red-teaming before public deployment of models.", "url": "https://whitehouse.gov/ai-safety-requirements" },
+        { "content": "China's AI regulation focuses on content control and algorithmic transparency.", "url": "https://reuters.com/china-ai-rules" },
+        { "content": "China AI regulations emphasize content control and algorithmic transparency requirements.", "url": "https://reuters.com/china-ai-transparency" },
+        { "content": "UK proposes flexible AI regulation framework based on existing regulators.", "url": "https://gov.uk/ai-white-paper" },
+        { "content": "UK AI regulation framework relies on existing sector regulators rather than new body.", "url": "https://gov.uk/ai-regulatory-approach" },
+        { "content": "Japan publishes AI guidelines focusing on economic competitiveness.", "url": "https://reuters.com/japan-ai-guidelines" }
+      ],
+      "expectations": {
+        "min_chunks": 10,
+        "min_domains": 3,
+        "max_similarity": 0.65
+      },
+      "should_pass": false
+    },
+    {
+      "id": "coverage-single-domain",
+      "topic": "Fusion energy recent milestones",
+      "description": "10 results from only 1 domain — fails diversity check",
+      "mock_web_results": [
+        { "content": "ITER achieves first plasma milestone in 2025 fusion experiment.", "url": "https://sciencedaily.com/iter-plasma" },
+        { "content": "Commonwealth Fusion Systems raises $2B for SPARC reactor development.", "url": "https://sciencedaily.com/commonwealth-sparc" },
+        { "content": "TAE Technologies announces hydrogen-boron fusion breakthrough.", "url": "https://sciencedaily.com/tae-hydrogen-boron" },
+        { "content": "Helion Energy signs deal with Microsoft for fusion electricity by 2028.", "url": "https://sciencedaily.com/helion-microsoft" },
+        { "content": "General Fusion demonstrates plasma confinement technology in UK.", "url": "https://sciencedaily.com/general-fusion-uk" },
+        { "content": "Zap Energy reaches 37 million degrees in sheared-flow-stabilized Z-pinch.", "url": "https://sciencedaily.com/zap-energy" },
+        { "content": "First Fusion private investment exceeds $6 billion globally.", "url": "https://sciencedaily.com/fusion-investment" },
+        { "content": "NIF achieves net energy gain in second fusion ignition experiment.", "url": "https://sciencedaily.com/nif-ignition" },
+        { "content": "MIT team demonstrates high-temperature superconducting magnet for fusion.", "url": "https://sciencedaily.com/mit-superconducting" },
+        { "content": "UK Atomic Energy Authority opens STEP fusion prototype site.", "url": "https://sciencedaily.com/uk-step-prototype" }
+      ],
+      "expectations": {
+        "min_chunks": 10,
+        "min_domains": 3,
+        "max_similarity": 0.75
+      },
+      "should_pass": false
+    },
+    {
+      "id": "coverage-wrong-metadata",
+      "topic": "Electric vehicle battery technology 2025",
+      "description": "5 results, 3 domains — injects wrong scope/source_type, fails metadata checks",
+      "mock_web_results": [
+        { "content": "Solid-state batteries achieve 500 Wh/kg density in量产 prototype.", "url": "https://reuters.com/solid-state-density" },
+        { "content": "CATL unveils sodium-ion battery with 200 Wh/kg for EVs.", "url": "https://reuters.com/catl-sodium-ion" },
+        { "content": "Tesla 4680 battery cells reach full production at Giga Texas.", "url": "https://techcrunch.com/tesla-4680" },
+        { "content": "BYD blade battery passes extreme safety tests with no thermal runaway.", "url": "https://techcrunch.com/byd-blade" },
+        { "content": "QuantumScape ships first solid-state samples to automotive partners.", "url": "https://bloomberg.com/quantumscape-samples" }
+      ],
+      "expectations": {
+        "min_chunks": 5,
+        "min_domains": 3,
+        "max_similarity": 0.75,
+        "scope_correct": true,
+        "source_type_correct": true
+      },
+      "should_pass": false,
+      "inject_metadata_errors": true
+    },
+    {
+      "id": "coverage-boundary",
+      "topic": "Space exploration milestones 2025",
+      "description": "Exactly 5 results, 3 domains — tests ≥ not > thresholds",
+      "mock_web_results": [
+        { "content": "NASA Artemis III successfully lands crew at lunar south pole.", "url": "https://nasa.gov/artemis-landing" },
+        { "content": "SpaceX Starship completes first orbital refueling demonstration.", "url": "https://spacex.com/starship-refuel" },
+        { "content": "China's Chang'e-7 mission returns samples from lunar far side.", "url": "https://space.com/change7-samples" },
+        { "content": "Blue Origin New Glenn reaches orbit on maiden launch.", "url": "https://space.com/new-glenn-orbit" },
+        { "content": "JWST discovers carbon compounds on Europa's surface.", "url": "https://nasa.gov/jwst-europa" }
+      ],
+      "expectations": {
+        "min_chunks": 5,
+        "min_domains": 3,
+        "max_similarity": 0.75
+      },
+      "should_pass": true
+    }
+  ],
+  "quality_corpus": {
+    "description": "Frozen Tavily chunks from live pipeline runs against canonical topics. Populated by scripts/capture_corpus.py",
+    "capture_run_id": "",
+    "entries": [
+      {
+        "topic": "BRICS De-dollarization and the Shift Away from USD Dominance",
+        "description": "Economics — high-density financial content",
+        "source_chunks": [],
+        "cached_responses": []
+      },
+      {
+        "topic": "Quantum Computing Breakthroughs in 2025",
+        "description": "Tech/Science — expected sparse/few results (tests density edge case)",
+        "source_chunks": [],
+        "cached_responses": []
+      },
+      {
+        "topic": "US Federal Reserve Interest Rate Decision Impact on Markets 2025",
+        "description": "Finance/Policy — expected boilerplate/low-info results (tests density detection)",
+        "source_chunks": [],
+        "cached_responses": []
+      },
+      {
+        "topic": "Nuclear Fusion Energy Recent Milestones and Breakthroughs",
+        "description": "Energy/Science — moderate-density technical content",
+        "source_chunks": [],
+        "cached_responses": []
+      },
+      {
+        "topic": "Solid-State Electric Vehicle Battery Technology Developments 2025",
+        "description": "Tech/Manufacturing — mixed-density industry reporting",
+        "source_chunks": [],
+        "cached_responses": []
+      },
+      {
+        "topic": "Space Exploration Key Milestones in 2025",
+        "description": "Aerospace — high-interest narrative content",
+        "source_chunks": [],
+        "cached_responses": []
+      },
+      {
+        "topic": "Global AI Regulation Frameworks Comparison EU US China 2025",
+        "description": "Policy/Tech — regulatory/legal domain with diverse sources",
+        "source_chunks": [],
+        "cached_responses": []
+      }
+    ]
+  },
+  "relevance_cases": []
+}
