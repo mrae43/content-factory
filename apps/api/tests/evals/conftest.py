@@ -31,12 +31,13 @@ from app.workers.agents import (
 )
 from app.workers.optimizer import ScriptOptimizerAgent
 from app.core.config import settings
+from app.services.web_search import TavilySearchService
 from tests.evals.judge import judge_score as _judge_score
 from tests.evals.rubrics import (
     RUBRICS,
     compute_weighted_score,
 )
-from tests.evals.schemas import GoldenCase, GoldenDataset
+from tests.evals.schemas import GoldenCase, GoldenDataset, ResearchingCase
 
 
 def pytest_addoption(parser):
@@ -58,6 +59,9 @@ _GOLDEN_DATASET_PATH = (
     Path(__file__).resolve().parent.parent / "golden" / "golden_dataset.json"
 )
 _BASELINES_PATH = Path(__file__).resolve().parent / "baselines.json"
+_RESEARCHING_FIXTURES_PATH = (
+    Path(__file__).resolve().parent / "fixtures" / "eval1_research_coverage.json"
+)
 
 
 def _load_golden_dataset() -> List[GoldenCase]:
@@ -71,6 +75,13 @@ def _load_golden_dataset() -> List[GoldenCase]:
     else:
         raise ValueError(f"Unexpected golden_dataset.json structure: {type(raw)}")
     return dataset.cases
+
+
+def _load_researching_cases() -> List[ResearchingCase]:
+    if not _RESEARCHING_FIXTURES_PATH.exists():
+        return []
+    raw = json.loads(_RESEARCHING_FIXTURES_PATH.read_text(encoding="utf-8"))
+    return [ResearchingCase(**item) for item in raw]
 
 
 def _is_live_mode(request) -> bool:
@@ -299,12 +310,80 @@ class EvalRunner:
         self.outputs["fact_check"] = result
         return result
 
+    def run_researching(self, case: ResearchingCase) -> dict:
+        chunks = []
+        for w in case.mock_web_results:
+            if case.inject_metadata_errors:
+                scope = "RAW-CONTEXT"
+                source_type = "USER_UPLOAD"
+            else:
+                scope = "LOCAL"
+                source_type = "WEB_SEARCH"
+            chunks.append(
+                {
+                    "content": w.content,
+                    "url": w.url,
+                    "scope": scope,
+                    "source_type": source_type,
+                }
+            )
+        return {"chunks": chunks}
+
+    async def run_researching_live(self, case: ResearchingCase) -> dict:
+        service = TavilySearchService()
+        results = await service.search(case.topic)
+        chunks = []
+        for r in results:
+            content = r.get("content", "") or r.get("snippet", "")
+            url = r.get("url", "")
+            chunks.append(
+                {
+                    "content": content,
+                    "url": url,
+                    "scope": "LOCAL",
+                    "source_type": "WEB_SEARCH",
+                }
+            )
+        return {"chunks": chunks}
+
 
 @pytest.fixture
 def eval_runner(request, mock_vector_store) -> EvalRunner:
     """EvalRunner with mock vector store. Uses golden references unless --live."""
     live = _is_live_mode(request)
     return EvalRunner(vector_store=mock_vector_store, live=live)
+
+
+# ==========================================
+# 4b. RESEARCHING EVAL FIXTURES
+# ==========================================
+
+
+@pytest.fixture
+def researching_runner(request) -> EvalRunner:
+    """EvalRunner for research coverage eval (golden mode: mock chunks; live mode: real Tavily)."""
+    live = _is_live_mode(request)
+    return EvalRunner(live=live)
+
+
+@pytest.fixture
+def researching_case(request) -> ResearchingCase:
+    """
+    Parametrized fixture yielding a single ResearchingCase by ID.
+    Use via indirect parametrization:
+        @pytest.mark.parametrize("researching_case", ["coverage-happy"], indirect=True)
+    """
+    case_id = getattr(request, "param", None)
+    if case_id is None:
+        raise ValueError(
+            "researching_case fixture requires indirect parametrization with a case ID"
+        )
+    cases = _load_researching_cases()
+    for case in cases:
+        if case.id == case_id:
+            return case
+    available = [c.id for c in cases]
+    raise ValueError(f"Researching case '{case_id}' not found. Available: {available}")
 
 
 # ==========================================

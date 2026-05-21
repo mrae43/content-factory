@@ -115,6 +115,34 @@ class CaseInput(BaseModel):
 
 
 # ==========================================
+# 2b. RESEARCHING EVAL SCHEMAS
+# ==========================================
+
+
+class MockWebResult(BaseModel):
+    content: str
+    url: str
+
+
+class ResearchingExpectations(BaseModel):
+    min_chunks: Optional[int] = None
+    min_domains: Optional[int] = None
+    max_similarity: Optional[float] = None
+    scope_correct: bool = True
+    source_type_correct: bool = True
+
+
+class ResearchingCase(BaseModel):
+    id: str
+    topic: str
+    description: str
+    mock_web_results: List[MockWebResult]
+    expectations: ResearchingExpectations
+    should_pass: bool
+    inject_metadata_errors: bool = False
+
+
+# ==========================================
 # 3. TRACE SPEC SCHEMAS
 # ==========================================
 
