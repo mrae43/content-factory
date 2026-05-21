@@ -319,12 +319,14 @@ class EvalRunner:
             else:
                 scope = "LOCAL"
                 source_type = "WEB_SEARCH"
-            chunks.append({
-                "content": w.content,
-                "url": w.url,
-                "scope": scope,
-                "source_type": source_type,
-            })
+            chunks.append(
+                {
+                    "content": w.content,
+                    "url": w.url,
+                    "scope": scope,
+                    "source_type": source_type,
+                }
+            )
         return {"chunks": chunks}
 
     async def run_researching_live(self, case: ResearchingCase) -> dict:
@@ -334,12 +336,14 @@ class EvalRunner:
         for r in results:
             content = r.get("content", "") or r.get("snippet", "")
             url = r.get("url", "")
-            chunks.append({
-                "content": content,
-                "url": url,
-                "scope": "LOCAL",
-                "source_type": "WEB_SEARCH",
-            })
+            chunks.append(
+                {
+                    "content": content,
+                    "url": url,
+                    "scope": "LOCAL",
+                    "source_type": "WEB_SEARCH",
+                }
+            )
         return {"chunks": chunks}
 
 

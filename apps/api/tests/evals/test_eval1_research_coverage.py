@@ -103,6 +103,4 @@ async def test_research_coverage(
                 + "\n".join(f"  - {e}" for e in errors)
             )
         else:
-            assert errors, (
-                f"{case.id}: expected at least one check to fail, all passed"
-            )
+            assert errors, f"{case.id}: expected at least one check to fail, all passed"
