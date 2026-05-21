@@ -9,7 +9,7 @@ Multi-agent system that generates multi-format content (Shorts/Reels/TikToks, bl
 - **Agentic Over Atomic** — Research, Copywriter, and Red Team agents debate and correct each other through structured revision loops.
 - **Prompt Chaining with Semantic Memory + Evidence Injection** — ResearchAgent produces a condensed `refined_context` summary that the orchestrator persists and passes downstream. A `ContextBuilder` service then performs structured RAG retrieval using `topic` + `story_directives`, producing `evidence_sections` — a formatted text block of similarity-scored, relevance-tagged chunks. The CopywriterAgent works from both `refined_context` and `evidence_sections` instead of calling the vector store directly — eliminating context-window bloat, enabling auditable research summaries with grounded evidence, and ensuring consistent behavior across revision loops.
 - **Structured Evidence Retrieval** — A dedicated `ContextBuilder` service queries the vector store before script writing, enriching the copywriter prompt with similarity-scored, relevance-tagged evidence chunks (`story_directives` guide the query composition). Evidence sections are injected directly into agent prompts for grounded generation.
-- **Zero-Hallucination Guardrails** — Red Team breaks scripts into atomic claims, cross-references each against the vector store directly, and persists verdicts to Postgres. Claims that fail are sent back for revision (max 3 attempts before human escalation).
+- **Zero-Hallucination Guardrails** — Red Team breaks scripts into atomic claims, cross-references each against the vector store directly, and persists verdicts to Postgres. Claims that fail are sent back for revision (max 3 attempts before human escalation). Configurable `GuardrailStrictness` profiles (`Low`, `Medium`, `High`) control similarity thresholds, `claim_categories` (claim types checked), and whether `UNCERTAIN` verdicts trigger revision (`uncertain_is_soft_fail`) or require human review (`requires_human_review`). An `uncertain_pass_through` escape hatch on `StoryDirectives` waives only the UNCERTAIN revision trigger under High profile.
 - **Governance-as-Code** — Full audit trail via `fact_check_claims` table with evidence references linked to source chunks. API returns the complete fact-check report alongside scripts and assets.
 - **Web-Enriched RAG** — Tavily search enriches user-provided context with live web results, ingested as vector chunks for semantic retrieval by downstream agents.
 - **Evaluator-Optimizer Pattern** — On revision, a dedicated `ScriptOptimizerAgent` surgically patches failed claims instead of re-drafting the entire script, preserving quality sections and reducing hallucination drift.
@@ -74,7 +74,7 @@ Each formatter is wrapped in a **`FormatterHarness`** — a generate-validate-re
 When `format_type = "all"`, both formatters run concurrently via `asyncio.gather()`.
 
 ### 8. Asset Generation (`ASSET_GENERATION`)
-**MVP: Mocked** — The **Asset Studio Agent** (`meta-llama/Llama-3.3-70B-Instruct-Turbo`, configurable) generates Veo/Lyria production prompts but returns a fake `s3://` URL. No real TTS, video rendering, or FFmpeg yet.
+The orchestrator branches by format: **video** jobs use the **Asset Studio Agent** (`meta-llama/Llama-3.3-70B-Instruct-Turbo`, configurable — generates production prompts, returns mocked `s3://` URL); **carousel** jobs use the **CarouselImageAgent** which generates real images via Together AI `FLUX.1-schnell` with platform-specific dimensions (Instagram/LinkedIn 1080×1350, Twitter 1080×1620, TikTok 1080×1920, YouTube 1920×1080), editorial brand styling (copper and stone tones, flat vector illustration), and stores them locally under `static/carousel_images/` for static serving. Image generation includes retry logic (3 attempts with exponential backoff). A `POST /api/v1/jobs/{id}/regenerate-assets` endpoint allows re-running carousel image generation post-completion.
 
 ### 9. Completion (`COMPLETED`)
 LOCAL-scope vector chunks are cleaned up. The final job state, scripts, audit trail, and asset metadata are available via the API.
@@ -89,6 +89,7 @@ LOCAL-scope vector chunks are cleaned up. The final job state, scripts, audit tr
 | `POST` | `/api/v1/jobs/` | Create a new RenderJob (returns `202 Accepted`) |
 | `GET` | `/api/v1/jobs/{id}` | Poll job status with full scripts, claims audit, and assets |
 | `POST` | `/api/v1/jobs/{id}/approve-script` | Approve or reject script (human-in-the-loop) |
+| `POST` | `/api/v1/jobs/{id}/regenerate-assets` | Re-run carousel image generation after completion |
 
 ---
 
@@ -103,7 +104,8 @@ LOCAL-scope vector chunks are cleaned up. The final job state, scripts, audit tr
 | ORM | SQLAlchemy 2 async (`asyncpg`) |
 | Migrations | Alembic (sync via `psycopg2`) |
 | AI Orchestration | LangChain + Google GenAI + Together AI (OpenAI-compatible) |
-| Models | All default to `meta-llama/Llama-3.3-70B-Instruct-Turbo` via Together AI. Each agent stage configurable via `{research,copywriter,evaluator,optimizer,asset,formatter}_{model,temperature}` env vars. Eval suite uses separate `eval_*` models. Embeddings: `models/gemini-embedding-001` (Gemini). |
+| Image Generation | Together AI `v1/images/generations` with `FLUX.1-schnell` (configurable via `image_model` env var) |
+| Models | All default to `meta-llama/Llama-3.3-70B-Instruct-Turbo` via Together AI. Each agent stage configurable via `{research,copywriter,evaluator,optimizer,asset,formatter}_{model,temperature}` env vars. Image model: `black-forest-labs/FLUX.1-schnell`. Eval suite uses separate `eval_*` models. Embeddings: `models/gemini-embedding-001` (Gemini). |
 | Embeddings | `models/gemini-embedding-001` (768-dim, pgvector HNSW with cosine) |
 | Web Search | Tavily (`langchain-tavily`) |
 | Background Queue | `asyncio.create_task` + `FOR UPDATE SKIP LOCKED` (no Celery/Redis) |
@@ -230,6 +232,11 @@ Optional `.env` overrides (all default to via Together AI unless `gemini-` prefi
 | `SIMILARITY_THRESHOLD` | `0.75` | Vector search cosine similarity cutoff |
 | `CONTEXT_BUILDER_TOP_K` | `10` | Number of chunks retrieved by ContextBuilder |
 | `RETRIEVAL_RETRY_MAX` | `3` | Max retries for assembled_context before failing |
+| `IMAGE_MODEL` | `black-forest-labs/FLUX.1-schnell` | Carousel image generation model (Together AI) |
+| `IMAGE_GEN_MAX_RETRIES` | `3` | Max retry attempts per image generation |
+| `IMAGE_GEN_TIMEOUT_SECONDS` | `30` | HTTP timeout per image generation request |
+| `IMAGE_STORAGE_PATH` | `static/carousel_images` | Local directory for generated carousel images |
+| `STORAGE_BACKEND` | `local` | Storage adapter (`local` only; S3/GCS planned) |
 | `SYNTHID_WATERMARK_ENABLED` | `True` | SynthID flag (no implementation yet) |
 | `WORKER_POLL_INTERVAL_SECONDS` | `5` | QueueWorker poll interval |
 | `WORKER_LOCK_TIMEOUT_MINUTES` | `15` | Stuck job recovery timeout |
@@ -257,7 +264,9 @@ content-factory/                  # Nx workspace root
 │   ├── api/                      # Python FastAPI backend
 │   │   ├── app/
 │   │   │   main.py               # FastAPI app + lifespan (starts/stops QueueWorker)
-│   │   │   core/config.py        # pydantic-settings, reads .env (database_url — required, eval model configs)
+│   │   │   core/
+│   │   │     config.py            # pydantic-settings, reads .env (database_url — required, eval model configs)
+│   │   │     guardrails.py        # GuardrailStrictness enum, GUARDRAIL_PROFILES, get_guardrail_config()
 │   │   │   api/routes.py         # /api/v1/jobs/ endpoints + health check
 │   │   │   db/
 │   │   │     models.py           # SQLAlchemy models (factory schema) — RenderJob with refined_context, research_confidence, citation_index, assembled_context (JSONB), retrieval_retry_count
@@ -273,12 +282,17 @@ content-factory/                  # Nx workspace root
 │   │   │     web_search.py       # TavilySearchService
 │   │   │     context_builder.py  # RAG query composition, evidence formatting, AssembledContext
 │   │   │     format_validator.py # FormatValidator → BlogValidator, CarouselValidator
+│   │   │     image_gen.py        # ImageGenerationService — Together AI FLUX.1-schnell, retry logic, platform dimensions
+│   │   │   storage/
+│   │   │     adapter.py          # get_storage() dispatcher
+│   │   │     local.py            # LocalStorage — saves to static/carousel_images/
 │   │   │   workers/
 │   │   │     orchestrator.py     # Agentic state machine
 │   │   │     queue_worker.py     # asyncio poll loop with SKIP LOCKED
 │   │   │     agents.py           # BaseAgent → Research, Copywriter, RedTeam, AssetStudio
 │   │   │     optimizer.py        # ScriptOptimizerAgent
 │   │   │     formatters.py       # BlogFormatterAgent, CarouselFormatterAgent
+│   │   │     carousel_image_agent.py  # CarouselImageAgent — real image gen via Together AI FLUX
 │   │   │     harness.py          # FormatterHarness — generate-validate-retry with doom loop detection
 │   │   │     tasks.py            # Post-completion LOCAL chunk cleanup
 │   │   ├── alembic/              # Database migrations
@@ -318,11 +332,15 @@ The project uses pytest with `asyncio_mode = "auto"` and five custom markers:
 
 | Marker | Scope | Files |
 |--------|-------|-------|
-| `unit` | Core logic — chunking, config, CRUD, routes, queue worker, vector store, context builder, formatter harness, format validator | `tests/unit/` (9 files, 168 tests) |
-| `agent` | Agent behavior — research, copywriter, red team, asset studio, optimizer, blog formatter, carousel formatter, video formatter | `tests/agents/` (9 files, 50 tests) |
+| `unit` | Core logic — chunking, config, CRUD, routes, queue worker, vector store, context builder, formatter harness, format validator, image gen service | `tests/unit/` (11 files, 209 tests) |
+| `agent` | Agent behavior — research, copywriter, red team, asset studio, optimizer, blog formatter, carousel formatter, carousel image, video formatter | `tests/agents/` (10 files, 65 tests) |
 | `eval` | Outcome evals with LLM-as-Judge scoring across pipeline stages | `tests/evals/` (4 test files, 34 parametrized cases) |
 | `golden` | Trajectory validation against golden dataset | `tests/golden/` (23+ cases across 6 categories) |
 | `integration` | End-to-end orchestrator flows with RETRIEVAL phase, retry logic, evidence context passing | `tests/integration/` (60+ tests, CI-only) |
+
+### Eval Contracts & Criteria
+
+The eval suite is governed by formal contracts at `apps/api/tests/evals/contracts/` — 27 files across 8 pipeline stages (Research Desk → Retrieval Desk → Writer's Desk → Fact-Check Desk → Fact-Check Loop → Layout Desk → Pipeline Status → End-to-End). Each contract specifies the eval method, pass conditions, and thresholds. The master criteria document at `apps/api/tests/evals/evals-criteria.md` (409 lines) defines 5 guiding principles, 14 failure codes (F-R1 to F-P2), and 7 recommended eval datasets.
 
 ### Outcome Eval Test Matrix
 
@@ -362,7 +380,7 @@ docker-build-api (after python lint only)
 - **Step 5 (Scripting)** — CopywriterAgent receives `refined_context`, `evidence_sections` (from AssembledContext), and `story_directives` (target_audience, tone, angle) from orchestrator. On revision, `ScriptOptimizerAgent` surgically patches failed claims with the same evidence context instead of full re-draft.
 - **Step 6 (Red Team)** — RedTeamAgent audits script claims with three-pass evaluation, persists verdicts, configurable max revision loops
 - **Step 7 (Format Output)** — BlogFormatterAgent and CarouselFormatterAgent produce structured blog/carousel outputs via Plan-then-Execute two-phase LLM calls. Wrapped in `FormatterHarness` with doom loop detection. Platform-aware validation (Twitter 280, LinkedIn 700, Instagram 2200 character limits). Branches by `format_type`: `video` skips, `blog`/`carousel` format then complete, `all` runs both in parallel then continues to asset generation
-- **Step 8 (Asset Generation)** — AssetStudioAgent generates prompts (mocked `s3://` URL)
+- **Step 8 (Asset Generation)** — CarouselImageAgent generates real images via Together AI FLUX.1-schnell with platform-specific dimensions, editorial styling, local storage, and retry logic. AssetStudioAgent generates video production prompts (mocked `s3://` URL). Regenerate endpoint available for carousel images post-completion.
 - **Step 9 (Completion)** — LOCAL-scope chunk cleanup, final state
 
 ### Infrastructure
@@ -374,14 +392,15 @@ docker-build-api (after python lint only)
 - **Context Builder (Structured RAG)** — `ContextBuilder` service (`app/services/context_builder.py`) composes a multi-field query from `topic` + `story_directives`, retrieves from both RAW-CONTEXT and LOCAL scopes, enriches chunks with `topic_relevance` labels, and formats evidence sections for prompt injection. `AssembledContext` persisted as JSONB on `render_jobs`.
 - **Prompt Chaining + Evidence Injection** — Orchestrator mediates Research → ContextBuilder → Copywriter pipeline: `refined_context` (research summary) + `evidence_sections` (retrieved chunks) + `story_directives` (audience/tone/angle) are injected into agent prompts. Copywriter and Optimizer both receive the same evidence context.
 - **Evaluator-Optimizer Pattern** — Configurable models/temperatures via env vars for both Red Team and Optimizer agents
-- **Test Suite** — Unit (168) + agent (50) + integration (60+) tests with CI pipeline via GitHub Actions
-- **Eval Infrastructure** — LLM-as-Judge scoring (judge.py), deterministic assertions, rubrics, golden dataset (23+ cases), 4 outcome test files with 34 parametrized cases
+- **Test Suite** — Unit (209) + agent (65) + integration (60+) tests with CI pipeline via GitHub Actions
+- **Eval Infrastructure** — LLM-as-Judge scoring (judge.py), deterministic assertions, rubrics, golden dataset (23+ cases), 4 outcome test files with 34 parametrized cases, 27 eval contracts across 8 pipeline stages, master criteria document (409 lines)
 - **Multi-provider LLM** — Routing via model name prefix: `gemini-*` → Google GenAI SDK, all others → Together AI (OpenAI-compatible). All production agents default to Together AI (`meta-llama/Llama-3.3-70B-Instruct-Turbo`). Configurable per-stage via env vars. Embeddings always use `models/gemini-embedding-001` (Gemini). Eval suite uses separate `eval_*` model configs.
 - **Multi-Format Output** — Blog and carousel formatters with Plan-then-Execute two-phase LLM calls, `FormatterHarness` generate-validate-retry with doom loop detection, platform-aware validation (per-slide character limits)
+- **Carousel Image Generation** — Real image gen via Together AI `FLUX.1-schnell` with platform-specific dimensions, editorial brand styling, local storage, and retry logic (3 attempts). Regenerate endpoint available post-completion.
 - **Docker** — 4-service Compose stack (pgvector, pgAdmin, API, Web). Migrations auto-run on API container start via `entrypoint.sh`. Single workspace lockfile at repo root (`apps/web/pnpm-lock.yaml` removed). pnpm 11 `allowBuilds` in `pnpm-workspace.yaml`.
 
 ### Intentionally Deferred (Wizard of Oz MVP)
 
 - **SynthID Watermarking** — Config flag exists (`synthid_watermark_enabled`) but no implementation
 - **GLOBAL Knowledge Base** — Skipped; platform constraints are hardcoded in agent system prompts
-- **Real Asset Generation** — No TTS, video rendering, or FFmpeg; agent returns mocked URLs
+- **Video Asset Generation** — No TTS, video rendering, or FFmpeg; AssetStudioAgent returns mocked URLs (carousel images are real via Together AI FLUX)
