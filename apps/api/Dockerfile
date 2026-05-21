@@ -33,6 +33,7 @@ COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/pytho
 COPY --from=builder /usr/local/bin /usr/local/bin
 
 COPY app/ ./app/
+COPY static/ ./static/
 COPY alembic/ ./alembic/
 COPY alembic.ini .
 COPY entrypoint.sh .
