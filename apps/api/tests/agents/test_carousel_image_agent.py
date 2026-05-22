@@ -28,7 +28,7 @@ async def test_generates_images_for_all_slides():
         return_value=MagicMock(success=True, image_bytes=b"img", failure_reason=None)
     )
     mock_store = MagicMock()
-    mock_store.upload_image.return_value = "/static/carousel_images/slide_01.png"
+    mock_store.upload_image.return_value = "/api/proxy/images/slide_01.png"
 
     agent = _make_agent(mock_image_service=mock_gen, mock_storage=mock_store)
     context = {
@@ -44,8 +44,8 @@ async def test_generates_images_for_all_slides():
 
     assert result.status == AgentActionStatus.SUCCESS
     slides = result.payload["format_payload"]["slides"]
-    assert slides[0]["image_url"] == "/static/carousel_images/slide_01.png"
-    assert slides[1]["image_url"] == "/static/carousel_images/slide_01.png"
+    assert slides[0]["image_url"] == "/api/proxy/images/slide_01.png"
+    assert slides[1]["image_url"] == "/api/proxy/images/slide_01.png"
     assert mock_gen.generate.call_count == 2
     assert mock_store.upload_image.call_count == 2
     assert result.metadata["successful_slides"] == 2
@@ -59,7 +59,7 @@ async def test_honours_platform_arg():
         return_value=MagicMock(success=True, image_bytes=b"img", failure_reason=None)
     )
     mock_store = MagicMock()
-    mock_store.upload_image.return_value = "/static/carousel_images/slide.png"
+    mock_store.upload_image.return_value = "/api/proxy/images/slide.png"
 
     agent = _make_agent(mock_image_service=mock_gen, mock_storage=mock_store)
     context = {

@@ -520,6 +520,9 @@ async def _transition_asset_generation(db: AsyncSession, job) -> None:
     if any_success:
         await db.commit()
         await update_job_status(db, job.id, JobStatusEnum.COMPLETED)
+    else:
+        await db.commit()
+        await update_job_status(db, job.id, JobStatusEnum.FAILED)
 
 
 async def _resolve_evidence_refs(

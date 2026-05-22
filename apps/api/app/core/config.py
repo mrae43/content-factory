@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     image_gen_max_retries: int = 3
     image_gen_timeout_seconds: int = 30
     image_storage_path: str = "static/carousel_images"
+    image_gen_slide_delay: float = 1.5
     storage_backend: str = "local"
 
     # Eval Model Configuration (Together AI)

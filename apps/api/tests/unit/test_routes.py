@@ -441,7 +441,7 @@ class TestRegenerateAssets:
                             "slide_number": 1,
                             "text": "Slide 1",
                             "visual_description": "A sunset",
-                            "image_url": "/static/carousel_images/abc_slide_01.png",
+                            "image_url": "/api/proxy/images/abc_slide_01.png",
                         }
                     ]
                 }
@@ -466,9 +466,7 @@ class TestRegenerateAssets:
         assert resp.status_code == 200
         data = resp.json()
         assert "slides" in data
-        assert (
-            data["slides"][0]["image_url"] == "/static/carousel_images/abc_slide_01.png"
-        )
+        assert data["slides"][0]["image_url"] == "/api/proxy/images/abc_slide_01.png"
 
     async def test_should_return_404_when_job_not_found(self, client, mock_db):
         mock_result = MagicMock()

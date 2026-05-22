@@ -1491,7 +1491,10 @@ class TestTransitionAssetGeneration:
             await execute_state_transition(mock_db_session, mock_job)
 
             assert mock_job.final_video_url is None
-            mock_update.assert_not_awaited()
+            mock_db_session.commit.assert_awaited()
+            mock_update.assert_awaited_once_with(
+                mock_db_session, mock_job.id, JobStatusEnum.FAILED
+            )
 
     async def test_should_generate_carousel_images_and_update_payload(
         self,
@@ -1522,7 +1525,7 @@ class TestTransitionAssetGeneration:
                             "slide_number": 1,
                             "text": "Slide text",
                             "visual_description": "Test visual",
-                            "image_url": "/static/carousel_images/job_slide_01.png",
+                            "image_url": "/api/proxy/images/job_slide_01.png",
                         }
                     ]
                 }
@@ -1548,7 +1551,7 @@ class TestTransitionAssetGeneration:
             await execute_state_transition(mock_db_session, mock_job)
 
             assert carousel_script.format_payload["slides"][0]["image_url"] == (
-                "/static/carousel_images/job_slide_01.png"
+                "/api/proxy/images/job_slide_01.png"
             )
             mock_db_session.commit.assert_awaited()
             mock_update.assert_awaited_once_with(

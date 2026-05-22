@@ -10,7 +10,7 @@ class LocalStorage:
         UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
         path = UPLOAD_DIR / filename
         path.write_bytes(file_bytes)
-        return f"/static/carousel_images/{filename}"
+        return f"/api/proxy/images/{filename}"
 
     def delete_image(self, filename: str) -> None:
         path = UPLOAD_DIR / filename

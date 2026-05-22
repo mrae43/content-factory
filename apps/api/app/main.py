@@ -42,7 +42,9 @@ async def lifespan(app: FastAPI):
     await worker.stop()
 
 
-app = FastAPI(title="Content Factory API (2026)", lifespan=lifespan)
+app = FastAPI(
+    title="Content Factory API (2026)", lifespan=lifespan, redirect_slashes=False
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -53,6 +55,7 @@ app.add_middleware(
 
 app.include_router(router)
 
+app.mount("/images", StaticFiles(directory="static/carousel_images"), name="images")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
