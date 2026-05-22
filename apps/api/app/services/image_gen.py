@@ -17,11 +17,11 @@ _STYLE_ENRICHMENT = (
 _TOGETHER_IMAGES_URL = "https://api.together.xyz/v1/images/generations"
 
 PLATFORM_DIMENSIONS: dict[str, tuple[int, int]] = {
-    "instagram": (1080, 1350),
-    "linkedin": (1080, 1350),
-    "twitter": (1080, 1620),
+    "instagram": (1080, 1344),
+    "linkedin": (1080, 1344),
+    "twitter": (1080, 1616),
     "tiktok": (1080, 1920),
-    "youtube": (1920, 1080),
+    "youtube": (1920, 1088),
 }
 
 DEFAULT_DIMENSIONS = (1080, 1350)
@@ -78,11 +78,12 @@ class ImageGenerationService:
                 last_exception = asyncio.TimeoutError("HTTP timeout")
             except aiohttp.ClientResponseError as e:
                 logger.warning(
-                    "Image gen HTTP %d (attempt %d/%d) for: %s",
+                    "Image gen HTTP %d (attempt %d/%d) for: %s | %s",
                     e.status,
                     attempt,
                     self.max_retries,
                     prompt[:60],
+                    e.message[:500],
                 )
                 last_exception = e
             except aiohttp.ClientError as e:
@@ -132,6 +133,15 @@ class ImageGenerationService:
                 json=payload,
                 headers=headers,
             ) as resp:
+                if resp.status >= 400:
+                    body = await resp.text()
+                    raise aiohttp.ClientResponseError(
+                        request_info=resp.request_info,
+                        history=(),
+                        status=resp.status,
+                        message=body[:500],
+                        headers=resp.headers,
+                    )
                 resp.raise_for_status()
                 data = await resp.json()
 

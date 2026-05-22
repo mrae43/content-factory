@@ -145,7 +145,7 @@ class TestImageGenerationService:
     def _make_session(self, post_cm):
         return _MockSession(post_cm)
 
-    def _make_success_response(self, b64_str=None, width=1080, height=1350):
+    def _make_success_response(self, b64_str=None, width=1080, height=1344):
         data = {
             "data": [
                 {"b64_json": b64_str or _dummy_b64(), "width": width, "height": height}
@@ -170,7 +170,7 @@ class TestImageGenerationService:
         assert result.image_bytes is not None
         assert len(result.image_bytes) >= 1024
         assert result.width == 1080
-        assert result.height == 1350
+        assert result.height == 1344
         assert result.prompt_used is not None
         assert _STYLE_ENRICHMENT in result.prompt_used
 
@@ -189,7 +189,7 @@ class TestImageGenerationService:
 
         assert result.success is True
         assert result.width == 1080
-        assert result.height == 1350
+        assert result.height == 1344
 
     @pytest.mark.asyncio
     async def test_generate_passes_correct_payload(self, service, mock_aiohttp):
@@ -204,7 +204,7 @@ class TestImageGenerationService:
         call_kwargs = session.post.call_args[1]
         assert call_kwargs["json"]["model"] == "test-model"
         assert call_kwargs["json"]["width"] == 1080
-        assert call_kwargs["json"]["height"] == 1350
+        assert call_kwargs["json"]["height"] == 1344
         assert call_kwargs["json"]["steps"] == 4
         assert call_kwargs["json"]["n"] == 1
         assert call_kwargs["json"]["response_format"] == "b64_json"
