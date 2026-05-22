@@ -243,7 +243,21 @@ async def test_topic_relevance_calibration(
         pytest.fail(f"Calibration failed: {'; '.join(violations)}")
 ```
 
-### 5. `tests/evals/evals-criteria.md` — Fix dataset size
+### 5. `tests/evals/contracts/01-research-topic-relevance-calibration.md` — Fix dataset size
+
+Change line 9 from:
+
+```
+- Held-out set of 200 chunks with human-labelled relevance (HIGH/MEDIUM/LOW)
+```
+
+to:
+
+```
+- Held-out set of 50 chunks with human-labelled relevance (HIGH/MEDIUM/LOW)
+```
+
+### 6. `tests/evals/evals-criteria.md` — Fix dataset size
 
 Change line 383 from:
 
@@ -281,6 +295,7 @@ to:
 2. Populate `relevance` section in `eval1_research.json` with 50 chunks
 3. Add validator + fixture to `conftest.py`
 4. Write `test_eval1_calibration.py`
-5. Fix dataset size in `evals-criteria.md`
-6. Verify: `uv run pytest tests/evals/test_eval1_calibration.py -m eval -v`
-7. Verify: `nx lint api && nx test:unit api` — no regressions
+5. Fix dataset size in `contracts/01-research-topic-relevance-calibration.md`
+6. Fix dataset size in `evals-criteria.md`
+7. Verify: `uv run pytest tests/evals/test_eval1_calibration.py -m eval -v`
+8. Verify: `nx lint api && nx test:unit api` — no regressions
