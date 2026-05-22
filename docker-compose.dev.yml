@@ -2,6 +2,7 @@ services:
   api:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
+      - ./apps/api/static:/workspace/static
       - ./apps/api/app:/workspace/app
       - ./apps/api/alembic:/workspace/alembic
       - ./apps/api/alembic.ini:/workspace/alembic.ini
@@ -12,4 +13,4 @@ services:
       - ./apps/web/src:/app/src
       - ./apps/web/public:/app/public
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_API_URL=http://api:8000

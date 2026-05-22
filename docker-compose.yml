@@ -67,6 +67,7 @@ services:
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:
+      - ./apps/api/static:/workspace/static
       - ./apps/api/app:/workspace/app
       - ./apps/api/alembic:/workspace/alembic
       - ./apps/api/alembic.ini:/workspace/alembic.ini
@@ -85,12 +86,12 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
-      args:
-        NEXT_PUBLIC_API_URL: http://localhost:${API_PORT:-8000}
     container_name: factory_web
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-3000}:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://api:8000
     networks:
       - factory-net
     depends_on:
