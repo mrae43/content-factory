@@ -1,6 +1,8 @@
+import asyncio
 import logging
 from typing import Any, Dict
 
+from app.core.config import settings
 from app.storage.adapter import get_storage
 from app.services.image_gen import ImageGenerationService
 from app.workers.agents import AgentActionStatus, AgentResult
@@ -48,11 +50,14 @@ class CarouselImageAgent:
             )
 
         failures: list[dict] = []
-        for slide in slides:
+        for i, slide in enumerate(slides):
             visual_description = slide.get("visual_description", "")
             if not visual_description:
                 slide["image_url"] = None
                 continue
+
+            if i > 0:
+                await asyncio.sleep(settings.image_gen_slide_delay)
 
             result = await self.image_service.generate(visual_description, platform)
 
