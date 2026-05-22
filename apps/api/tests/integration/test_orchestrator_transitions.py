@@ -1491,7 +1491,10 @@ class TestTransitionAssetGeneration:
             await execute_state_transition(mock_db_session, mock_job)
 
             assert mock_job.final_video_url is None
-            mock_update.assert_not_awaited()
+            mock_db_session.commit.assert_awaited()
+            mock_update.assert_awaited_once_with(
+                mock_db_session, mock_job.id, JobStatusEnum.FAILED
+            )
 
     async def test_should_generate_carousel_images_and_update_payload(
         self,
