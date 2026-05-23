@@ -685,6 +685,18 @@
           "platform": {
             "$ref": "#/components/schemas/PlatformEnum",
             "description": "Target platform: twitter, linkedin, instagram, youtube, tiktok"
+          },
+          "device_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Id",
+            "description": "Client device identifier for S3 key prefixing. Sent from localStorage."
           }
         },
         "type": "object",
