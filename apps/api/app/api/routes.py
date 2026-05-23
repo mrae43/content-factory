@@ -1,6 +1,7 @@
 from typing import Optional
-
+ 
 from fastapi import APIRouter, HTTPException, Depends, status
+from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
@@ -239,8 +240,9 @@ async def regenerate_assets(
             carousel_script.format_payload,
             carousel_result.payload["format_payload"],
         )
+        flag_modified(carousel_script, "format_payload")
         await db.commit()
-        return existing
+        return {"status": "ok"}
 
     raise HTTPException(
         status_code=500,

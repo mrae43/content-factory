@@ -3,8 +3,9 @@ import logging
 import traceback
 from typing import Any, Dict
 from uuid import UUID
-
+ 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.db.crud import (
     update_job_status,
@@ -512,6 +513,7 @@ async def _transition_asset_generation(db: AsyncSession, job) -> None:
                 carousel_script.format_payload,
                 carousel_result.payload["format_payload"],
             )
+            flag_modified(carousel_script, "format_payload")
             any_success = True
         else:
             await log_error(
