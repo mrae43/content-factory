@@ -16,7 +16,12 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB, ENUM
+from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import declarative_base, relationship
+
+# Mutation-tracked JSONB variant — in-place dict changes (e.g.
+# slide["image_url"] = url) are detected by SQLAlchemy on commit.
+TrackedJSONB = MutableDict.as_mutable(JSONB)
 from pgvector.sqlalchemy import Vector
 
 Base = declarative_base()
@@ -205,7 +210,7 @@ class Script(Base):
     feedback_history = Column(JSONB, nullable=False, server_default="[]")
 
     format_type = Column(String, nullable=True)
-    format_payload = Column(JSONB, nullable=True)
+    format_payload = Column(TrackedJSONB, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
     updated_at = Column(DateTime(timezone=True), server_default=text("now()"))
