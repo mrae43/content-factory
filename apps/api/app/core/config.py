@@ -53,7 +53,15 @@ class Settings(BaseSettings):
     image_gen_timeout_seconds: int = 30
     image_storage_path: str = "static/carousel_images"
     image_gen_slide_delay: float = 1.5
-    storage_backend: str = "local"
+    storage_backend: str = "s3"
+
+    # S3 / SeaweedFS
+    s3_endpoint_url: str = "http://seaweedfs:8333"
+    s3_access_key_id: str = "factory"
+    s3_secret_access_key: str = "factory-secret"
+    s3_bucket_images: str = "media-images"
+    s3_bucket_videos: str = "media-videos"
+    s3_public_url: str = "http://localhost:8333"
 
     # Eval Model Configuration (Together AI)
     eval_research_model: str = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
