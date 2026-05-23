@@ -175,7 +175,7 @@ async def test_skips_slide_without_visual_description():
 
 
 @pytest.mark.agent
-async def test_filename_includes_job_id():
+async def test_filename_and_folder_include_ids():
     jid = uuid4()
     mock_gen = MagicMock()
     mock_gen.generate = AsyncMock(
@@ -188,13 +188,17 @@ async def test_filename_includes_job_id():
         "job_id": jid,
         "format_payload": {"slides": [_slide(1)]},
         "platform": "instagram",
+        "device_id": "test-device",
     }
 
     await agent.run(context)
 
-    filename = mock_store.upload_image.call_args[0][1]
-    assert str(jid) in filename
-    assert filename.endswith(".png")
+    args, kwargs = mock_store.upload_image.call_args
+    filename = args[1]
+    folder = kwargs.get("folder", args[2] if len(args) > 2 else "")
+    assert filename == "slide_01.png"
+    assert str(jid) in folder
+    assert "test-device" in folder
 
 
 @pytest.mark.agent
@@ -236,6 +240,7 @@ async def test_missing_job_id_still_runs():
     context = {
         "format_payload": {"slides": [_slide(1)]},
         "platform": "instagram",
+        "device_id": "anon-device",
     }
 
     result = await agent.run(context)
