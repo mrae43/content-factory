@@ -26,6 +26,12 @@ router = APIRouter(prefix="/api/v1/jobs", tags=["Content Factory"])
 
 
 @router.post(
+    "",
+    response_model=RenderJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    include_in_schema=False,
+)
+@router.post(
     "/", response_model=RenderJobResponse, status_code=status.HTTP_202_ACCEPTED
 )
 async def create_render_job(
@@ -43,6 +49,7 @@ async def create_render_job(
             format_type=request.format_type.value,
             platform=request.platform.value,
             status=JobStatusEnum.PENDING,
+            device_id=request.device_id,
         )
         db.add(new_job)
         await db.commit()
@@ -68,6 +75,12 @@ async def create_render_job(
         )
 
 
+@router.get(
+    "",
+    response_model=list[RenderJobResponse],
+    status_code=status.HTTP_200_OK,
+    include_in_schema=False,
+)
 @router.get(
     "/",
     response_model=list[RenderJobResponse],
@@ -217,13 +230,21 @@ async def regenerate_assets(
         "job_id": job.id,
         "format_payload": carousel_script.format_payload,
         "platform": job.platform or "instagram",
+        "device_id": job.device_id,
     }
     carousel_result = await agent.run(context)
 
     if carousel_result.status == AgentActionStatus.SUCCESS:
-        carousel_script.format_payload = carousel_result.payload["format_payload"]
+        existing = carousel_script.format_payload or {}
+        for new_slide in carousel_result.payload["format_payload"].get("slides", []):
+            num = new_slide.get("slide_number")
+            for existing_slide in existing.get("slides", []):
+                if existing_slide.get("slide_number") == num:
+                    existing_slide["image_url"] = new_slide.get("image_url")
+                    break
+        carousel_script.format_payload = existing
         await db.commit()
-        return carousel_result.payload["format_payload"]
+        return existing
 
     raise HTTPException(
         status_code=500,
