@@ -64,7 +64,7 @@ class CarouselImageAgent:
 
             if result.success and result.image_bytes:
                 filename = f"slide_{slide['slide_number']:02d}.png"
-                folder = f"{device_id or '__anonymous__'}/{job_id}"
+                folder = f"{device_id or '__anonymous__'}/{job_id or 'standalone'}"
                 url = self.storage.upload_image(result.image_bytes, filename, folder=folder)
                 slide["image_url"] = url
             else:
