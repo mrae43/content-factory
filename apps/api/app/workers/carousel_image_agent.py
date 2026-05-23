@@ -10,6 +10,17 @@ from app.workers.agents import AgentActionStatus, AgentResult
 logger = logging.getLogger(__name__)
 
 
+def merge_image_urls(existing_payload: dict | None, new_payload: dict) -> dict:
+    existing = existing_payload or {}
+    for new_slide in new_payload.get("slides", []):
+        num = new_slide.get("slide_number")
+        for existing_slide in existing.get("slides", []):
+            if existing_slide.get("slide_number") == num:
+                existing_slide["image_url"] = new_slide.get("image_url")
+                break
+    return existing
+
+
 class CarouselImageAgent:
     """
     Generates images for carousel slides using ImageGenerationService.

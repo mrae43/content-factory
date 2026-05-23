@@ -34,7 +34,7 @@ from app.workers.agents import (
     AgentActionStatus,
 )
 from app.workers.optimizer import ScriptOptimizerAgent
-from app.workers.carousel_image_agent import CarouselImageAgent
+from app.workers.carousel_image_agent import CarouselImageAgent, merge_image_urls
 from app.workers.formatters import (
     BlogFormatterAgent,
     CarouselFormatterAgent,
@@ -508,16 +508,10 @@ async def _transition_asset_generation(db: AsyncSession, job) -> None:
         carousel_result = await agent.run(context)
 
         if carousel_result.status == AgentActionStatus.SUCCESS:
-            existing = carousel_script.format_payload or {}
-            for new_slide in carousel_result.payload["format_payload"].get(
-                "slides", []
-            ):
-                num = new_slide.get("slide_number")
-                for existing_slide in existing.get("slides", []):
-                    if existing_slide.get("slide_number") == num:
-                        existing_slide["image_url"] = new_slide.get("image_url")
-                        break
-            carousel_script.format_payload = existing
+            carousel_script.format_payload = merge_image_urls(
+                carousel_script.format_payload,
+                carousel_result.payload["format_payload"],
+            )
             any_success = True
         else:
             await log_error(

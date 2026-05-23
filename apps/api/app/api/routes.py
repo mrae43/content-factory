@@ -17,7 +17,7 @@ from app.schemas.shorts import (
 from app.db.models import RenderJob, Script
 from app.db.session import get_db
 from app.db.crud import list_render_jobs as crud_list_jobs, get_latest_format_script
-from app.workers.carousel_image_agent import CarouselImageAgent
+from app.workers.carousel_image_agent import CarouselImageAgent, merge_image_urls
 from app.workers.agents import AgentActionStatus
 
 logger = logging.getLogger(__name__)
@@ -235,14 +235,10 @@ async def regenerate_assets(
     carousel_result = await agent.run(context)
 
     if carousel_result.status == AgentActionStatus.SUCCESS:
-        existing = carousel_script.format_payload or {}
-        for new_slide in carousel_result.payload["format_payload"].get("slides", []):
-            num = new_slide.get("slide_number")
-            for existing_slide in existing.get("slides", []):
-                if existing_slide.get("slide_number") == num:
-                    existing_slide["image_url"] = new_slide.get("image_url")
-                    break
-        carousel_script.format_payload = existing
+        carousel_script.format_payload = merge_image_urls(
+            carousel_script.format_payload,
+            carousel_result.payload["format_payload"],
+        )
         await db.commit()
         return existing
 
