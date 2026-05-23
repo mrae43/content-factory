@@ -8,7 +8,8 @@ async function apiClient<T>(
 ): Promise<T> {
   const { params, ...fetchOptions } = options;
 
-  const url = new URL(endpoint, window.location.origin);
+  const base = typeof window !== "undefined" ? window.location.origin : (process.env.NEXT_PUBLIC_API_URL || "");
+  const url = new URL(endpoint, base);
   if (params) {
     Object.entries(params).forEach(([key, value]) =>
       url.searchParams.set(key, value)
