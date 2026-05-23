@@ -6,6 +6,8 @@ networks:
 volumes:
   pgdata:
     name: factory_pgdata
+  seaweedfs_data:
+    name: factory_seaweedfs_data
 
 services:
   db:
@@ -56,6 +58,34 @@ services:
           cpus: '0.5'
           memory: 512M
 
+  seaweedfs:
+    image: chrislusf/seaweedfs:latest
+    container_name: seaweedfs
+    ports:
+      - "8333:8333"
+      - "9333:9333"
+    volumes:
+      - seaweedfs_data:/data
+      - ./apps/api/s3.json:/etc/seaweedfs/s3.json
+    command: >
+      server -s3
+      -dir=/data
+      -ip.bind=0.0.0.0
+      -s3.config=/etc/seaweedfs/s3.json
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9333/cluster/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - factory-net
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
   api:
     build:
       context: ./apps/api
@@ -76,6 +106,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      seaweedfs:
+        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -90,8 +122,8 @@ services:
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-3000}:3000"
-    environment:
-      - NEXT_PUBLIC_API_URL=http://api:8000
+    env_file:
+      - .env
     networks:
       - factory-net
     depends_on:
