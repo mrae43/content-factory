@@ -1,5 +1,3 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
-
 interface RequestOptions extends RequestInit {
   params?: Record<string, string>;
 }
@@ -10,9 +8,7 @@ async function apiClient<T>(
 ): Promise<T> {
   const { params, ...fetchOptions } = options;
 
-  const url = API_BASE
-    ? new URL(`${API_BASE}${endpoint}`)
-    : new URL(endpoint, window.location.origin);
+  const url = new URL(endpoint, window.location.origin);
   if (params) {
     Object.entries(params).forEach(([key, value]) =>
       url.searchParams.set(key, value)
