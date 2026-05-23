@@ -14,20 +14,27 @@ class S3Storage:
         )
         self.bucket = settings.s3_bucket_images
         self.public_url = settings.s3_public_url.rstrip("/")
+        self._bucket_checked = False
 
-    def upload_image(self, file_bytes: bytes, filename: str, folder: str = "") -> str:
-        key = f"{folder}/{filename}" if folder else filename
-
+    def _ensure_bucket(self) -> None:
+        if self._bucket_checked:
+            return
         try:
             self.client.head_bucket(Bucket=self.bucket)
         except Exception:
             self.client.create_bucket(Bucket=self.bucket)
+        self._bucket_checked = True
+
+    def upload_image(self, file_bytes: bytes, filename: str, folder: str = "", content_type: str = "image/png") -> str:
+        key = f"{folder}/{filename}" if folder else filename
+
+        self._ensure_bucket()
 
         self.client.put_object(
             Bucket=self.bucket,
             Key=key,
             Body=file_bytes,
-            ContentType="image/png",
+            ContentType=content_type,
         )
         return f"{self.public_url}/{self.bucket}/{key}"
 
