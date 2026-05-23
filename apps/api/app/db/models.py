@@ -18,11 +18,11 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID, JSONB, ENUM
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import declarative_base, relationship
+from pgvector.sqlalchemy import Vector
 
 # Mutation-tracked JSONB variant — in-place dict changes (e.g.
 # slide["image_url"] = url) are detected by SQLAlchemy on commit.
 TrackedJSONB = MutableDict.as_mutable(JSONB)
-from pgvector.sqlalchemy import Vector
 
 Base = declarative_base()
 
