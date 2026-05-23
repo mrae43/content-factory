@@ -97,6 +97,9 @@ class RenderJob(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     topic = Column(String, nullable=False)
 
+    # Client device identifier for S3 key prefixing
+    device_id = Column(String, nullable=True)
+
     # Step 1: Pre-context given by the user (URLs, base text, constraints)
     pre_context = Column(JSONB, nullable=False, server_default="{}")
 
@@ -143,6 +146,7 @@ class ResearchChunk(Base):
         Index("ix_research_meta_gin", "meta", postgresql_using="gin"),
         Index(
             "ix_research_embedding_hnsw",
+            "embedding",
             postgresql_using="hnsw",
             postgresql_with={"m": 16, "ef_construction": 64},
             postgresql_ops={"embedding": "vector_cosine_ops"},

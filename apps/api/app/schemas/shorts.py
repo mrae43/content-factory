@@ -236,6 +236,10 @@ class JobCreateRequest(BaseModel):
         ...,
         description="Target platform: twitter, linkedin, instagram, youtube, tiktok",
     )
+    device_id: Optional[str] = Field(
+        None,
+        description="Client device identifier for S3 key prefixing. Sent from localStorage.",
+    )
 
     @model_validator(mode="after")
     def validate_format_for_platform(self):
