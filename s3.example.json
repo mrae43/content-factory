@@ -1,11 +1,11 @@
 {
 	"identities": [
 		{
-			"name": "dev",
+			"name": "factory",
 			"credentials": [
 				{
-					"accessKey": "",
-					"secretKey": ""
+					"accessKey": "factory",
+					"secretKey": "factory-secret"
 				}
 			],
 			"actions": ["Admin", "Read", "Write"]
