@@ -6,7 +6,13 @@ UPLOAD_DIR = Path(settings.image_storage_path)
 
 
 class LocalStorage:
-    def upload_image(self, file_bytes: bytes, filename: str, folder: str = "", content_type: str = "image/png") -> str:
+    def upload_image(
+        self,
+        file_bytes: bytes,
+        filename: str,
+        folder: str = "",
+        content_type: str = "image/png",
+    ) -> str:
         target = UPLOAD_DIR / folder if folder else UPLOAD_DIR
         target.mkdir(parents=True, exist_ok=True)
         path = target / filename

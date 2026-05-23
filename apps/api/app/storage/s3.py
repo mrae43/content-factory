@@ -25,7 +25,13 @@ class S3Storage:
             self.client.create_bucket(Bucket=self.bucket)
         self._bucket_checked = True
 
-    def upload_image(self, file_bytes: bytes, filename: str, folder: str = "", content_type: str = "image/png") -> str:
+    def upload_image(
+        self,
+        file_bytes: bytes,
+        filename: str,
+        folder: str = "",
+        content_type: str = "image/png",
+    ) -> str:
         key = f"{folder}/{filename}" if folder else filename
 
         self._ensure_bucket()

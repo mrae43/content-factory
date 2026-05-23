@@ -1,5 +1,5 @@
 from typing import Optional
- 
+
 from fastapi import APIRouter, HTTPException, Depends, status
 from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy import select
