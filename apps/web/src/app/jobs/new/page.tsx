@@ -95,6 +95,13 @@ function NewJobForm() {
   const handleSubmit = async () => {
     try {
       setErrorMessage(null);
+
+      let device_id = localStorage.getItem("device_id");
+      if (!device_id) {
+        device_id = crypto.randomUUID();
+        localStorage.setItem("device_id", device_id);
+      }
+
       const result = await createJob.mutateAsync({
         topic,
         research_inputs: {
@@ -110,6 +117,7 @@ function NewJobForm() {
         },
         format_type: formatType as "all" | "video" | "blog" | "carousel",
         platform: platform as "twitter" | "linkedin" | "instagram" | "youtube" | "tiktok",
+        device_id,
       });
       router.push(`/jobs/${result.id}`);
       toast.success("Story commissioned — pipeline started.");

@@ -1,6 +1,7 @@
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Depends, status
+from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
@@ -17,7 +18,7 @@ from app.schemas.shorts import (
 from app.db.models import RenderJob, Script
 from app.db.session import get_db
 from app.db.crud import list_render_jobs as crud_list_jobs, get_latest_format_script
-from app.workers.carousel_image_agent import CarouselImageAgent
+from app.workers.carousel_image_agent import CarouselImageAgent, merge_image_urls
 from app.workers.agents import AgentActionStatus
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/jobs", tags=["Content Factory"])
 
 
+@router.post(
+    "",
+    response_model=RenderJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    include_in_schema=False,
+)
 @router.post(
     "/", response_model=RenderJobResponse, status_code=status.HTTP_202_ACCEPTED
 )
@@ -43,6 +50,7 @@ async def create_render_job(
             format_type=request.format_type.value,
             platform=request.platform.value,
             status=JobStatusEnum.PENDING,
+            device_id=request.device_id,
         )
         db.add(new_job)
         await db.commit()
@@ -68,6 +76,12 @@ async def create_render_job(
         )
 
 
+@router.get(
+    "",
+    response_model=list[RenderJobResponse],
+    status_code=status.HTTP_200_OK,
+    include_in_schema=False,
+)
 @router.get(
     "/",
     response_model=list[RenderJobResponse],
@@ -217,13 +231,18 @@ async def regenerate_assets(
         "job_id": job.id,
         "format_payload": carousel_script.format_payload,
         "platform": job.platform or "instagram",
+        "device_id": job.device_id,
     }
     carousel_result = await agent.run(context)
 
     if carousel_result.status == AgentActionStatus.SUCCESS:
-        carousel_script.format_payload = carousel_result.payload["format_payload"]
+        carousel_script.format_payload = merge_image_urls(
+            carousel_script.format_payload,
+            carousel_result.payload["format_payload"],
+        )
+        flag_modified(carousel_script, "format_payload")
         await db.commit()
-        return carousel_result.payload["format_payload"]
+        return {"status": "ok"}
 
     raise HTTPException(
         status_code=500,

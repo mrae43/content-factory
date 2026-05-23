@@ -287,6 +287,11 @@ export interface components {
             format_type: components["schemas"]["FormatTypeEnum"];
             /** @description Target platform: twitter, linkedin, instagram, youtube, tiktok */
             platform: components["schemas"]["PlatformEnum"];
+            /**
+             * Device Id
+             * @description Client device identifier for S3 key prefixing. Sent from localStorage.
+             */
+            device_id?: string | null;
         };
         /**
          * JobStatusEnum

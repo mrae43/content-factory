@@ -16,7 +16,12 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB, ENUM
+from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import declarative_base, relationship
+
+# Mutation-tracked JSONB variant — in-place dict changes (e.g.
+# slide["image_url"] = url) are detected by SQLAlchemy on commit.
+TrackedJSONB = MutableDict.as_mutable(JSONB)
 from pgvector.sqlalchemy import Vector
 
 Base = declarative_base()
@@ -97,6 +102,9 @@ class RenderJob(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     topic = Column(String, nullable=False)
 
+    # Client device identifier for S3 key prefixing
+    device_id = Column(String, nullable=True)
+
     # Step 1: Pre-context given by the user (URLs, base text, constraints)
     pre_context = Column(JSONB, nullable=False, server_default="{}")
 
@@ -143,6 +151,7 @@ class ResearchChunk(Base):
         Index("ix_research_meta_gin", "meta", postgresql_using="gin"),
         Index(
             "ix_research_embedding_hnsw",
+            "embedding",
             postgresql_using="hnsw",
             postgresql_with={"m": 16, "ef_construction": 64},
             postgresql_ops={"embedding": "vector_cosine_ops"},
@@ -201,7 +210,7 @@ class Script(Base):
     feedback_history = Column(JSONB, nullable=False, server_default="[]")
 
     format_type = Column(String, nullable=True)
-    format_payload = Column(JSONB, nullable=True)
+    format_payload = Column(TrackedJSONB, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
     updated_at = Column(DateTime(timezone=True), server_default=text("now()"))

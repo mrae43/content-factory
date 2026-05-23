@@ -5,6 +5,7 @@ from typing import Any, Dict
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.db.crud import (
     update_job_status,
@@ -34,7 +35,7 @@ from app.workers.agents import (
     AgentActionStatus,
 )
 from app.workers.optimizer import ScriptOptimizerAgent
-from app.workers.carousel_image_agent import CarouselImageAgent
+from app.workers.carousel_image_agent import CarouselImageAgent, merge_image_urls
 from app.workers.formatters import (
     BlogFormatterAgent,
     CarouselFormatterAgent,
@@ -503,11 +504,16 @@ async def _transition_asset_generation(db: AsyncSession, job) -> None:
             "job_id": job.id,
             "format_payload": carousel_script.format_payload,
             "platform": job.platform or "instagram",
+            "device_id": job.device_id,
         }
         carousel_result = await agent.run(context)
 
         if carousel_result.status == AgentActionStatus.SUCCESS:
-            carousel_script.format_payload = carousel_result.payload["format_payload"]
+            carousel_script.format_payload = merge_image_urls(
+                carousel_script.format_payload,
+                carousel_result.payload["format_payload"],
+            )
+            flag_modified(carousel_script, "format_payload")
             any_success = True
         else:
             await log_error(

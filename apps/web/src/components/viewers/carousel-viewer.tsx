@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Image  from "next/image";
 import type { CarouselFormatPayload, PlatformEnum } from "@content-factory/shared-types";
 import {
   HelpCircle,
@@ -84,7 +83,7 @@ export function CarouselViewer({ payload, platform }: CarouselViewerProps) {
       >
         {slide.image_url ? (
           <div className="h-full rounded-lg border border-border overflow-hidden relative bg-black">
-            <Image
+            <img
               src={slide.image_url}
               alt={`Slide ${slide.slide_number}`}
               className="h-full w-full object-contain"

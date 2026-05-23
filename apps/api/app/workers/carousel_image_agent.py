@@ -10,6 +10,17 @@ from app.workers.agents import AgentActionStatus, AgentResult
 logger = logging.getLogger(__name__)
 
 
+def merge_image_urls(existing_payload: dict | None, new_payload: dict) -> dict:
+    existing = existing_payload or {}
+    for new_slide in new_payload.get("slides", []):
+        num = new_slide.get("slide_number")
+        for existing_slide in existing.get("slides", []):
+            if existing_slide.get("slide_number") == num:
+                existing_slide["image_url"] = new_slide.get("image_url")
+                break
+    return existing
+
+
 class CarouselImageAgent:
     """
     Generates images for carousel slides using ImageGenerationService.
@@ -31,6 +42,7 @@ class CarouselImageAgent:
         format_payload = context.get("format_payload", {})
         job_id = context.get("job_id")
         platform = context.get("platform", "instagram")
+        device_id = context.get("device_id")
 
         if not isinstance(format_payload, dict):
             return AgentResult(
@@ -62,8 +74,11 @@ class CarouselImageAgent:
             result = await self.image_service.generate(visual_description, platform)
 
             if result.success and result.image_bytes:
-                filename = f"{job_id}_slide_{slide['slide_number']:02d}.png"
-                url = self.storage.upload_image(result.image_bytes, filename)
+                filename = f"slide_{slide['slide_number']:02d}.png"
+                folder = f"{device_id or '__anonymous__'}/{job_id or 'standalone'}"
+                url = self.storage.upload_image(
+                    result.image_bytes, filename, folder=folder
+                )
                 slide["image_url"] = url
             else:
                 slide["image_url"] = None
