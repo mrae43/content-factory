@@ -31,6 +31,7 @@ class CarouselImageAgent:
         format_payload = context.get("format_payload", {})
         job_id = context.get("job_id")
         platform = context.get("platform", "instagram")
+        device_id = context.get("device_id")
 
         if not isinstance(format_payload, dict):
             return AgentResult(
@@ -62,8 +63,9 @@ class CarouselImageAgent:
             result = await self.image_service.generate(visual_description, platform)
 
             if result.success and result.image_bytes:
-                filename = f"{job_id}_slide_{slide['slide_number']:02d}.png"
-                url = self.storage.upload_image(result.image_bytes, filename)
+                filename = f"slide_{slide['slide_number']:02d}.png"
+                folder = f"{device_id or '__anonymous__'}/{job_id}"
+                url = self.storage.upload_image(result.image_bytes, filename, folder=folder)
                 slide["image_url"] = url
             else:
                 slide["image_url"] = None
