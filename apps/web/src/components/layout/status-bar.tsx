@@ -1,7 +1,7 @@
 "use client";
 
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 function formatTimeAgo(ms: number): string {
@@ -15,6 +15,8 @@ export function StatusBar() {
   const isFetching = useIsFetching();
   const queryClient = useQueryClient();
   const [lastUpdate, setLastUpdate] = useState(Date.now());
+  const lastUpdateRef = useRef(lastUpdate);
+  lastUpdateRef.current = lastUpdate;
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -22,13 +24,13 @@ export function StatusBar() {
       if (
         event.type === "updated" &&
         event.query.state.dataUpdatedAt &&
-        event.query.state.dataUpdatedAt > lastUpdate
+        event.query.state.dataUpdatedAt > lastUpdateRef.current
       ) {
         setLastUpdate(event.query.state.dataUpdatedAt);
       }
     });
     return () => unsubscribe();
-  }, [queryClient, lastUpdate]);
+  }, [queryClient]);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -56,7 +58,7 @@ export function StatusBar() {
         />
         {isLive ? "Live" : "Stale"}
       </span>
-      {timeAgo < 60000 && (
+      {timeAgo > 0 && (
         <span className="text-muted-foreground/60">
           &middot; {formatTimeAgo(timeAgo)}
         </span>
