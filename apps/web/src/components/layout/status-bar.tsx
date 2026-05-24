@@ -1,7 +1,7 @@
 "use client";
 
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
 function formatTimeAgo(ms: number): string {
@@ -14,19 +14,17 @@ function formatTimeAgo(ms: number): string {
 export function StatusBar() {
   const isFetching = useIsFetching();
   const queryClient = useQueryClient();
-  const [lastUpdate, setLastUpdate] = useState(Date.now());
-  const lastUpdateRef = useRef(lastUpdate);
-  lastUpdateRef.current = lastUpdate;
-  const [now, setNow] = useState(Date.now());
+  const [lastUpdate, setLastUpdate] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
-      if (
-        event.type === "updated" &&
-        event.query.state.dataUpdatedAt &&
-        event.query.state.dataUpdatedAt > lastUpdateRef.current
-      ) {
-        setLastUpdate(event.query.state.dataUpdatedAt);
+      if (event.type === "updated" && event.query.state.dataUpdatedAt) {
+        setLastUpdate((prev) =>
+          event.query.state.dataUpdatedAt > prev
+            ? event.query.state.dataUpdatedAt
+            : prev
+        );
       }
     });
     return () => unsubscribe();
