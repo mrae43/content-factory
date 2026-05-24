@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { Copy, Check } from "lucide-react";
 
 interface CopyButtonProps {
@@ -11,7 +11,7 @@ interface CopyButtonProps {
 export function CopyButton({ getContent, label = "Copy" }: CopyButtonProps) {
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = useCallback(async () => {
+  const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(getContent());
       setCopied(true);
@@ -19,7 +19,7 @@ export function CopyButton({ getContent, label = "Copy" }: CopyButtonProps) {
     } catch {
       // clipboard write failed — silently ignore
     }
-  }, [getContent]);
+  };
 
   return (
     <button
