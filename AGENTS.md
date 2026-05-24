@@ -61,7 +61,7 @@ All production agents default to `meta-llama/Llama-3.3-70B-Instruct-Turbo` via T
 | `asset_model` | Llama-3.3-70B | 0.5 | Asset studio (video/audio prompts) |
 | `formatter_model` | Llama-3.3-70B | 0.3 | Blog/carousel/video formatting |
 
-**Image generation:** `black-forest-labs/FLUX.1-schnell` via Together AI. Platform-specific dimensions. Storage via `StorageAdapter` (default: `local` → `static/carousel_images/`).
+**Image generation:** `black-forest-labs/FLUX.1-schnell` via Together AI. Platform-specific dimensions. Storage via `StorageAdapter` (default: `s3` → SeaweedFS, fallback `local` → `static/carousel_images/`).
 
 **Eval models** (separate from production):
 

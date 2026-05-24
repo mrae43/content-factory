@@ -14,6 +14,7 @@ Multi-agent system that generates multi-format content (Shorts/Reels/TikToks, bl
 - **Web-Enriched RAG** — Tavily search enriches user-provided context with live web results, ingested as vector chunks for semantic retrieval by downstream agents.
 - **Evaluator-Optimizer Pattern** — On revision, a dedicated `ScriptOptimizerAgent` surgically patches failed claims instead of re-drafting the entire script, preserving quality sections and reducing hallucination drift.
 - **Multi-Format Output** — Pipeline branches by `format_type` after Red Team approval: `video` (asset generation), `blog` (structured articles with SEO metadata), `carousel` (platform-specific slide decks), or `all` (blog + carousel in parallel, then assets). `FormatterHarness` wraps each formatter with generate-validate-retry loops and doom loop detection.
+- **S3/SeaweedFS Object Storage** — `StorageAdapter` abstracts between `S3Storage` (boto3, auto-creates buckets, `device_id/job_id` key prefixing) and `LocalStorage` (static files). SeaweedFS runs as a first-class Docker service. Default backend: `s3`.
 - **Platform-Aware Validation** — `BlogValidator` and `CarouselValidator` enforce schema constraints and platform-specific character limits (Twitter 280, LinkedIn 700, Instagram 2200) before accepting output.
 
 ---
@@ -29,7 +30,7 @@ After Red Team approval (Step 6), the pipeline branches by `format_type`:
 - **`all`** (default) → FORMATTING (blog + carousel in parallel) → ASSET_GENERATION → COMPLETED
 
 ### 1. Ingestion (`PENDING`)
-User submits a topic (e.g., *"BRICS De-dollarization 2025"*) along with pre-context (source URLs, raw text, audience target) via `POST /api/v1/jobs/`.
+User submits a topic (e.g., *"BRICS De-dollarization 2025"*) along with pre-context (source URLs, raw text, audience target), `format_type`, `platform`, and optional `device_id` (for S3 key prefixing) via `POST /api/v1/jobs/`.
 
 ### 2. Extraction & Chunking
 `MarkdownTextSplitter` chunks the raw text into `RAW-CONTEXT` scope vectors in the pgvector `research_chunks` table.
@@ -74,7 +75,7 @@ Each formatter is wrapped in a **`FormatterHarness`** — a generate-validate-re
 When `format_type = "all"`, both formatters run concurrently via `asyncio.gather()`.
 
 ### 8. Asset Generation (`ASSET_GENERATION`)
-The orchestrator branches by format: **video** jobs use the **Asset Studio Agent** (`meta-llama/Llama-3.3-70B-Instruct-Turbo`, configurable — generates production prompts, returns mocked `s3://` URL); **carousel** jobs use the **CarouselImageAgent** which generates real images via Together AI `FLUX.1-schnell` with platform-specific dimensions (Instagram/LinkedIn 1080×1350, Twitter 1080×1620, TikTok 1080×1920, YouTube 1920×1080), editorial brand styling (copper and stone tones, flat vector illustration), and stores them locally under `static/carousel_images/` for static serving. Image generation includes retry logic (3 attempts with exponential backoff). A `POST /api/v1/jobs/{id}/regenerate-assets` endpoint allows re-running carousel image generation post-completion.
+The orchestrator branches by format: **video** jobs use the **Asset Studio Agent** (`meta-llama/Llama-3.3-70B-Instruct-Turbo`, configurable — generates production prompts, returns mocked `s3://` URL); **carousel** jobs use the **CarouselImageAgent** which generates real images via Together AI `FLUX.1-schnell` with platform-specific dimensions (Instagram/LinkedIn 1088×1344, Twitter 1088×1616, TikTok 1088×1920, YouTube 1920×1088), editorial brand styling (copper and stone tones, flat vector illustration, no text/typography). Images are uploaded via `StorageAdapter` (default: S3/SeaweedFS, fallback: `local` → `static/carousel_images/`) with a `device_id/job_id` folder prefix for multi-device isolation. Image generation includes retry logic (3 attempts with exponential backoff) **and a global rate-limit coordinator** (asyncio `Lock`, 3s minimum gap between calls, exponential backoff on HTTP 429). A `POST /api/v1/jobs/{id}/regenerate-assets` endpoint allows re-running carousel image generation post-completion. **SeaweedFS** (S3-compatible object store) runs as a Docker service alongside the stack.
 
 ### 9. Completion (`COMPLETED`)
 LOCAL-scope vector chunks are cleaned up. The final job state, scripts, audit trail, and asset metadata are available via the API.
@@ -104,14 +105,15 @@ LOCAL-scope vector chunks are cleaned up. The final job state, scripts, audit tr
 | ORM | SQLAlchemy 2 async (`asyncpg`) |
 | Migrations | Alembic (sync via `psycopg2`) |
 | AI Orchestration | LangChain + Google GenAI + Together AI (OpenAI-compatible) |
-| Image Generation | Together AI `v1/images/generations` with `FLUX.1-schnell` (configurable via `image_model` env var) |
+| Image Generation | Together AI `v1/images/generations` with `FLUX.1-schnell` (configurable via `image_model` env var). Global rate-limit coordinator with exponential backoff. |
+| Storage | `StorageAdapter` dispatcher — default **S3** (`app/storage/s3.py`, via `boto3`, targets SeaweedFS), fallback **local** (`app/storage/local.py` → `static/carousel_images/`). Configured via `STORAGE_BACKEND` env var. |
 | Models | All default to `meta-llama/Llama-3.3-70B-Instruct-Turbo` via Together AI. Each agent stage configurable via `{research,copywriter,evaluator,optimizer,asset,formatter}_{model,temperature}` env vars. Image model: `black-forest-labs/FLUX.1-schnell`. Eval suite uses separate `eval_*` models. Embeddings: `models/gemini-embedding-001` (Gemini). |
 | Embeddings | `models/gemini-embedding-001` (768-dim, pgvector HNSW with cosine) |
 | Web Search | Tavily (`langchain-tavily`) |
 | Background Queue | `asyncio.create_task` + `FOR UPDATE SKIP LOCKED` (no Celery/Redis) |
 | Testing | pytest + pytest-asyncio + httpx + deepeval + LLM-as-Judge (Together AI) |
 | CI/CD | GitHub Actions (lint → unit/agent tests → eval/integration/docker) |
-| Containerization | Docker Compose (pgvector:pg16, pgAdmin4, API, Web) |
+| Containerization | Docker Compose (pgvector:pg16, pgAdmin4, SeaweedFS, API, Web) |
 | Linter/Formatter | Ruff (Python), ESLint (TypeScript) |
 | Design System | Stone & Copper palette, Playfair Display + Inter + JetBrains Mono — see [`DESIGN.md`](DESIGN.md) |
 
@@ -123,7 +125,7 @@ LOCAL-scope vector chunks are cleaned up. The final job state, scripts, audit tr
 # 1. Create .env with required variables (see Environment section)
 cp .env.example .env
 
-# 2. Start all services (db + pgadmin + api + web)
+# 2. Start all services (db + pgadmin + seaweedfs + api + web)
 docker compose up -d
 
 # 3. Migrations auto-run on container start via entrypoint.sh
@@ -161,6 +163,7 @@ After `docker compose up -d`, services are available at:
 | API (FastAPI) | http://localhost:8000/docs | Swagger UI |
 | pgAdmin | http://localhost:5050 | Login with `PGADMIN_EMAIL` / `PGADMIN_PASSWORD` |
 | PostgreSQL | `127.0.0.1:5433` | Binary protocol only — use pgAdmin or a DB client, not a browser |
+| SeaweedFS (S3) | http://localhost:8333 | S3-compatible object store — bucket `media-images` |
 
 **pgAdmin DB connection:** When adding a server in pgAdmin, use Host `db` and Port `5432` (Docker internal), **not** `localhost`. pgAdmin and the database share the `factory_isolated_net` bridge network.
 
@@ -176,8 +179,8 @@ uv run pytest tests/ -v          # Run all tests
 docker compose exec api pytest tests/ -v
 
 # Run by marker
-uv run pytest -m unit            # Unit tests only (9 files, 168 tests)
-uv run pytest -m agent           # Agent tests only (9 files, 50 tests)
+uv run pytest -m unit            # Unit tests only (10 files)
+uv run pytest -m agent           # Agent tests only (9 files)
 uv run pytest -m eval            # Eval benchmarks
 uv run pytest -m golden          # Golden dataset validation
 uv run pytest -m integration     # Integration tests (format branching, CI-only)
@@ -212,6 +215,16 @@ Required `.env` variables:
 | `PGADMIN_PASSWORD` | pgAdmin login password |
 | `API_PORT` | Docker Compose API host port (default `8000`) |
 
+### Job Creation Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `topic` | `string` | Content topic for generation |
+| `pre_context` | `string` | Optional raw text, URLs, audience constraints |
+| `format_type` | `enum` | `video`, `blog`, `carousel`, or `all` |
+| `platform` | `enum` | `twitter`, `linkedin`, `instagram`, `youtube`, `tiktok` |
+| `device_id` | `string?` | Client device identifier for S3 key prefixing (sent from `localStorage`) |
+
 Optional `.env` overrides (all default to via Together AI unless `gemini-` prefixed):
 
 | Variable | Default | Description |
@@ -235,8 +248,15 @@ Optional `.env` overrides (all default to via Together AI unless `gemini-` prefi
 | `IMAGE_MODEL` | `black-forest-labs/FLUX.1-schnell` | Carousel image generation model (Together AI) |
 | `IMAGE_GEN_MAX_RETRIES` | `3` | Max retry attempts per image generation |
 | `IMAGE_GEN_TIMEOUT_SECONDS` | `30` | HTTP timeout per image generation request |
-| `IMAGE_STORAGE_PATH` | `static/carousel_images` | Local directory for generated carousel images |
-| `STORAGE_BACKEND` | `local` | Storage adapter (`local` only; S3/GCS planned) |
+| `IMAGE_STORAGE_PATH` | `static/carousel_images` | Local directory for generated carousel images (fallback) |
+| `IMAGE_GEN_SLIDE_DELAY` | `1.5` | Seconds to wait between successive slide image generations |
+| `STORAGE_BACKEND` | `s3` | Storage adapter (`s3` via SeaweedFS, `local` fallback) |
+| `S3_ENDPOINT_URL` | `http://seaweedfs:8333` | S3-compatible endpoint |
+| `S3_ACCESS_KEY_ID` | `factory` | S3 access key |
+| `S3_SECRET_ACCESS_KEY` | `factory-secret` | S3 secret key |
+| `S3_BUCKET_IMAGES` | `media-images` | S3 bucket for generated images |
+| `S3_BUCKET_VIDEOS` | `media-videos` | S3 bucket for video assets |
+| `S3_PUBLIC_URL` | `http://localhost:8333` | Public URL prefix for browser-accessible image URLs |
 | `SYNTHID_WATERMARK_ENABLED` | `True` | SynthID flag (no implementation yet) |
 | `WORKER_POLL_INTERVAL_SECONDS` | `5` | QueueWorker poll interval |
 | `WORKER_LOCK_TIMEOUT_MINUTES` | `15` | Stuck job recovery timeout |
@@ -263,17 +283,17 @@ content-factory/                  # Nx workspace root
 ├── apps/
 │   ├── api/                      # Python FastAPI backend
 │   │   ├── app/
-│   │   │   main.py               # FastAPI app + lifespan (starts/stops QueueWorker)
+│   │   │   main.py               # FastAPI app + lifespan (starts/stops QueueWorker), /images and /static mounts, redirect_slashes=False
 │   │   │   core/
 │   │   │     config.py            # pydantic-settings, reads .env (database_url — required, eval model configs)
 │   │   │     guardrails.py        # GuardrailStrictness enum, GUARDRAIL_PROFILES, get_guardrail_config()
-│   │   │   api/routes.py         # /api/v1/jobs/ endpoints + health check
+│   │   │   api/routes.py         # /api/v1/jobs/ endpoints + health check + /regenerate-assets
 │   │   │   db/
-│   │   │     models.py           # SQLAlchemy models (factory schema) — RenderJob with refined_context, research_confidence, citation_index, assembled_context (JSONB), retrieval_retry_count
+│   │   │     models.py           # SQLAlchemy models (factory schema) — RenderJob with device_id (S3 key prefix), refined_context, research_confidence, citation_index, assembled_context (JSONB), retrieval_retry_count. Script.format_payload uses TrackedJSONB (MutableDict) for in-place mutation support.
 │   │   │     session.py          # async engine + session factory (settings.database_url)
 │   │   │     crud.py             # query helpers + queue operations
 │   │   │   schemas/
-│   │   │     shorts.py           # Pydantic request/response models + FormatTypeEnum, PlatformEnum
+│   │   │     shorts.py           # Pydantic request/response models + FormatTypeEnum, PlatformEnum, device_id for S3 key prefixing
 │   │   │     formats.py          # Structured format schemas (BlogSection, CarouselSlide, SeoMeta)
 │   │   │   services/
 │   │   │     llm.py              # Multi-provider LLM routing (Gemini + Together AI)
@@ -282,9 +302,10 @@ content-factory/                  # Nx workspace root
 │   │   │     web_search.py       # TavilySearchService
 │   │   │     context_builder.py  # RAG query composition, evidence formatting, AssembledContext
 │   │   │     format_validator.py # FormatValidator → BlogValidator, CarouselValidator
-│   │   │     image_gen.py        # ImageGenerationService — Together AI FLUX.1-schnell, retry logic, platform dimensions
+│   │   │     image_gen.py        # ImageGenerationService — Together AI FLUX.1-schnell, retry logic, platform dimensions, global rate-limit coordinator (asyncio Lock, 3s min gap, exponential backoff on 429)
 │   │   │   storage/
-│   │   │     adapter.py          # get_storage() dispatcher
+│   │   │     adapter.py          # get_storage() dispatcher (s3 or local)
+│   │   │     s3.py               # S3Storage — boto3 client, SeaweedFS, auto-create bucket
 │   │   │     local.py            # LocalStorage — saves to static/carousel_images/
 │   │   │   workers/
 │   │   │     orchestrator.py     # Agentic state machine
@@ -297,7 +318,19 @@ content-factory/                  # Nx workspace root
 │   │   │     tasks.py            # Post-completion LOCAL chunk cleanup
 │   │   ├── alembic/              # Database migrations
 │   │   ├── tests/                # Python test suite
-│   │   ├── scripts/              # Type generation scripts
+│   │   │   ├── evals/
+│   │   │   │   ├── contracts/    # 27 eval contracts across 8 pipeline stages (Research → E2E)
+│   │   │   │   ├── fixtures/     # eval1_research.json — frozen Tavily corpus + cached scores
+│   │   │   │   ├── plans/        # Implementation plans for eval 1.x
+│   │   │   │   ├── audit/        # Eval audit trail
+│   │   │   │   ├── conftest.py   # EvalRunner, researching_runner, quality_corpus fixtures
+│   │   │   │   ├── schemas.py    # ResearchingCase, QualityCorpus, CachedChunkScore, etc.
+│   │   │   │   ├── chunk_quality_scorer.py
+│   │   │   │   ├── assertions.py # Deterministic check helpers (chunk count, domain diversity, etc.)
+│   │   │   │   ├── judge.py      # LLM-as-Judge scoring
+│   │   │   │   ├── rubrics.py    # Weighted scoring rubrics
+│   │   │   │   └── baselines.json
+│   │   ├── scripts/              # Type generation scripts + capture_corpus.py (Eval 1 corpus builder)
 │   │   ├── pyproject.toml        # uv-managed Python deps
 │   │   ├── uv.lock               # Lockfile for deterministic Python builds
 │   │   ├── entrypoint.sh         # Auto-runs alembic upgrade head, then uvicorn
@@ -321,7 +354,8 @@ content-factory/                  # Nx workspace root
 ├── pnpm-lock.yaml                # Workspace lockfile (lockfileVersion 9.0, pnpm 11)
 ├── pnpm-workspace.yaml           # pnpm workspace definition + allowBuilds for pnpm 11
 ├── tsconfig.base.json            # Shared TS config
-└── docker-compose.yml            # All services (db + pgadmin + api + web)
+├── s3.json / s3.example.json     # SeaweedFS S3 identity config (anonymous read-only + factory admin)
+└── docker-compose.yml            # All services (db + pgadmin + seaweedfs + api + web)
 ```
 
 ---
@@ -332,15 +366,19 @@ The project uses pytest with `asyncio_mode = "auto"` and five custom markers:
 
 | Marker | Scope | Files |
 |--------|-------|-------|
-| `unit` | Core logic — chunking, config, CRUD, routes, queue worker, vector store, context builder, formatter harness, format validator, image gen service | `tests/unit/` (11 files, 209 tests) |
-| `agent` | Agent behavior — research, copywriter, red team, asset studio, optimizer, blog formatter, carousel formatter, carousel image, video formatter | `tests/agents/` (10 files, 65 tests) |
-| `eval` | Outcome evals with LLM-as-Judge scoring across pipeline stages | `tests/evals/` (4 test files, 34 parametrized cases) |
+| `unit` | Core logic — chunking, config, CRUD, routes, queue worker, vector store, context builder, formatter harness, format validator, image gen service, guardrail config, story directives | `tests/unit/` (10 files) |
+| `agent` | Agent behavior — research, copywriter, red team, asset studio, optimizer, blog formatter, carousel formatter, carousel image, video formatter | `tests/agents/` (9 files, 65+ tests) |
+| `eval` | Outcome evals with LLM-as-Judge scoring across pipeline stages + **Eval 1** (research coverage + chunk quality) | `tests/evals/` (6 files, 40+ parametrized cases) |
 | `golden` | Trajectory validation against golden dataset | `tests/golden/` (23+ cases across 6 categories) |
-| `integration` | End-to-end orchestrator flows with RETRIEVAL phase, retry logic, evidence context passing | `tests/integration/` (60+ tests, CI-only) |
+| `integration` | End-to-end orchestrator flows with RETRIEVAL phase, retry logic, evidence context passing, formatting transitions | `tests/integration/` (60+ tests, CI-only) |
 
 ### Eval Contracts & Criteria
 
 The eval suite is governed by formal contracts at `apps/api/tests/evals/contracts/` — 27 files across 8 pipeline stages (Research Desk → Retrieval Desk → Writer's Desk → Fact-Check Desk → Fact-Check Loop → Layout Desk → Pipeline Status → End-to-End). Each contract specifies the eval method, pass conditions, and thresholds. The master criteria document at `apps/api/tests/evals/evals-criteria.md` (409 lines) defines 5 guiding principles, 14 failure codes (F-R1 to F-P2), and 7 recommended eval datasets.
+
+**Eval 1 (Research Phase)** adds two dedicated test files:
+- `test_eval1_research_coverage.py` — Validates chunk count, domain diversity, duplicate detection, scope/source_type metadata from Tavily-researched topics
+- `test_eval1_chunk_quality.py` — LLM-judged scoring (relevance, density, coherence) on a frozen corpus of 7 canonical topics (BRICS, Quantum Computing, Fed Rates, etc.) captured via `scripts/capture_corpus.py`
 
 ### Outcome Eval Test Matrix
 
@@ -350,6 +388,8 @@ The eval suite is governed by formal contracts at `apps/api/tests/evals/contract
 | `test_outcome_script.py` | 6 (H-001..H-004, R-003, M-004) | CopywriterAgent |
 | `test_outcome_factcheck.py` | 10 (H-001..H-004, R-001..R-002, R-004, E-001, F-003, F-004) | RedTeamAgent |
 | `test_outcome_optimizer.py` | 4 (R-001, R-002, R-004, F-004) | ScriptOptimizerAgent |
+| `test_eval1_research_coverage.py` | 7 (coverage-happy, coverage-minimal-sources, coverage-sparse, metadata-error, high-volume, duplicate-content, scope-validation) | Researching (Tavily ingest) |
+| `test_eval1_chunk_quality.py` | 7 (quality-brics, quality-sparse-FR1, quality-boilerplate, quality-fusion, quality-ev-battery, quality-space, quality-ai-regulation) | Chunk Quality (frozen corpus) |
 
 Eval modes:
 - **Golden mode** (default): Uses pre-recorded `reference_outputs` from `golden_dataset.json` — deterministic, fast, no API calls.
@@ -380,7 +420,7 @@ docker-build-api (after python lint only)
 - **Step 5 (Scripting)** — CopywriterAgent receives `refined_context`, `evidence_sections` (from AssembledContext), and `story_directives` (target_audience, tone, angle) from orchestrator. On revision, `ScriptOptimizerAgent` surgically patches failed claims with the same evidence context instead of full re-draft.
 - **Step 6 (Red Team)** — RedTeamAgent audits script claims with three-pass evaluation, persists verdicts, configurable max revision loops
 - **Step 7 (Format Output)** — BlogFormatterAgent and CarouselFormatterAgent produce structured blog/carousel outputs via Plan-then-Execute two-phase LLM calls. Wrapped in `FormatterHarness` with doom loop detection. Platform-aware validation (Twitter 280, LinkedIn 700, Instagram 2200 character limits). Branches by `format_type`: `video` skips, `blog`/`carousel` format then complete, `all` runs both in parallel then continues to asset generation
-- **Step 8 (Asset Generation)** — CarouselImageAgent generates real images via Together AI FLUX.1-schnell with platform-specific dimensions, editorial styling, local storage, and retry logic. AssetStudioAgent generates video production prompts (mocked `s3://` URL). Regenerate endpoint available for carousel images post-completion.
+- **Step 8 (Asset Generation)** — CarouselImageAgent generates real images via Together AI FLUX.1-schnell with platform-specific dimensions (1088×1344/1616/1920), editorial styling (no text/typography), S3/SeaweedFS storage with `device_id/job_id` folder prefixing, global rate-limit coordinator (3s min gap, exponential backoff on 429), and retry logic (3 attempts). AssetStudioAgent generates video production prompts (mocked `s3://` URL). Regenerate endpoint available for carousel images post-completion.
 - **Step 9 (Completion)** — LOCAL-scope chunk cleanup, final state
 
 ### Infrastructure
@@ -392,12 +432,13 @@ docker-build-api (after python lint only)
 - **Context Builder (Structured RAG)** — `ContextBuilder` service (`app/services/context_builder.py`) composes a multi-field query from `topic` + `story_directives`, retrieves from both RAW-CONTEXT and LOCAL scopes, enriches chunks with `topic_relevance` labels, and formats evidence sections for prompt injection. `AssembledContext` persisted as JSONB on `render_jobs`.
 - **Prompt Chaining + Evidence Injection** — Orchestrator mediates Research → ContextBuilder → Copywriter pipeline: `refined_context` (research summary) + `evidence_sections` (retrieved chunks) + `story_directives` (audience/tone/angle) are injected into agent prompts. Copywriter and Optimizer both receive the same evidence context.
 - **Evaluator-Optimizer Pattern** — Configurable models/temperatures via env vars for both Red Team and Optimizer agents
-- **Test Suite** — Unit (209) + agent (65) + integration (60+) tests with CI pipeline via GitHub Actions
-- **Eval Infrastructure** — LLM-as-Judge scoring (judge.py), deterministic assertions, rubrics, golden dataset (23+ cases), 4 outcome test files with 34 parametrized cases, 27 eval contracts across 8 pipeline stages, master criteria document (409 lines)
+- **Test Suite** — Unit + agent + integration (200+ tests) with CI pipeline via GitHub Actions
+- **Eval Infrastructure** — LLM-as-Judge scoring (judge.py), deterministic assertions, rubrics, golden dataset (23+ cases), 6 outcome + eval1 test files with 40+ parametrized cases, 27 eval contracts across 8 pipeline stages, master criteria document (409 lines), frozen Tavily corpus (7 canonical topics via `scripts/capture_corpus.py`)
 - **Multi-provider LLM** — Routing via model name prefix: `gemini-*` → Google GenAI SDK, all others → Together AI (OpenAI-compatible). All production agents default to Together AI (`meta-llama/Llama-3.3-70B-Instruct-Turbo`). Configurable per-stage via env vars. Embeddings always use `models/gemini-embedding-001` (Gemini). Eval suite uses separate `eval_*` model configs.
 - **Multi-Format Output** — Blog and carousel formatters with Plan-then-Execute two-phase LLM calls, `FormatterHarness` generate-validate-retry with doom loop detection, platform-aware validation (per-slide character limits)
-- **Carousel Image Generation** — Real image gen via Together AI `FLUX.1-schnell` with platform-specific dimensions, editorial brand styling, local storage, and retry logic (3 attempts). Regenerate endpoint available post-completion.
-- **Docker** — 4-service Compose stack (pgvector, pgAdmin, API, Web). Migrations auto-run on API container start via `entrypoint.sh`. Single workspace lockfile at repo root (`apps/web/pnpm-lock.yaml` removed). pnpm 11 `allowBuilds` in `pnpm-workspace.yaml`.
+- **Carousel Image Generation** — Real image gen via Together AI `FLUX.1-schnell` with platform-specific dimensions (1088×1344/1616/1920), editorial brand styling (no text/typography), global rate-limit coordinator (asyncio Lock, 3s min gap, exponential backoff on 429), S3/SeaweedFS storage with `device_id/job_id` folder prefixing, and retry logic (3 attempts). Regenerate endpoint available post-completion.
+- **S3/SeaweedFS Storage** — `StorageAdapter` dispatcher with `S3Storage` (boto3, auto-create bucket) and `LocalStorage` (static files) backends. SeaweedFS runs as a Docker service. Configurable via `S3_*` env vars. Default backend: `s3`.
+- **Docker** — 5-service Compose stack (pgvector, pgAdmin, SeaweedFS, API, Web). Migrations auto-run on API container start via `entrypoint.sh`. Single workspace lockfile at repo root (`apps/web/pnpm-lock.yaml` removed). pnpm 11 `allowBuilds` in `pnpm-workspace.yaml`.
 
 ### Intentionally Deferred (Wizard of Oz MVP)
 
