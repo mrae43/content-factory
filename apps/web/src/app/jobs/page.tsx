@@ -7,8 +7,10 @@ import { MiniPipeline } from "@/components/jobs/mini-pipeline";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { useUIStore } from "@/stores/ui-store";
 import Link from "next/link";
+import { pipelineStages, deskLabels } from "@/lib/constants/pipeline";
 
 type EditorialFilter = "all" | "active" | "published" | "review" | "killed";
 
@@ -200,10 +202,23 @@ export default function JobsPage() {
                         </div>
                         {isActive && (
                           <div className="mt-2.5 sm:mt-3">
-                            <MiniPipeline
-                              currentStatus={job.status}
-                              formatType={job.format_type}
-                            />
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <span>
+                                  <MiniPipeline
+                                    currentStatus={job.status}
+                                    formatType={job.format_type}
+                                  />
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" align="center">
+                                {(() => {
+                                  const idx = pipelineStages.indexOf(job.status as typeof pipelineStages[number]);
+                                  const label = idx >= 0 ? deskLabels[job.status] : job.status;
+                                  return `${label} \u00B7 Step ${idx + 1} of ${pipelineStages.length}`;
+                                })()}
+                              </TooltipContent>
+                            </Tooltip>
                           </div>
                         )}
                       </div>

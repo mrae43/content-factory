@@ -1,6 +1,23 @@
 "use client";
 
 import type { VideoFormatPayload } from "@content-factory/shared-types";
+import { CopyButton } from "./copy-button";
+
+function videoToText(p: VideoFormatPayload): string {
+  const parts: string[] = [];
+  parts.push(`Visual Style: ${p.visual_style}`);
+  if (p.audio_direction) parts.push(`Audio Direction: ${p.audio_direction}`);
+  parts.push(`Total Duration: ${p.total_duration_seconds}s`);
+  parts.push("");
+  for (const scene of p.scenes) {
+    parts.push(`Scene ${scene.scene_number} (${scene.duration_seconds}s)`);
+    parts.push(`  Visual: ${scene.visual_prompt}`);
+    parts.push(`  Narration: ${scene.narration_text}`);
+    if (scene.audio_cue) parts.push(`  Audio: ${scene.audio_cue}`);
+    parts.push("");
+  }
+  return parts.join("\n");
+}
 
 interface VideoScriptViewerProps {
   payload: VideoFormatPayload;
@@ -10,7 +27,8 @@ export function VideoScriptViewer({ payload }: VideoScriptViewerProps) {
   return (
     <div className="space-y-5">
       <div className="space-y-2">
-        <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
           <span>
             <span className="font-semibold text-foreground">Visual Style:</span>{" "}
             {payload.visual_style}
@@ -25,6 +43,8 @@ export function VideoScriptViewer({ payload }: VideoScriptViewerProps) {
             <span className="font-semibold text-foreground">Total Duration:</span>{" "}
             {payload.total_duration_seconds}s
           </span>
+        </div>
+          <CopyButton getContent={() => videoToText(payload)} label="Copy script" />
         </div>
         <div className="editorial-rule" />
       </div>

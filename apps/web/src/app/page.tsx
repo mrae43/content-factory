@@ -7,6 +7,7 @@ import { FormatBadge } from "@/components/jobs/format-badge";
 import { StatusDot } from "@/components/jobs/status-dot";
 import { MiniPipeline } from "@/components/jobs/mini-pipeline";
 import { Button } from "@/components/ui/button";
+import { TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -296,15 +297,33 @@ export default function HomePage() {
 
   return (
     <div className="space-y-8 sm:space-y-10">
-      {(activeJobs.length > 0 || reviewJobs.length > 0) && (
+      {reviewJobs.length > 0 && (
         <section className="space-y-2 sm:space-y-3">
-          <SectionHeading count={activeJobs.length + reviewJobs.length}>
-            Active Stories
-          </SectionHeading>
+          <div className="flex items-baseline gap-2">
+            <div className="flex items-center gap-2">
+              <TriangleAlert className="h-5 w-5 text-warning" />
+              <h3 className="font-heading text-fluid-xl font-semibold text-foreground">
+                Needs Attention
+              </h3>
+            </div>
+            <span className="text-fluid-xs font-medium text-muted-foreground">
+              ({reviewJobs.length})
+            </span>
+          </div>
           <div className="space-y-1.5 sm:space-y-2">
             {reviewJobs.map((job) => (
               <StoryCard key={job.id} job={job} />
             ))}
+          </div>
+        </section>
+      )}
+
+      {activeJobs.length > 0 && (
+        <section className="space-y-2 sm:space-y-3">
+          <SectionHeading count={activeJobs.length}>
+            Active Stories
+          </SectionHeading>
+          <div className="space-y-1.5 sm:space-y-2">
             {activeJobs.map((job) => (
               <StoryCard key={job.id} job={job} />
             ))}

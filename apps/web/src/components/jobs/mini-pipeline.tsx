@@ -1,27 +1,9 @@
+import { pipelineStages, deskLabels } from "@/lib/constants/pipeline";
+
 interface MiniPipelineProps {
   currentStatus: string;
   formatType?: string | null;
 }
-
-const pipelineStages = [
-  "PENDING",
-  "RESEARCHING",
-  "RETRIEVAL",
-  "SCRIPTING",
-  "FACT_CHECKING_SCRIPT",
-  "FORMATTING",
-  "ASSET_GENERATION",
-] as const;
-
-const deskLabels: Record<string, string> = {
-  PENDING: "Queued",
-  RESEARCHING: "Research",
-  RETRIEVAL: "Retrieve",
-  SCRIPTING: "Writing",
-  FACT_CHECKING_SCRIPT: "Fact-Check",
-  FORMATTING: "Layout",
-  ASSET_GENERATION: "Assets",
-};
 
 export function MiniPipeline({ currentStatus, formatType }: MiniPipelineProps) {
   const fmt = (formatType ?? "all").toLowerCase();

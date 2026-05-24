@@ -2,23 +2,41 @@
 
 import type { BlogFormatPayload } from "@content-factory/shared-types";
 import { CollapsibleSection } from "@/components/editorial/collapsible-section";
+import { CopyButton } from "./copy-button";
 
 interface BlogViewerProps {
   payload: BlogFormatPayload;
 }
 
+function blogToText(p: BlogFormatPayload): string {
+  const parts: string[] = [];
+  parts.push(`Title: ${p.title}`);
+  if (p.subtitle) parts.push(`Subtitle: ${p.subtitle}`);
+  parts.push("");
+  for (const s of p.sections) {
+    parts.push(s.heading);
+    parts.push(s.body);
+    parts.push("");
+  }
+  if (p.call_to_action) parts.push(`CTA: ${p.call_to_action}`);
+  return parts.join("\n");
+}
+
 export function BlogViewer({ payload }: BlogViewerProps) {
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="font-heading text-2xl font-bold tracking-tight">
-          {payload.title}
-        </h1>
-        {payload.subtitle && (
-          <p className="mt-1.5 font-heading text-base font-medium text-muted-foreground italic">
-            {payload.subtitle}
-          </p>
-        )}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-heading text-2xl font-bold tracking-tight">
+            {payload.title}
+          </h1>
+          {payload.subtitle && (
+            <p className="mt-1.5 font-heading text-base font-medium text-muted-foreground italic">
+              {payload.subtitle}
+            </p>
+          )}
+        </div>
+        <CopyButton getContent={() => blogToText(payload)} label="Copy article" />
       </div>
 
       {payload.sections.map((section, i) => (
