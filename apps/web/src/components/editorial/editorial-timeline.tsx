@@ -326,7 +326,7 @@ function TimelineNode({ stage, state, isLast, job }: TimelineNodeProps) {
       <div className={`flex-1 pb-8 ${isLast ? "pb-0" : ""}`}>
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
           <h4 className="font-heading text-base font-semibold leading-tight">
-            {config.name}
+            {config.name} ({stage})
           </h4>
           {summaryText && (
             <span className="text-xs text-muted-foreground">
