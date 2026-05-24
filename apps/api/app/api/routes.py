@@ -242,7 +242,7 @@ async def regenerate_assets(
         )
         flag_modified(carousel_script, "format_payload")
         await db.commit()
-        return {"status": "ok"}
+        return {"status": "ok", **carousel_script.format_payload}
 
     raise HTTPException(
         status_code=500,
