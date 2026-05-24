@@ -86,7 +86,7 @@ class TestSettings:
         assert s.worker_poll_interval_seconds == 5
         assert s.worker_lock_timeout_minutes == 15
         assert s.image_storage_path == "static/carousel_images"
-        assert s.storage_backend == "local"
+        assert s.storage_backend == "s3"
 
     def test_custom_values_override_defaults(self):
         s = Settings(
@@ -106,7 +106,7 @@ class TestSettings:
         assert s.worker_poll_interval_seconds == 10
         assert s.worker_lock_timeout_minutes == 30
         assert s.image_storage_path == "static/carousel_images"
-        assert s.storage_backend == "local"
+        assert s.storage_backend == "s3"
 
     def test_custom_image_storage_path(self):
         s = Settings(
