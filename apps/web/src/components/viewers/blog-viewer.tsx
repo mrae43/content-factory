@@ -27,15 +27,15 @@ export function BlogViewer({ payload }: BlogViewerProps) {
     <div className="space-y-8">
       <div className="flex items-start justify-between gap-4">
         <div>
-        <h1 className="font-heading text-2xl font-bold tracking-tight">
-          {payload.title}
-        </h1>
-        {payload.subtitle && (
-          <p className="mt-1.5 font-heading text-base font-medium text-muted-foreground italic">
-            {payload.subtitle}
-          </p>
-        )}
-      </div>
+          <h1 className="font-heading text-2xl font-bold tracking-tight">
+            {payload.title}
+          </h1>
+          {payload.subtitle && (
+            <p className="mt-1.5 font-heading text-base font-medium text-muted-foreground italic">
+              {payload.subtitle}
+            </p>
+          )}
+        </div>
         <CopyButton getContent={() => blogToText(payload)} label="Copy article" />
       </div>
 
