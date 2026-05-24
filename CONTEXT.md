@@ -1,5 +1,11 @@
 # Content Factory — Domain Glossary
 
+## Image Storage
+
+Generated carousel slide images are stored in SeaweedFS via its S3-compatible API, then served directly to the browser as plain HTTP URLs. The pipeline uses two identities in SeaweedFS's S3 config: an `anonymous` identity with `Read` access (so browsers can fetch images without authentication) and a `factory` identity with full `Admin/Read/Write` credentials used by the API container for uploads. S3 public URL format: `http://localhost:8333/{bucket}/{device_id}/{job_id}/slide_{NN}.png`.
+
+
+
 ## Story
 
 The central unit of work flowing through the pipeline. Represented in the database as a `RenderJob`. A Story has a topic (headline), a status, and carries all content produced through the pipeline (research, scripts, claims, assets).
