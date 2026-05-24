@@ -10,26 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { useUIStore } from "@/stores/ui-store";
 import Link from "next/link";
-
-const pipelineStages = [
-  "PENDING",
-  "RESEARCHING",
-  "RETRIEVAL",
-  "SCRIPTING",
-  "FACT_CHECKING_SCRIPT",
-  "FORMATTING",
-  "ASSET_GENERATION",
-] as const;
-
-const deskLabels: Record<string, string> = {
-  PENDING: "Queued",
-  RESEARCHING: "Research",
-  RETRIEVAL: "Retrieve",
-  SCRIPTING: "Writing",
-  FACT_CHECKING_SCRIPT: "Fact-Check",
-  FORMATTING: "Layout",
-  ASSET_GENERATION: "Assets",
-};
+import { pipelineStages, deskLabels } from "@/lib/constants/pipeline";
 
 type EditorialFilter = "all" | "active" | "published" | "review" | "killed";
 
