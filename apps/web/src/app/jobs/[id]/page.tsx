@@ -168,8 +168,15 @@ function JobDetailContent({
     return <ActiveOutput job={job} />;
   }
 
+  const defaultTab =
+    job.status === "COMPLETED" || job.status === "FAILED"
+      ? "output"
+      : job.status === "HUMAN_REVIEW_NEEDED"
+        ? "review"
+        : "trail";
+
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
       <div className="space-y-2">
         <h1 className="font-heading text-3xl font-bold tracking-tight">
           {job.topic}
@@ -199,32 +206,56 @@ function JobDetailContent({
         </div>
       </div>
 
-      <div className="space-y-4">
-        <SectionHeader label="THE PUBLISHED PIECE" />
-        {renderSection1()}
-      </div>
+      <Tabs defaultValue={defaultTab}>
+        <TabsList variant="line">
+          <TabsTrigger value="output">Output</TabsTrigger>
+          <TabsTrigger value="trail">Trail</TabsTrigger>
+          <TabsTrigger value="review">Review</TabsTrigger>
+        </TabsList>
 
-      <div className="space-y-4">
-        <SectionHeader label="THE EDITORIAL TRAIL" />
-        <div className="rounded-lg border border-border p-6">
-          <EditorialTimeline job={job} />
-        </div>
-      </div>
+        <TabsContent value="output">
+          <div className="pt-4 space-y-4">
+            <SectionHeader label="THE PUBLISHED PIECE" />
+            {renderSection1()}
+          </div>
+        </TabsContent>
 
-      <FactCheckAudit allClaims={allClaims} />
+        <TabsContent value="trail">
+          <div className="pt-4 space-y-8">
+            <div className="space-y-4">
+              <SectionHeader label="THE EDITORIAL TRAIL" />
+              <div className="rounded-lg border border-border p-6">
+                <EditorialTimeline job={job} />
+              </div>
+            </div>
 
-      <CitationIndexSection citationIndex={job.citation_index} />
+            <FactCheckAudit allClaims={allClaims} />
 
-      {job.status === "HUMAN_REVIEW_NEEDED" && (
-        <ReviewSection
-          job={job}
-          approvalMutation={approvalMutation}
-          feedbackText={feedbackText}
-          setFeedbackText={setFeedbackText}
-          showRejectForm={showRejectForm}
-          setShowRejectForm={setShowRejectForm}
-        />
-      )}
+            <CitationIndexSection citationIndex={job.citation_index} />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="review">
+          <div className="pt-4 space-y-4">
+            {job.status === "HUMAN_REVIEW_NEEDED" ? (
+              <ReviewSection
+                job={job}
+                approvalMutation={approvalMutation}
+                feedbackText={feedbackText}
+                setFeedbackText={setFeedbackText}
+                showRejectForm={showRejectForm}
+                setShowRejectForm={setShowRejectForm}
+              />
+            ) : (
+              <div className="rounded-lg border border-border p-6 text-center">
+                <p className="text-sm text-muted-foreground">
+                  No review required at this stage.
+                </p>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
