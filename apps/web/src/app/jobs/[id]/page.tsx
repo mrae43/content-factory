@@ -169,7 +169,7 @@ function JobDetailContent({
   }
 
   const defaultTab =
-    job.status === "COMPLETED" || job.status === "FAILED"
+    job.status === "COMPLETED"
       ? "output"
       : job.status === "HUMAN_REVIEW_NEEDED"
         ? "review"
@@ -210,7 +210,16 @@ function JobDetailContent({
         <TabsList variant="line">
           <TabsTrigger value="output">Output</TabsTrigger>
           <TabsTrigger value="trail">Trail</TabsTrigger>
-          <TabsTrigger value="review">Review</TabsTrigger>
+          <TabsTrigger value="review" className="relative">
+            Review
+            {job.status === "HUMAN_REVIEW_NEEDED" ? (
+              <span className="ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold text-white" style={{ backgroundColor: 'var(--warning)' }}>
+                1
+              </span>
+            ) : (
+              <span className="ml-1.5 text-[10px] text-muted-foreground">0</span>
+            )}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="output">
