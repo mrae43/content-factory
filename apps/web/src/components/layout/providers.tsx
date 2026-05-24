@@ -26,6 +26,13 @@ export default function DashboardLayout({
     }
 
     mq.addEventListener("change", handleChange);
+
+    const isDark = document.documentElement.classList.contains("dark");
+    const currentTheme = useUIStore.getState().theme;
+    if ((isDark && currentTheme !== "dark") || (!isDark && currentTheme !== "light")) {
+      useUIStore.setState({ theme: isDark ? "dark" : "light" });
+    }
+
     return () => mq.removeEventListener("change", handleChange);
   }, []);
 
