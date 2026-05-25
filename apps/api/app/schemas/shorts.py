@@ -140,9 +140,6 @@ class ResearchInputs(BaseModel):
     source_urls: List[HttpUrl] = Field(
         default_factory=list, description="URLs to scrape for research"
     )
-    raw_text: Optional[str] = Field(
-        None, description="Raw copied text or book excerpts"
-    )
 
 
 class StoryDirectives(BaseModel):
@@ -221,10 +218,13 @@ class OptimizerFeedbackEntry(BaseModel):
 # 3. REQUEST SCHEMAS (Input via API)
 # ==========================================
 class JobCreateRequest(BaseModel):
-    """Payload for Step 1: User inserts topic & context."""
+    """Payload for Step 1: User inserts title & context."""
 
-    topic: str = Field(
+    title: str = Field(
         ..., min_length=3, max_length=200, example="BRICS De-dollarization 2025"
+    )
+    user_reference: str = Field(
+        ..., min_length=1, description="User-provided background text as narrative foundation"
     )
     research_inputs: ResearchInputs
     story_directives: StoryDirectives = Field(default_factory=StoryDirectives)
@@ -324,18 +324,16 @@ class RenderJobResponse(BaseModel):
     """Outputs for Step 8: The Master Object State."""
 
     id: UUID
-    topic: str
+    title: str
     status: JobStatusEnum
+    user_reference: str = Field(..., description="User-provided reference text")
+    source_urls: List[str] = Field(default_factory=list, description="Source URLs for Tavily extraction")
+    story_directives: Dict[str, Any] = Field(default_factory=dict, description="Editorial directives")
     format_type: Optional[FormatTypeEnum] = FormatTypeEnum.ALL
     platform: Optional[PlatformEnum] = None
     final_video_url: Optional[str]
     refined_context: Optional[str] = None
-    research_confidence: Optional[float] = None
-    citation_index: Optional[List[Dict[str, Any]]] = None
     error_log: Optional[Dict[str, Any]]
-    pre_context: Optional[Dict[str, Any]] = Field(
-        None, description="Original user-provided context"
-    )
 
     # We only expose the most recently active script to keep payloads light
     scripts: List[ScriptResponse] = Field(default_factory=list)
