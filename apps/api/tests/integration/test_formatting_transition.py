@@ -40,7 +40,7 @@ class TestTransitionFormattingVideo:
     ):
         mock_job.status = JobStatusEnum.FACT_CHECKING_SCRIPT
         mock_job.format_type = "video"
-        mock_job.pre_context = {"guardrail_strictness": "Low"}
+        mock_job.story_directives = {"guardrail_strictness": "Low"}
         mock_script = MagicMock()
         mock_script.id = uuid4()
         mock_script.version = 1
