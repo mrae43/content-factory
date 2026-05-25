@@ -40,6 +40,24 @@ class TestQueryComposition:
         result = _compose_query("AI regulation", directives)
         assert result == "AI regulation"
 
+    def test_user_reference_included_in_query(self):
+        directives = {"tone": "urgent"}
+        result = _compose_query("BRICS", directives, user_reference="Some context")
+        assert "Some context" in result
+
+    def test_user_reference_truncated_to_500_chars(self):
+        long_ref = "x" * 1000
+        directives = {}
+        result = _compose_query("Title", directives, user_reference=long_ref)
+        assert len(result) <= len("Title") + 500
+
+    def test_user_reference_partial_inclusion(self):
+        directives = {"tone": "analytical", "angle": "de-dollarization"}
+        long_ref = "a" * 600
+        result = _compose_query("BRICS", directives, user_reference=long_ref)
+        assert "a" * 500 in result
+        assert "a" * 600 not in result
+
 
 @pytest.mark.unit
 class Relevance:
@@ -205,7 +223,7 @@ class TestBuildEdgeCases:
     async def test_passes_correct_scopes(self, mock_vector_store):
         job_id = uuid4()
         await build(
-            topic="Test",
+            title="Test",
             story_directives={},
             refined_context="Narrative.",
             vector_store=mock_vector_store,
