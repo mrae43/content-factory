@@ -173,7 +173,7 @@ function JobDetailContent({
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
       <div className="space-y-2">
         <h1 className="font-heading text-3xl font-bold tracking-tight">
-          {job.topic}
+{job.title}
         </h1>
         <p className="text-sm text-muted-foreground">
           Job{" "}
@@ -219,7 +219,7 @@ function JobDetailContent({
 
             <FactCheckAudit allClaims={allClaims} />
 
-            <CitationIndexSection citationIndex={job.citation_index} />
+            <FactCheckAudit allClaims={allClaims} />
           </div>
         </TabBar.Trail>
 
@@ -295,9 +295,8 @@ function FailedSection({ job }: { job: RenderJobResponse }) {
           type="button"
           className="text-primary hover:underline cursor-pointer"
           onClick={() => {
-            const rawText =
-              (job.pre_context as Record<string, unknown>)?.raw_text ?? "";
-            window.location.href = `/jobs/new?topic=${encodeURIComponent(job.topic)}&raw_text=${encodeURIComponent(typeof rawText === "string" ? rawText : "")}`;
+            const rawText = job.user_reference ?? "";
+            window.location.href = `/jobs/new?title=${encodeURIComponent(job.title)}&raw_text=${encodeURIComponent(rawText)}`;
           }}
         >
           Commission it again
@@ -526,7 +525,7 @@ function ActiveOutput({ job }: { job: RenderJobResponse }) {
   if (status === "PENDING") {
     return (
       <div className="rounded-lg border border-border p-6 space-y-3">
-        <h4 className="font-heading text-base font-semibold">{job.topic}</h4>
+        <h4 className="font-heading text-base font-semibold">{job.title}</h4>
         <div className="flex flex-wrap gap-2">
           <FormatBadge formatType={job.format_type} />
           {job.platform && (
@@ -694,60 +693,6 @@ function FactCheckAudit({
             opinion-based material.
           </p>
         )}
-      </div>
-    </div>
-  );
-}
-
-type CitationEntry = {
-  claim_fragment?: string;
-  source_url?: string;
-  chunk_id?: string;
-};
-
-function CitationIndexSection({
-  citationIndex,
-}: {
-  citationIndex: { [key: string]: unknown }[] | null | undefined;
-}) {
-  if (!citationIndex || citationIndex.length === 0) return null;
-
-  const entries = citationIndex as CitationEntry[];
-
-  return (
-    <div id="citation-index" className="space-y-4">
-      <SectionHeader label="CITATION INDEX" />
-      <div className="rounded-lg border border-border p-5 space-y-3">
-        <p className="text-xs text-muted-foreground">
-          {entries.length} citation{entries.length > 1 ? "s" : ""} mapped from research synthesis
-        </p>
-        <div className="space-y-2">
-          {entries.map((entry, i) => (
-            <div
-              key={i}
-              className="rounded-md bg-muted p-3 space-y-1 text-xs"
-            >
-              <p className="font-medium text-foreground">
-                &ldquo;{entry.claim_fragment ?? ""}&rdquo;
-              </p>
-              {entry.source_url && (
-                <a
-                  href={entry.source_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline break-all"
-                >
-                  {entry.source_url}
-                </a>
-              )}
-              {entry.chunk_id && (
-                <p className="text-muted-foreground font-mono">
-                  Chunk: {entry.chunk_id.slice(0, 8)}&hellip;
-                </p>
-              )}
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   );

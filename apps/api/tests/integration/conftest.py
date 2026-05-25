@@ -10,9 +10,12 @@ from app.schemas.shorts import JobStatusEnum
 def mock_job():
     job = MagicMock()
     job.id = uuid4()
-    job.topic = "BRICS De-dollarization 2025"
-    job.pre_context = {
-        "raw_text": "The BRICS nations announced a new payment system..."
+    job.title = "BRICS De-dollarization 2025"
+    job.user_reference = "The BRICS nations announced a new payment system..."
+    job.source_urls = []
+    job.story_directives = {
+        "target_audience": "Investors",
+        "guardrail_strictness": "High",
     }
     job.status = JobStatusEnum.PENDING
     job.final_video_url = None

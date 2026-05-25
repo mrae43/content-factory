@@ -192,7 +192,7 @@ export default function JobsPage() {
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                       <div className="min-w-0 flex-1">
                         <p className="font-heading text-fluid-base font-semibold leading-snug text-foreground">
-                          {job.topic}
+                          {job.title}
                         </p>
                         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                           <StatusDot status={job.status} />

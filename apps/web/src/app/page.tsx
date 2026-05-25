@@ -54,7 +54,7 @@ function StoryCard({
 }: {
   job: {
     id: string;
-    topic: string;
+    title: string;
     status: string;
     format_type: string | null;
     platform?: string | null;
@@ -69,7 +69,7 @@ function StoryCard({
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
             <div className="min-w-0 flex-1">
               <p className="font-heading text-fluid-base font-semibold leading-snug text-foreground">
-                {job.topic}
+                {job.title}
               </p>
               <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                 <StatusDot status={job.status} />
@@ -104,7 +104,7 @@ function PublishedCard({
 }: {
   job: {
     id: string;
-    topic: string;
+    title: string;
     status: string;
     format_type: string | null;
     platform?: string | null;
@@ -119,7 +119,7 @@ function PublishedCard({
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
             <div className="min-w-0 flex-1">
               <p className="font-heading text-fluid-base font-semibold leading-snug text-foreground">
-                {job.topic}
+                {job.title}
               </p>
               <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                 <StatusDot status={job.status} />
@@ -141,7 +141,7 @@ function KilledCard({
 }: {
   job: {
     id: string;
-    topic: string;
+    title: string;
     status: string;
     format_type: string | null;
     created_at: string;
@@ -164,7 +164,7 @@ function KilledCard({
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
             <div className="min-w-0 flex-1">
               <p className="font-heading text-fluid-base font-semibold leading-snug text-foreground">
-                {job.topic}
+                {job.title}
               </p>
               <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                 <StatusDot status={job.status} />

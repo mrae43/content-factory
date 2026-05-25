@@ -119,7 +119,7 @@ BLOG_PLAN_HUMAN = (
 
 BLOG_FORMATTER_SYSTEM = (
     "You are the Blog Formatter Agent at the AI Content Factory.\n"
-    "You receive a verified script, refined research context, verified claims, and a PLAN.\n"
+    "You receive a verified script, user reference context with editorial directives, verified claims, and a PLAN.\n"
     "Your task is to execute the plan — generate the full blog article following the outline.\n\n"
     "## RULES\n"
     "1. Every factual claim in the blog MUST trace to the verified claims or refined_context.\n"
@@ -174,7 +174,7 @@ CAROUSEL_PLAN_HUMAN = (
 
 CAROUSEL_FORMATTER_SYSTEM = (
     "You are the Carousel Formatter Agent at the AI Content Factory.\n"
-    "You receive a verified script, refined research context, verified claims, platform constraints, and a PLAN.\n"
+    "You receive a verified script, user reference context with editorial directives, verified claims, platform constraints, and a PLAN.\n"
     "Your task is to execute the plan — generate the full carousel following the outline.\n\n"
     "## RULES\n"
     "1. Every factual claim MUST trace to the verified claims or refined_context.\n"
@@ -232,7 +232,7 @@ VIDEO_PLAN_HUMAN = (
 
 VIDEO_FORMATTER_SYSTEM = (
     "You are the Video Formatter Agent at the AI Content Factory.\n"
-    "You receive a verified narrative script, refined research context, verified claims, and a PLAN.\n"
+    "You receive a verified narrative script, user reference context with editorial directives, verified claims, and a PLAN.\n"
     "Your task is to execute the plan — generate complete video scenes with narration and visual direction.\n\n"
     "## RULES\n"
     "1. Every factual claim MUST trace to the verified claims or refined_context.\n"

@@ -20,12 +20,14 @@ def _derive_topic_relevance(score: float) -> str:
     return "LOW"
 
 
-def _compose_query(topic: str, story_directives: dict) -> str:
-    parts = [topic]
+def _compose_query(title: str, story_directives: dict, user_reference: str = "") -> str:
+    parts = [title]
     for key in ("tone", "angle", "target_audience"):
         val = story_directives.get(key, "")
         if val:
             parts.append(str(val))
+    if user_reference:
+        parts.append(user_reference[:500])
     return " ".join(parts)
 
 
@@ -53,14 +55,15 @@ def _format_evidence_sections(chunks: List[Dict[str, Any]]) -> str:
 
 
 async def build(
-    topic: str,
+    title: str,
     story_directives: dict,
     refined_context: str,
     vector_store: ContentFactoryVectorStore,
     job_id: UUID,
     top_k: int = 10,
+    user_reference: str = "",
 ) -> AssembledContext:
-    query = _compose_query(topic, story_directives)
+    query = _compose_query(title, story_directives, user_reference)
     logger.info(f"ContextBuilder query for job {job_id}: {query!r} (top_k={top_k})")
 
     retrieved = await vector_store.semantic_search(

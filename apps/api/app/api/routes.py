@@ -40,13 +40,11 @@ async def create_render_job(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        pre_context = {
-            **request.research_inputs.model_dump(mode="json"),
-            **request.story_directives.model_dump(mode="json"),
-        }
         new_job = RenderJob(
-            topic=request.topic,
-            pre_context=pre_context,
+            title=request.title,
+            user_reference=request.user_reference,
+            source_urls=[str(u) for u in request.research_inputs.source_urls],
+            story_directives=request.story_directives.model_dump(mode="json"),
             format_type=request.format_type.value,
             platform=request.platform.value,
             status=JobStatusEnum.PENDING,
@@ -64,7 +62,7 @@ async def create_render_job(
         job_to_return = result.scalar_one()
 
         logger.info(
-            f"Created RenderJob {job_to_return.id} for topic: {job_to_return.topic}"
+            f"Created RenderJob {job_to_return.id} for title: {job_to_return.title}"
         )
         return job_to_return
 
