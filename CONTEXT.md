@@ -8,11 +8,11 @@ Generated carousel slide images are stored in SeaweedFS via its S3-compatible AP
 
 ## Story
 
-The central unit of work flowing through the pipeline. Represented in the database as a `RenderJob`. A Story has a topic (headline), a status, and carries all content produced through the pipeline (research, scripts, claims, assets).
+The central unit of work flowing through the pipeline. Represented in the database as a `RenderJob`. A Story has a title, a status, and carries all content produced through the pipeline (research, scripts, claims, assets).
 
 ## Research
 
-The first value-adding phase of the pipeline. Performed by the Research Desk. Web search only: TavilySearch on the Story's topic. Results are chunked, embedded (Gemini 768-dim, cosine), and ingested into the vector store as `LOCAL`-scope chunks with `source_type: WEB_SEARCH`. Produces no narrative output — synthesis is handled by the Retrieval Desk.
+The first value-adding phase of the pipeline. Performed by the Research Desk. Web search only: TavilySearch on the Story's title. Results are chunked, embedded (Gemini 768-dim, cosine), and ingested into the vector store as `LOCAL`-scope chunks with `source_type: WEB_SEARCH`. Produces no narrative output — synthesis is handled by the Retrieval Desk.
 
 _Ancillary term:_ **Research Chunks** — the individual vectorized text fragments stored in pgvector, tagged with a **source_type** enum (`USER_PROVIDED` from user-supplied URLs/raw text, `WEB_SEARCH` from Tavily results, `INFERRED` from the Retrieval Desk's synthesis), and a **scope** (`RAW-CONTEXT` for user-provided material, `LOCAL` for web results and refined chunks). source_type controls epistemic weight during fact-checking; scope controls lifecycle (LOCAL chunks are cleaned up after completion).
 
@@ -20,29 +20,28 @@ Each chunk carries enrichment metadata: **similarity_score** (cosine distance fr
 
 ## Retrieval
 
-The second phase, performed by the Retrieval Desk. Owns all pre-scripting evidence assembly. Three sequential steps:
+The second phase, performed by the Retrieval Desk. Owns all pre-scripting evidence assembly. Two sequential steps:
 
-1. **Synthesis** — the ResearchAgent queries the vector store (semantic search over all `RAW-CONTEXT` and `LOCAL` scopes) and feeds retrieved chunks to an LLM to produce a **Refined Context** (800–1500 word narrative), a **Citation Index**, and refined `INFERRED` chunks that are re-ingested into the vector store.
-2. **Context Assembly** — the Context Builder performs a fresh semantic search against all scopes, enriches retrieved chunks with `similarity_score` and `topic_relevance`, and produces an `AssembledContext` (narrative summary + formatted evidence sections + raw chunk payloads).
-3. **Persistence** — the `AssembledContext` and `Citation Index` are persisted on the Story's `RenderJob` row for consumption by the Writer's Desk.
+1. **Context Assembly** — the Context Builder performs a semantic search against all chunk scopes (composite query from title + Story Directives), enriches retrieved chunks with `similarity_score` and `topic_relevance`, and produces an `AssembledContext` (narrative summary + formatted evidence sections + raw chunk payloads). The retrieved evidence is also used to produce a **Refined Context** (800–1500 word narrative).
+2. **Persistence** — the `AssembledContext` and `refined_context` are persisted on the Story's `RenderJob` row for consumption by the Writer's Desk.
 
 ## Context Builder
 
-A component that runs inside the RETRIEVAL phase. It performs a fresh semantic search against all chunk scopes (composite query from topic + Story Directives), enriches retrieved chunks with `similarity_score` and `topic_relevance`, and produces the `AssembledContext` that the CopywriterAgent receives (narrative summary + evidence sections + raw chunk payloads). The result is persisted on the Story's `RenderJob` row and reused across the Fact-Check Loop — it is not rebuilt on each optimizer iteration.
-
-## Citation Index
-
-A structured sidecar attached to the Story alongside the Refined Context after the Retrieval Desk's Synthesis step. Maps claim fragments (or synthesis passages) to their source URLs and Research Chunk IDs. Enables the Fact-Check Loop to trace any claim to its origin — without re-searching the vector store. Not embedded in the Refined Context text itself.
+A component that runs inside the RETRIEVAL phase. It performs a semantic search against all chunk scopes (composite query from title + Story Directives), enriches retrieved chunks with `similarity_score` and `topic_relevance`, and produces the `AssembledContext` that the CopywriterAgent receives (narrative summary + evidence sections + raw chunk payloads). The result is persisted on the Story's `RenderJob` row and reused across the Fact-Check Loop — it is not rebuilt on each optimizer iteration.
 
 ## Research Inputs
 
-The retrievable material fed into the Indexer. Includes user-provided URLs, raw text, and web search results. Consumed during Indexing and discarded after Synthesis — they do not travel downstream.
+The retrievable material fed into the Indexer. Consists of two separate fields: **source_urls** (user-supplied URLs for web search and extraction) and **user_reference** (raw text providing editorial context). Consumed during Indexing and Retrieval — they do not travel downstream to the Writer's Desk directly.
 
 _Avoid:_ Mixing Story Directives into Research Inputs. Directives shape synthesis; Inputs feed retrieval.
 
+## User Reference
+
+The editorial brief raw text provided by the user at commission time. Stored as its own column (`user_reference`) on the RenderJob row, separate from `source_urls`. Passed to the Context Builder during Retrieval to compose the composite query, and propagated into the Refined Context as background context. Not to be confused with the user-supplied raw text that was previously embedded in `pre_context`.
+
 ## Story Directives
 
-The editorial metadata that shapes *how* research and scripting are framed. Includes target audience, tone, angle, and guardrail strictness. Unlike Research Inputs, Directives travel all the way to the Writer's Desk — they are consumed by Synthesis and Scripting, not by Indexing.
+The editorial metadata that shapes *how* research and scripting are framed. Includes target audience, tone, angle, and guardrail strictness. Stored as its own column on the RenderJob row. Unlike Research Inputs, Directives travel all the way to the Layout Desk (FORMATTING) — they are consumed by Synthesis and Scripting, not by Indexing.
 
 ## Script
 
