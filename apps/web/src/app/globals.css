@@ -53,6 +53,7 @@
   --color-accent-teal: var(--accent-teal);
   --color-accent-orange: var(--accent-orange);
   --color-accent-indigo: var(--accent-indigo);
+  --color-copper: var(--copper);
 }
 
 :root {
@@ -86,6 +87,7 @@
   --accent-teal: oklch(0.60 0.12 175);
   --accent-orange: oklch(0.65 0.2 55);
   --accent-indigo: oklch(0.45 0.2 270);
+  --copper: oklch(0.599 0.140 37.4);
   --radius: 0.625rem;
   --sidebar: oklch(0.965 0.006 84.6);
   --sidebar-foreground: oklch(0.228 0.009 75.2);
@@ -128,6 +130,7 @@
   --accent-teal: oklch(0.72 0.14 175);
   --accent-orange: oklch(0.75 0.22 55);
   --accent-indigo: oklch(0.58 0.22 270);
+  --copper: oklch(0.656 0.133 40.1);
   --sidebar: oklch(0.255 0.006 56.1);
   --sidebar-foreground: oklch(0.965 0.006 84.6);
   --sidebar-primary: oklch(0.656 0.133 40.1);
