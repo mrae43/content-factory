@@ -50,14 +50,14 @@ function getStageState(stage: string, currentStatus: string): StageState {
   return "future";
 }
 
-// function formatDuration(startDate: string, endDate?: string): string {
-//   const start = new Date(startDate).getTime();
-//   const end = endDate ? new Date(endDate).getTime() : Date.now();
-//   const diffSec = Math.round((end - start) / 1000);
-//   if (diffSec < 60) return `${diffSec}s`;
-//   if (diffSec < 3600) return `${Math.round(diffSec / 60)} min`;
-//   return `${Math.round(diffSec / 3600)}h ${Math.round((diffSec % 3600) / 60)}m`;
-// }
+function formatDuration(startDate: string, endDate?: string): string {
+  const start = new Date(startDate).getTime();
+  const end = endDate ? new Date(endDate).getTime() : Date.now();
+  const diffSec = Math.round((end - start) / 1000);
+  if (diffSec < 60) return `${diffSec}s`;
+  if (diffSec < 3600) return `${Math.round(diffSec / 60)} min`;
+  return `${Math.round(diffSec / 3600)}h ${Math.round((diffSec % 3600) / 60)}m`;
+}
 
 function formatRelativeTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -116,6 +116,10 @@ function TimelineNode({ stage, state, isLast, job }: TimelineNodeProps) {
       : "bg-border";
 
   const checkMark = isCompleted ? "\u2713" : isActive ? "\u25CF" : "";
+
+  const durationStr = isCompleted
+    ? formatDuration(job.created_at, job.updated_at)
+    : "";
 
   let summaryText = "";
   let outputContent: React.ReactNode = null;
@@ -335,6 +339,7 @@ function TimelineNode({ stage, state, isLast, job }: TimelineNodeProps) {
             <span className="text-xs text-muted-foreground">
               {checkMark && <span className="mr-1">{checkMark}</span>}
               {summaryText}
+              {durationStr && <span> · {durationStr}</span>}
             </span>
           )}
           {isActive && (
