@@ -100,21 +100,20 @@ class RenderJob(Base):
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    topic = Column(String, nullable=False)
+    title = Column(String, nullable=False)
 
     # Client device identifier for S3 key prefixing
     device_id = Column(String, nullable=True)
 
-    # Step 1: Pre-context given by the user (URLs, base text, constraints)
-    pre_context = Column(JSONB, nullable=False, server_default="{}")
+    user_reference = Column(Text, nullable=False, server_default="")
+    source_urls = Column(JSONB, nullable=False, server_default="[]")
+    story_directives = Column(JSONB, nullable=False, server_default="{}")
 
     status = Column(JobStatusEnum, nullable=False, server_default="PENDING")
 
     # Step 8: Final outputs
     final_video_url = Column(String, nullable=True)
     refined_context = Column(Text, nullable=True)
-    research_confidence = Column(Float, nullable=True)
-    citation_index = Column(JSONB, nullable=True)
     assembled_context = Column(JSONB, nullable=True)
     retrieval_retry_count = Column(Integer, nullable=False, server_default="0")
     error_log = Column(JSONB, nullable=True)
