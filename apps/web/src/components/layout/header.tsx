@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useUIStore } from "@/stores/ui-store";
-import { StatusBar } from "./status-bar";
 
 const pageTitles: Record<string, string> = {
   "/": "Overview",
@@ -45,7 +44,6 @@ export function Header() {
         </h1>
       </div>
       <div className="flex items-center gap-3">
-        <StatusBar />
         {!isCommission && (
           <Link
             href="/jobs/new"

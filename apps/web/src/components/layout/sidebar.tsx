@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useUIStore } from "@/stores/ui-store";
+import { useJobs } from "@/hooks/use-jobs";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -61,6 +62,11 @@ function Masthead() {
 export function Sidebar() {
   const pathname = usePathname();
   const { sidebarOpen, toggleSidebar } = useUIStore();
+  const { data: jobs } = useJobs();
+
+  const totalCount = jobs?.length ?? 0;
+  const reviewCount =
+    jobs?.filter((j) => j.status === "HUMAN_REVIEW_NEEDED").length ?? 0;
 
   return (
     <>
@@ -101,7 +107,20 @@ export function Sidebar() {
                     : "border-l-[3px] border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                 )}
               >
-                {item.label}
+                <span className="flex items-center justify-between">
+                  <span>{item.label}</span>
+                  {item.href === "/jobs" && totalCount > 0 && (
+                    <span className="text-xs text-muted-foreground">
+                      {totalCount}
+                      {reviewCount > 0 && (
+                        <span className="ml-1.5 inline-flex items-center gap-0.5 text-warning">
+                          <span className="h-1.5 w-1.5 rounded-full bg-warning" />
+                          {reviewCount}
+                        </span>
+                      )}
+                    </span>
+                  )}
+                </span>
               </Link>
             );
           })}

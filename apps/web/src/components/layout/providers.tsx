@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
+import { StatusBar } from "@/components/layout/status-bar";
 import { useState, useEffect, useLayoutEffect } from "react";
 import { useUIStore } from "@/stores/ui-store";
 
@@ -43,12 +44,13 @@ export default function DashboardLayout({
           <Sidebar />
           <div className="flex flex-1 flex-col overflow-hidden">
             <Header />
-            <main id="main" className="flex-1 overflow-y-auto p-4 md:p-6">
+            <main id="main" className="flex-1 overflow-y-auto px-4 pb-12 md:px-6">
               {children}
             </main>
           </div>
         </div>
       </TooltipProvider>
+      <StatusBar />
     </QueryClientProvider>
   );
 }

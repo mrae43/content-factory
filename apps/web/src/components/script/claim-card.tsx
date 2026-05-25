@@ -13,6 +13,7 @@ interface ClaimCardProps {
   claim_text: string;
   verdict: string;
   confidence: number;
+  category?: string | null;
   evidence_text?: string | null;
   evidence_references: string[];
 }
@@ -21,6 +22,7 @@ export function ClaimCard({
   claim_text,
   verdict,
   confidence,
+  category,
   evidence_text,
   evidence_references,
 }: ClaimCardProps) {
@@ -48,6 +50,12 @@ export function ClaimCard({
           {pct}%
         </span>
       </div>
+
+      {category && (
+        <div className="text-[11px] uppercase tracking-[0.05em] text-muted-foreground">
+          {category}
+        </div>
+      )}
 
       <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.05em] text-muted-foreground">
         <span className="font-medium">{config.label}</span>

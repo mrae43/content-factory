@@ -1,8 +1,98 @@
 # Content Factory — Design Source of Truth
 > The visual, interaction, and architectural design document for the Content Factory UI.
 > Every UI decision traces back to this file. When in doubt, read this first.
+
 ---
-## 1. Design Philosophy
+version: alpha
+name: Content Factory
+description: Personal editorial command center for multi-agent content pipeline with editor and operator modes
+colors:
+  background: oklch(0.965 0.006 84.6)
+  foreground: oklch(0.228 0.009 75.2)
+  card: oklch(0.994 0.006 84.6)
+  card-foreground: oklch(0.228 0.009 75.2)
+  muted: oklch(0.920 0.010 81.8)
+  muted-foreground: oklch(0.553 0.012 58.1)
+  border: oklch(0.860 0.015 80.7)
+  ring: oklch(0.599 0.140 37.4)
+  primary: oklch(0.599 0.140 37.4)
+  primary-foreground: oklch(0.994 0.006 84.6)
+  accent: oklch(0.931 0.014 57.6)
+  accent-foreground: oklch(0.228 0.009 75.2)
+  success: oklch(0.536 0.080 162.0)
+  warning: oklch(0.652 0.132 81.6)
+  destructive: oklch(0.505 0.190 27.5)
+  info: oklch(0.538 0.095 257.8)
+typography:
+  page-title:
+    fontFamily: Playfair Display
+    fontSize: 2rem
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: -0.02em
+  section-heading:
+    fontFamily: Playfair Display
+    fontSize: 1.5rem
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: -0.01em
+  card-title:
+    fontFamily: Playfair Display
+    fontSize: 1.125rem
+    fontWeight: 600
+    lineHeight: 1.4
+  body:
+    fontFamily: Inter
+    fontSize: 0.875rem
+    fontWeight: 400
+    lineHeight: 1.6
+  small:
+    fontFamily: Inter
+    fontSize: 0.75rem
+    fontWeight: 500
+    lineHeight: 1.5
+    letterSpacing: 0.02em
+  mono:
+    fontFamily: JetBrains Mono
+    fontSize: 0.8125rem
+    fontWeight: 400
+    lineHeight: 1.5
+spacing:
+  xs: 4px
+  sm: 8px
+  md: 12px
+  lg: 16px
+  xl: 24px
+  2xl: 32px
+  3xl: 48px
+  4xl: 64px
+rounded:
+  sm: 4px
+  md: 8px
+  lg: 12px
+components:
+  masthead:
+    typography: "{typography.page-title}"
+    textColor: "{colors.foreground}"
+    padding: 24px 20px
+  card:
+    backgroundColor: "{colors.card}"
+    textColor: "{colors.card-foreground}"
+    rounded: "{rounded.md}"
+    padding: 24px
+  nav-item:
+    fontFamily: Inter
+    fontSize: 0.875rem
+    fontWeight: 500
+    padding: 8px 20px
+  format-badge:
+    rounded: "{rounded.sm}"
+    fontFamily: Inter
+    fontSize: 0.6875rem
+    fontWeight: 600
+    textColor: "{colors.primary}"
+---
+## 1. Overview
 ### Core Identity
 Content Factory is a **personal editorial command center** — not a SaaS dashboard, not an admin panel, not an AI playground. It is the tool of an editor who codes: someone who commissions content, monitors the editorial process, reviews proofs, and publishes — but also wants full visibility into the multi-agent machinery underneath.
 
@@ -35,9 +125,8 @@ This metaphor shapes every visual and interaction decision. The UI should feel l
 4. **Craft, not generated.** Every element should feel deliberately placed. No default spacings, no unstyled text, no raw JSON visible by default. If it looks like an AI made it, it's wrong.
 5. **Full depth on demand.** Technical detail (agent traces, JSON payloads, revision diffs, claim evidence) is always one click away — in collapsible sections, tooltips, or expandable panels.
 6. **Operator as first-class citizen.** The user may be debugging at midnight. Raw state names are a hover away, polling has a visible heartbeat, and the shell surfaces counts of things needing attention, not just page names.
----
-## 2. Visual Language
-### Color Palette
+
+## 2. Colors
 **Primary palette — Stone & Copper:**
 | Token | Light Mode | Usage |
 |---|---|---|
@@ -70,7 +159,8 @@ background (oklch(0.965 0.006 84.6))          ← page
        └── muted (oklch(0.920 0.010 81.8))    ← inset/depressed areas
             └── border (oklch(0.860 0.015 80.7)) ← dividers
 ```
-### Typography
+
+## 3. Typography
 **Font families:**
 | Role | Font | Rationale |
 |---|---|---|
@@ -91,7 +181,8 @@ background (oklch(0.965 0.006 84.6))          ← page
 - **Pull quotes** for key claims or takeaways (Playfair Display italic, larger size, copper border-left)
 - **Section dividers** as thin copper rules (`border-bottom: 1px solid oklch(0.599 0.140 37.4 / 0.3)`)
 - **Masthead** "Content Factory" in Playfair Display, bold, with a subtle copper underline
-### Spacing & Layout
+
+## 4. Layout & Spacing
 **Base unit:** 4px. Spacing tokens at 4, 8, 12, 16, 24, 32, 48, 64.
 **Content max-width:** 72rem (1152px) for the main content area. Editorial design breathes — generous margins, no full-bleed data.
 **Card treatment:**
@@ -104,8 +195,162 @@ box-shadow: 0 1px 2px oklch(0.228 0.009 75.2 / 0.04)
 ```
 No heavy shadows. No ring borders. Cards are like printed cards on a desk — slight elevation, warm tone.
 **Whitespace philosophy:** More than you think. Editorial design uses whitespace to separate, not borders. If two sections are far apart, they don't need a line between them. Let the type breathe.
----
-## 3. App Shell
+
+## 5. Elevation & Depth
+Depth is achieved through **tonal layering** rather than heavy shadows. The surface hierarchy (see §2. Colors) establishes visual depth through successive lightening of the warm stone palette:
+
+```
+background ← page level (the deepest layer)
+  └── card ← elevated surface (slightly lighter)
+       └── muted ← inset/depressed areas
+            └── border ← the most foregrounded layer
+```
+
+Cards receive a minimal shadow to suggest a physical object on a desk:
+- **Shadow:** `box-shadow: 0 1px 2px oklch(0.228 0.009 75.2 / 0.04)`
+- No heavy drop shadows, no ring borders, no blur effects
+
+Interactive elements (nav items, buttons) elevate on hover via a background color transition (`var(--accent)`), not through shadow changes. The elevation model prioritizes **color and position** over shadow intensity — elements that need attention rise to the top of the layout, not off the page.
+
+## 6. Shapes
+The shape language follows an editorial-architectural sensibility — subtle rounding that feels deliberate but never playful.
+
+| Token | Value | Applied To |
+|---|---|---|
+| `sm` | 4px | Badges (format badges, semantic tags), status dots |
+| `md` | 8px | Cards, modals, primary containers |
+| `lg` | 12px | Large overlays or panels |
+
+Specific component treatments:
+- **Cards:** `border-radius: 8px` — subtle, not round. A printed card on a desk.
+- **Format badges:** `border-radius: 4px` — editorial, not pill-shaped.
+- **Technical detail sections:** `border-radius: 6px` — between sm and md, for monospace content panels.
+- **Status indicators:** 8px diameter dot with 50% border-radius (fully round — the only fully round element in the system).
+- **Timeline nodes:** 12px diameter dot, fully round.
+- **Buttons:** `border-radius: 6px` — slightly softer than cards.
+
+No pill shapes, no fully rounded containers (aside from dots). The rounding should suggest precision, not playfulness.
+
+## 7. Components
+### 7.1 Masthead
+```
+Content Factory
+───────────────
+```
+- Font: Playfair Display, 1.25rem, 700
+- Color: `var(--foreground)`
+- Underline: 2px solid `var(--primary)` (copper), width auto to text
+- Padding: 24px 20px
+- No logo mark. The typography IS the logo.
+### 7.2 Navigation Items
+- Font: Inter, 0.875rem, 500
+- Padding: 8px 20px
+- Active state: `color: var(--primary)`, `border-left: 3px solid var(--primary)`, `background: var(--accent)`
+- Hover state: `background: var(--accent)`
+- Inactive state: `color: var(--muted-foreground)`
+- Spacing between items: 4px
+- **Badge counts:** Story count in parentheses after label, `var(--muted-foreground)`. When `HUMAN_REVIEW_NEEDED > 0`, a warning-colored dot and count appear on the Stories item (Inter 0.6875rem, `var(--warning)`). E.g. "Stories (12)" normally, "Stories (12) ⚑ 2" when review items exist.
+### 7.3 Format Badges
+Small pills indicating content format. Editorial treatment:
+- Background: `var(--primary)` at 10% opacity
+- Text: `var(--primary)` (copper)
+- Font: Inter, 0.6875rem (11px), 600, uppercase, letter-spacing 0.05em
+- Border-radius: 4px (not fully round — editorial, not tech)
+- Spacing: 4px between badges
+Values: `BLOG`, `CAROUSEL`, `VIDEO`, `ALL`
+### 7.4 Status Indicators
+Status is communicated through desk names, not raw enum values. A status badge uses:
+- A small dot (8px) in the semantic color
+- Desk name text in Inter 0.6875rem
+- No background pill — just dot + text
+| Status | Dot Color | Label |
+|---|---|---|
+| PENDING | `var(--muted-foreground)` | Queued |
+| RESEARCHING | `var(--warning)` | Research Desk |
+| FACT_CHECKING_RESEARCH | `var(--warning)` | Source Verification |
+| SCRIPTING | `var(--info)` | Writer's Desk |
+| FACT_CHECKING_SCRIPT | `var(--info)` | Fact-Check Desk |
+| FORMATTING | `var(--accent-purple)` | Layout Desk |
+| ASSET_GENERATION | `var(--accent-teal)` | Production |
+| COMPLETED | `var(--success)` | Published |
+| FAILED | `var(--destructive)` | Killed |
+| HUMAN_REVIEW_NEEDED | `var(--warning)` | Your Review |
+### 7.5 Claim Cards
+Each fact-check claim rendered as:
+```
+┌─────────────────────────────────────────────────────┐
+│  "BRICS nations now account for 35% of global       │
+│   GDP measured by purchasing power parity."          │
+│                                                      │
+│  ● SUPPORTED                                    95%  │
+│  Statistic · sources: 4 chunks                      │
+│                                                      │
+│  [▼ Evidence]                                        │
+└─────────────────────────────────────────────────────┘
+```
+- Claim text in Inter, 0.875rem, italic (quoted)
+- Verdict dot + label in semantic color
+- Confidence as a subtle copper bar (width proportional to percentage)
+- Category tag in small uppercase muted text
+- Evidence section is collapsible, showing linked research chunk previews
+### 7.6 Pipeline Progress (Mini)
+7 dots for 7 meaningful stages (collapsing passthrough stages):
+
+| Dot state | Color | Visual |
+|---|---|---|
+| Completed | `var(--success)` | Filled circle ● |
+| Active | `var(--primary)` | Filled circle with subtle opacity pulse ● |
+| Future | `var(--border)` | Hollow circle ○ |
+| Skipped | `var(--muted)` | Tiny dot (reduced size) |
+
+**Hybrid display strategy:**
+- **Dashboard (Overview) cards:** Inline, always visible below the desk name line. 7 dots in a row, no labels. Hover tooltip shows desk names.
+- **Stories list cards:** Hidden. Only visible on hover as a tooltip. Keeps the list scannable at high density.
+
+**Tooltip content:** On hover over the dot row (dashboard) or card (stories), a thin tooltip shows: desk name for each completed/active step, raw state enum in muted parentheses. No tooltip on future steps.
+### 7.7 Timeline Node
+For the editorial trail in job detail:
+```
+  ●  Research Desk
+  │  ✓ Completed · 4 min · 12 chunks
+  │
+  │  <output preview card>
+  │
+  │  [▼ Technical Details]
+  │
+  ●  Source Verification
+  │  ✓ Passthrough · <1s
+  │
+  ●  Writer's Desk
+  ...
+```
+- Dot: 12px circle, semantic color for status
+- Vertical connector: 2px line in `var(--border)`
+- Desk name: Playfair Display, 1rem
+- Duration + summary: Inter, 0.75rem, `var(--muted-foreground)`
+- Output card: inset with `var(--muted)` background, proper typesetting
+- Technical details: collapsible, monospace, muted background
+### 7.8 Collapsible Sections
+Used throughout for technical depth. Pattern:
+- Trigger: `[▶ Technical Details]` — Inter 0.75rem, `var(--muted-foreground)`
+- Expanded trigger: `[▼ Technical Details]` — `var(--primary)`
+- Content: indented, `var(--muted)` background, `border-radius: 6px`, monospace for code/JSON
+- Animation: none (editorial is instant, not bouncy)
+
+## 8. Do's and Don'ts
+
+- **Do** use the copper accent sparingly — the primary action per view (typically the commissioning button) should be the only copper element on the page
+- **Don't** use icons in the navigation; editorial design is text-driven — the sidebar is pure text with count badges
+- **Do** maintain the warm tonal hierarchy: `background < card < muted < border` — surfaces should stack visually from back to front
+- **Don't** show loading spinners during polling refreshes; data should update seamlessly in place
+- **Do** collapse raw technical detail (agent traces, JSON payloads, token usage) behind expandable `[▼ Technical Details]` triggers by default
+- **Don't** animate page transitions or collapsible toggles; editorial apps are instant and crisp — no spring physics, no slide animations
+- **Do** expose raw state enums, agent metadata, and model names on hover for operator debugging without cluttering the editorial view
+- **Don't** use pure black (`#000`) or pure white (`#fff`); always use warm off-tones from the Stone & Copper palette
+- **Do** use generous whitespace to separate sections rather than additional borders or dividers — let the type breathe
+- **Don't** show more than three action levels per view (primary copper CTA, secondary outline button, tertiary text link)
+
+## 9. App Shell
 ### Sidebar
 ```
 ┌──────────────────────────┐
@@ -151,6 +396,7 @@ A persistent operator feedback element fixed at the **bottom** of the viewport. 
 - **Live indicator:** 8px dot in `var(--success)` that fades opacity (0.5 → 1.0, 2s cycle) while polling is active. Turns `var(--warning)` with label "Stalled" if no poll response in >15s. Turns `var(--destructive)` with label "Disconnected" if fetch fails.
 - **Freshness scope:** Reflects the page currently in view (job list polling on Stories, job detail polling on a job). Not an app-wide aggregate.
 - **Tooltip on hover:** Shows exact last-updated timestamp and next poll ETA.
+
 ### Header
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -162,9 +408,9 @@ A persistent operator feedback element fixed at the **bottom** of the viewport. 
 - **Height:** h-14, border-bottom with `var(--border)`
 - **Background:** `var(--card)` — slightly warmer than page bg
 - **No hamburger menu** — sidebar toggle is a subtle icon if needed
----
-## 4. Page Designs
-### 4.1 Dashboard — "Overview"
+
+## 10. Page Designs
+### 10.1 Dashboard — "Overview"
 **Concept: The editor's desk. What needs your attention right now.**
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -221,7 +467,7 @@ A persistent operator feedback element fixed at the **bottom** of the viewport. 
 2. **Active Stories** — Jobs in non-terminal states. Each card shows:
    - Topic as card title (serif)
    - Current desk name + elapsed time
-   - Mini pipeline progress (dot-based, inline — see 5.6)
+   - Mini pipeline progress (dot-based, inline — see §7.6)
    - Click navigates to job detail
 3. **Recently Published** — Completed jobs. Cards show:
    - Topic + format badges
@@ -232,7 +478,7 @@ A persistent operator feedback element fixed at the **bottom** of the viewport. 
    - Error summary on expand
 **Empty state:** Single centered card with editorial copy: "No stories yet. Commission your first piece." + copper "Commission" CTA.
 **No stat cards.** Stats are small counters inline in section headers ("Active Stories (3)", "Recently Published (12)").
-### 4.2 Jobs List — "Stories"
+### 10.2 Jobs List — "Stories"
 **Concept: The assignment board.**
 Same card-list pattern as Dashboard, but with filtering, full history, and higher density. Mini pipeline is **hover-only** (tooltip) rather than inline — keeps the list scannable at a glance.
 ```
@@ -263,7 +509,7 @@ Same card-list pattern as Dashboard, but with filtering, full history, and highe
 | Review | HUMAN_REVIEW_NEEDED |
 | Killed | FAILED |
 **Card metadata:** Format badges as small copper-tinted pills. Status as a single word in the appropriate semantic color. Desk name + relative timestamp.
-### 4.3 Create Job — "Commission Content"
+### 10.3 Create Job — "Commission Content"
 **Concept: Giving the newsroom its assignment. One focused form, fast.**
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -313,7 +559,7 @@ Same card-list pattern as Dashboard, but with filtering, full history, and highe
 - Confirmation step: warm muted background summary card with Confirm/Edit buttons
 - Form fields: warm white background, warm border, no harsh outlines
 - Error state: inline copper-tinted error card below the form
-### 4.4 Job Detail — The Story
+### 10.4 Job Detail — The Story
 **Concept: Opening a story file. Three tabs — Output, Trail, Review — always visible. Default tab is state-aware.**
 
 ```
@@ -385,7 +631,7 @@ Vertical timeline. Each node is a desk. Structure per node:
 3. **Output preview:** The key output from that stage — rendered, not raw
 4. **Collapsible "Technical Details":** Agent used, model, temperature, raw JSON payload, token usage
 
-Timeline styling from 5.7 (unchanged: dot + vertical connector).
+Timeline styling from §7.7 (unchanged: dot + vertical connector).
 
 **Input context in the trail:** The Research Desk node includes a "Source Materials" sub-section showing:
 - `pre_context.source_urls` as a list of clickable links (Inter 0.75rem, copper color)
@@ -415,7 +661,7 @@ When `HUMAN_REVIEW_NEEDED`: a warm copper-bordered card with:
 - Reason for escalation (revision count, Red Team escalation)
 - Two buttons: "Approve & Publish" (copper primary) and "Request Revision" (outline)
 
-### 4.5 Error Display
+### 10.5 Error Display
 Errors are not red JSON dumps. They are structured:
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -436,115 +682,9 @@ Errors are not red JSON dumps. They are structured:
 │  └──────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────┘
 ```
----
-## 5. Component Specifications
-### 5.1 Masthead
-```
-Content Factory
-───────────────
-```
-- Font: Playfair Display, 1.25rem, 700
-- Color: `var(--foreground)`
-- Underline: 2px solid `var(--primary)` (copper), width auto to text
-- Padding: 24px 20px
-- No logo mark. The typography IS the logo.
-### 5.2 Navigation Items
-- Font: Inter, 0.875rem, 500
-- Padding: 8px 20px
-- Active state: `color: var(--primary)`, `border-left: 3px solid var(--primary)`, `background: var(--accent)`
-- Hover state: `background: var(--accent)`
-- Inactive state: `color: var(--muted-foreground)`
-- Spacing between items: 4px
-- **Badge counts:** Story count in parentheses after label, `var(--muted-foreground)`. When `HUMAN_REVIEW_NEEDED > 0`, a warning-colored dot and count appear on the Stories item (Inter 0.6875rem, `var(--warning)`). E.g. "Stories (12)" normally, "Stories (12) ⚑ 2" when review items exist.
-### 5.3 Format Badges
-Small pills indicating content format. Editorial treatment:
-- Background: `var(--primary)` at 10% opacity
-- Text: `var(--primary)` (copper)
-- Font: Inter, 0.6875rem (11px), 600, uppercase, letter-spacing 0.05em
-- Border-radius: 4px (not fully round — editorial, not tech)
-- Spacing: 4px between badges
-Values: `BLOG`, `CAROUSEL`, `VIDEO`, `ALL`
-### 5.4 Status Indicators
-Status is communicated through desk names, not raw enum values. A status badge uses:
-- A small dot (8px) in the semantic color
-- Desk name text in Inter 0.6875rem
-- No background pill — just dot + text
-| Status | Dot Color | Label |
-|---|---|---|
-| PENDING | `var(--muted-foreground)` | Queued |
-| RESEARCHING | `var(--warning)` | Research Desk |
-| FACT_CHECKING_RESEARCH | `var(--warning)` | Source Verification |
-| SCRIPTING | `var(--info)` | Writer's Desk |
-| FACT_CHECKING_SCRIPT | `var(--info)` | Fact-Check Desk |
-| FORMATTING | `var(--accent-purple)` | Layout Desk |
-| ASSET_GENERATION | `var(--accent-teal)` | Production |
-| COMPLETED | `var(--success)` | Published |
-| FAILED | `var(--destructive)` | Killed |
-| HUMAN_REVIEW_NEEDED | `var(--warning)` | Your Review |
-### 5.5 Claim Cards
-Each fact-check claim rendered as:
-```
-┌─────────────────────────────────────────────────────┐
-│  "BRICS nations now account for 35% of global       │
-│   GDP measured by purchasing power parity."          │
-│                                                      │
-│  ● SUPPORTED                                    95%  │
-│  Statistic · sources: 4 chunks                      │
-│                                                      │
-│  [▼ Evidence]                                        │
-└─────────────────────────────────────────────────────┘
-```
-- Claim text in Inter, 0.875rem, italic (quoted)
-- Verdict dot + label in semantic color
-- Confidence as a subtle copper bar (width proportional to percentage)
-- Category tag in small uppercase muted text
-- Evidence section is collapsible, showing linked research chunk previews
-### 5.6 Pipeline Progress (Mini)
-7 dots for 7 meaningful stages (collapsing passthrough stages):
 
-| Dot state | Color | Visual |
-|---|---|---|
-| Completed | `var(--success)` | Filled circle ● |
-| Active | `var(--primary)` | Filled circle with subtle opacity pulse ● |
-| Future | `var(--border)` | Hollow circle ○ |
-| Skipped | `var(--muted)` | Tiny dot (reduced size) |
-
-**Hybrid display strategy:**
-- **Dashboard (Overview) cards:** Inline, always visible below the desk name line. 7 dots in a row, no labels. Hover tooltip shows desk names.
-- **Stories list cards:** Hidden. Only visible on hover as a tooltip. Keeps the list scannable at high density.
-
-**Tooltip content:** On hover over the dot row (dashboard) or card (stories), a thin tooltip shows: desk name for each completed/active step, raw state enum in muted parentheses. No tooltip on future steps.
-### 5.7 Timeline Node
-For the editorial trail in job detail:
-```
-  ●  Research Desk
-  │  ✓ Completed · 4 min · 12 chunks
-  │
-  │  <output preview card>
-  │
-  │  [▼ Technical Details]
-  │
-  ●  Source Verification
-  │  ✓ Passthrough · <1s
-  │
-  ●  Writer's Desk
-  ...
-```
-- Dot: 12px circle, semantic color for status
-- Vertical connector: 2px line in `var(--border)`
-- Desk name: Playfair Display, 1rem
-- Duration + summary: Inter, 0.75rem, `var(--muted-foreground)`
-- Output card: inset with `var(--muted)` background, proper typesetting
-- Technical details: collapsible, monospace, muted background
-### 5.8 Collapsible Sections
-Used throughout for technical depth. Pattern:
-- Trigger: `[▶ Technical Details]` — Inter 0.75rem, `var(--muted-foreground)`
-- Expanded trigger: `[▼ Technical Details]` — `var(--primary)`
-- Content: indented, `var(--muted)` background, `border-radius: 6px`, monospace for code/JSON
-- Animation: none (editorial is instant, not bouncy)
----
-## 6. Content Rendering Specifications
-### 6.1 Blog Output
+## 11. Content Rendering Specifications
+### 11.1 Blog Output
 Each blog section rendered as:
 - **Heading:** Playfair Display, 1.25rem, 600
 - **Body:** Inter, 0.9375rem (15px), line-height 1.7, `var(--foreground)`
@@ -556,7 +696,7 @@ SEO metadata and tags in a collapsed "SEO Details" section:
 - Meta title, meta description as plain text
 - Keywords as small copper pills (same style as format badges)
 - Tags as larger editorial labels
-### 6.2 Carousel Output
+### 11.2 Carousel Output
 Each slide rendered as:
 ```
 ┌─────────────────────────────────────────┐
@@ -577,7 +717,7 @@ Each slide rendered as:
 - Hook type: small badge (same format badges style)
 - Character count: muted, small, with warning color if near limit
 Thread title at top. Hashtags as copper pills at bottom. CTA slide highlighted with copper border.
-### 6.3 Video Script Output
+### 11.3 Video Script Output
 Each scene rendered as a storyboard card:
 ```
 ┌──────────────────────────────────────────────────────┐
@@ -599,8 +739,8 @@ Each scene rendered as a storyboard card:
 - Audio cue: full-width footer, Inter italic, `var(--muted-foreground)`
 - Total duration shown at top of the storyboard section
 - Visual style and audio direction as editorial notes above the grid
----
-## 7. Interaction Patterns
+
+## 12. Interaction Patterns
 ### Transitions
 - **Page navigation:** Instant. No animations. Editorial apps are crisp.
 - **Collapsible expand/collapse:** Instant. No spring physics.
@@ -612,7 +752,7 @@ Each scene rendered as a storyboard card:
 - Job detail: 3s interval when job is in a non-terminal state
 - Stop polling immediately on terminal states (COMPLETED, FAILED, HUMAN_REVIEW_NEEDED)
 - No loading spinners during polling refreshes — seamless data updates
-- **Visual heartbeat:** The `StatusBar` (see 3.3) provides live feedback — pulsing dot when polling is active, warning when stalled, destructive when disconnected
+- **Visual heartbeat:** The `StatusBar` (see §9.2) provides live feedback — pulsing dot when polling is active, warning when stalled, destructive when disconnected
 
 ### Copy / Export
 - **Copy-to-clipboard:** Copper icon button in top-right corner of each output section. Click copies text content only (no HTML formatting). Brief "Copied" toast (1.5s, muted background, Inter 0.75rem).
@@ -627,9 +767,9 @@ Every empty state is a warm card with editorial copy, not a sterile message:
 ### Error Handling
 - **Form errors:** Inline copper-tinted alert card below the form field. Not red.
 - **API errors:** Toast notification (sonner) with warm styling.
-- **Job failures:** Structured "Killed Story" card in job detail (see 4.5).
----
-## 8. Dark Mode (Default)
+- **Job failures:** Structured "Killed Story" card in job detail (see §10.5).
+
+## 13. Dark Mode (Default)
 Dark mode is the **default and primary identity**. The app loads in dark mode. Light mode exists for users who prefer paper-like reading during daylight. The editorial identity (typography, copper palette, warm tones) carries through in both modes — this is warm dark, not cold blue-black.
 ### Default Behavior
 - On first load, respect `prefers-color-scheme` system preference. If the OS is in dark mode, the app is dark. If the OS is in light mode, the app is light.
@@ -650,7 +790,7 @@ Dark mode is the **default and primary identity**. The app loads in dark mode. L
 Typography unchanged. Serif headings remain. The warm tones carry through — this is warm dark, not cold dark. Surface hierarchy same as light: `background < card < muted < border`.
 
 ### Light Palette (Secondary)
-Same Stone & Copper palette from Section 2 (reproduced here for completeness):
+Same Stone & Copper palette from §2. Colors (reproduced here for completeness):
 | Token | Light Mode |
 |---|---|
 | `background` | `oklch(0.965 0.006 84.6)` |
@@ -663,8 +803,8 @@ Same Stone & Copper palette from Section 2 (reproduced here for completeness):
 
 ### Toggle
 Toggle button in the sidebar header area, below the masthead. Simple moon/sun icon. No label text needed.
----
-## 9. Implementation Notes
+
+## 14. Implementation Notes
 ### What Changes From Current Code
 | Component | Current | New |
 |---|---|---|
@@ -708,8 +848,8 @@ Toggle button in the sidebar header area, below the masthead. Simple moon/sun ic
 4. **Phase 4: Job Detail** — Tabbed layout (Output / Trail / Review) with state-aware defaults. `TabBar` component. Copy-to-clipboard buttons. Enum on hover in trail timeline.
 5. **Phase 5: Commission Form** — Editorial labeling and refined layout.
 6. **Phase 6: Polish** — Empty states, micro-interactions, claim card styling.
----
-## 10. Decision Log
+
+## 15. Decision Log
 Decisions made during the design process, recorded for traceability. Superseded entries are struck through with a reference to the replacement.
 
 | # | Question | Decision | Rationale |

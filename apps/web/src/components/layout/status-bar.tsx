@@ -16,6 +16,7 @@ export function StatusBar() {
   const queryClient = useQueryClient();
   const [lastUpdate, setLastUpdate] = useState(() => Date.now());
   const [now, setNow] = useState(() => Date.now());
+  const [hasError, setHasError] = useState(false);
 
   useEffect(() => {
     const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
@@ -26,6 +27,17 @@ export function StatusBar() {
             : prev
         );
       }
+      if (event.type === "updated") {
+        if (event.query.state.status === "error") {
+          setHasError(true);
+        } else if (event.query.state.status === "success") {
+          const anyError = queryClient
+            .getQueryCache()
+            .getAll()
+            .some((q) => q.state.status === "error");
+          setHasError(anyError);
+        }
+      }
     });
     return () => unsubscribe();
   }, [queryClient]);
@@ -35,32 +47,36 @@ export function StatusBar() {
     return () => clearInterval(timer);
   }, []);
 
-  const isLive = isFetching > 0;
   const timeAgo = lastUpdate > 0 ? now - lastUpdate : 0;
 
+  let status: "live" | "stalled" | "disconnected";
+  if (hasError) {
+    status = "disconnected";
+  } else if (isFetching > 0 || timeAgo < 15000) {
+    status = "live";
+  } else {
+    status = "stalled";
+  }
+
+  const statusConfig = {
+    live: { dot: "bg-success animate-pulse", label: "Live" },
+    stalled: { dot: "bg-warning", label: "Stalled" },
+    disconnected: { dot: "bg-destructive", label: "Disconnected" },
+  };
+
+  const cfg = statusConfig[status];
+
   return (
-    <div
-      className={cn(
-        "flex items-center gap-2 text-[11px] leading-none transition-colors",
-        isLive ? "text-primary" : "text-muted-foreground"
-      )}
-    >
-      <span className="inline-flex items-center gap-1">
-        <span
-          className={cn(
-            "h-1.5 w-1.5 rounded-full",
-            isLive
-              ? "bg-primary animate-pulse"
-              : "bg-muted-foreground/40"
-          )}
-        />
-        {isLive ? "Live" : "Stale"}
+    <div className="fixed bottom-0 left-0 right-0 z-50 flex h-8 items-center justify-between bg-muted px-4 text-[11px] leading-none text-muted-foreground">
+      <span>
+        {timeAgo > 0
+          ? `Last updated: ${formatTimeAgo(timeAgo)}`
+          : "No data"}
       </span>
-      {timeAgo > 0 && (
-        <span className="text-muted-foreground/60">
-          &middot; {formatTimeAgo(timeAgo)}
-        </span>
-      )}
+      <span className="inline-flex items-center gap-1.5">
+        <span className={cn("h-1.5 w-1.5 rounded-full", cfg.dot)} />
+        {cfg.label}
+      </span>
     </div>
   );
 }
