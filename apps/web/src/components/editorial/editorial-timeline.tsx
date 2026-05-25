@@ -323,10 +323,13 @@ function TimelineNode({ stage, state, isLast, job }: TimelineNodeProps) {
           <div className="w-0.5 flex-1 bg-border mt-1" />
         )}
       </div>
-      <div className={`flex-1 pb-8 ${isLast ? "pb-0" : ""}`}>
+      <div className={`flex-1 pb-8 ${isLast ? "pb-0" : ""} group`}>
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
           <h4 className="font-heading text-base font-semibold leading-tight">
-            {config.name} ({stage})
+            {config.name}
+            <span className="ml-1 text-xs font-normal text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+              ({stage})
+            </span>
           </h4>
           {summaryText && (
             <span className="text-xs text-muted-foreground">
