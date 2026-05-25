@@ -28,14 +28,22 @@ class TestTavilyExtract:
             mock_client.post.return_value = mock_response_obj
             mock_client_cls.return_value = mock_client
 
-            result = await service.extract(["https://example.com/article1", "https://example.com/article2"])
+            result = await service.extract(
+                ["https://example.com/article1", "https://example.com/article2"]
+            )
 
             assert len(result) == 2
             assert result[0]["url"] == "https://example.com/article1"
             assert result[0]["content"] == "Article 1 content"
             mock_client.post.assert_awaited_once_with(
                 TAVILY_EXTRACT_URL,
-                json={"urls": ["https://example.com/article1", "https://example.com/article2"], "api_key": ""},
+                json={
+                    "urls": [
+                        "https://example.com/article1",
+                        "https://example.com/article2",
+                    ],
+                    "api_key": "",
+                },
             )
 
     async def test_extract_returns_empty_when_urls_empty(self, service):
