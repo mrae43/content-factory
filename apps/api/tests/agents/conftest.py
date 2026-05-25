@@ -2,7 +2,6 @@ import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 
 from app.workers.agents import (
-    ResearchSchema,
     CopywriterSchema,
     RedTeamVerdict,
     ClaimItem,
@@ -11,19 +10,6 @@ from app.workers.agents import (
     StudioPromptSchema,
 )
 from app.workers.optimizer import OptimizerOutput
-
-
-@pytest.fixture
-def research_schema_output():
-    return ResearchSchema(
-        chunks=[
-            "BRICS GDP grew 3.2% in 2024.",
-            "New payment system announced Q2.",
-        ],
-        refined_context="BRICS collective GDP grew 3.2% in 2024 according to IMF data. A new payment system was announced in Q2 2025 by the New Development Bank.",
-        reasoning="Selected chunks with verified economic data.",
-        confidence=0.85,
-    )
 
 
 @pytest.fixture

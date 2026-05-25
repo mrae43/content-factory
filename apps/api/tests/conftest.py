@@ -59,9 +59,9 @@ def mock_web_search_service():
 @pytest.fixture
 def sample_job_payload():
     return {
-        "topic": "BRICS De-dollarization 2025",
+        "title": "BRICS De-dollarization 2025",
+        "user_reference": "The BRICS nations announced a new payment system...",
         "research_inputs": {
-            "raw_text": "The BRICS nations announced a new payment system...",
             "source_urls": [],
         },
         "story_directives": {
