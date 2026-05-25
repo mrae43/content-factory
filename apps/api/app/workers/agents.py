@@ -70,142 +70,6 @@ class BaseAgent(ABC):
         """The actual implementation required by child agents."""
         pass
 
-
-class CitationEntry(BaseModel):
-    claim_fragment: str = Field(
-        description="Short phrase or claim from the synthesized research"
-    )
-    source_url: str = Field(description="URL of the source supporting this claim")
-    chunk_id: str = Field(description="ID of the ResearchChunk this citation traces to")
-
-
-class ResearchSchema(BaseModel):
-    chunks: List[str] = Field(description="Extracted highly-credible data chunks.")
-    refined_context: str = Field(
-        description=(
-            "A comprehensive, self-contained research summary synthesizing all "
-            "retrieved evidence into a single coherent narrative. Must include: "
-            "key facts, dates, statistics, quotes, causal relationships, and "
-            "competing viewpoints. This summary will be the SOLE input for "
-            "script writing — it must be complete enough that a scriptwriter "
-            "never needs to consult raw sources."
-        )
-    )
-    citation_index: List[CitationEntry] = Field(
-        default_factory=list,
-        description=(
-            "Sidecar provenance mapping each significant claim to its source URL "
-            "and ResearchChunk ID. Fact-Check can trace claims without re-searching "
-            "the vector store."
-        ),
-    )
-    reasoning: str = Field(description="Why these facts were prioritized.")
-    confidence: float = Field(
-        description="Confidence in factual accuracy (0.0 to 1.0)."
-    )
-
-
-class ResearchAgent(BaseAgent):
-    async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
-        topic = context.get("topic", "Unknown Topic")
-        vector_store = context.get("vector_store")
-        job_id = context.get("job_id")
-
-        if not vector_store or not job_id:
-            return AgentResult(
-                status=AgentActionStatus.ERROR,
-                payload={},
-                reasoning="Vector store or job_id not provided. Cannot research without retrieval infrastructure.",
-                confidence_score=0.0,
-            )
-
-        retrieved = await vector_store.semantic_search(
-            query=topic,
-            job_id=job_id,
-            scopes=["RAW-CONTEXT", "LOCAL"],
-            top_k=10,
-        )
-
-        if not retrieved:
-            return AgentResult(
-                status=AgentActionStatus.ERROR,
-                payload={},
-                reasoning="No context retrieved from vector store above similarity threshold. Ensure pre_context was provided.",
-                confidence_score=0.0,
-            )
-
-        avg_score = sum(r["similarity_score"] for r in retrieved) / len(retrieved)
-        logger.info(
-            f"ResearchAgent retrieved {len(retrieved)} chunks, avg similarity: {avg_score:.3f}"
-        )
-
-        retrieved_context_text = "\n\n".join(
-            [f"Chunk ID {r['id']}: {r['content']}" for r in retrieved]
-        )
-
-        prompt = ChatPromptTemplate.from_messages(
-            [
-                (
-                    "system",
-                    (
-                        "You are the Deep Research Agent of the AI Content Factory. Your mission is to establish the ground truth.\n"
-                        "Prioritize historically accurate, verifiable, and high-impact data points. Ignore opinion, fluff, and low-confidence claims.\n"
-                        "Truth and Guardrails are first-class citizens. If context is insufficient, state it in your reasoning.\n\n"
-                        "You must also produce a `refined_context` — a single, comprehensive research summary that:\n"
-                        "1. Synthesizes ALL retrieved evidence into a coherent narrative\n"
-                        "2. Preserves specific facts: dates, names, statistics, quotes, source attributions\n"
-                        "3. Notes areas of conflicting evidence or uncertainty\n"
-                        "4. Is self-contained — a scriptwriter using ONLY this summary can write an accurate script\n"
-                        "5. Is concise but complete — aim for 800-1500 words, not a list of bullet points\n\n"
-                        "CITATION INDEX:\n"
-                        "For each significant claim in your synthesis, record which source URL "
-                        "and chunk ID it came from in the `citation_index` field. "
-                        "This allows the Fact-Check team to trace claims without re-searching "
-                        "the vector store."
-                    ),
-                ),
-                (
-                    "human",
-                    (
-                        "Identify the most critical facts about the following topic using the provided context.\n"
-                        "<topic>\n{topic}\n</topic>\n"
-                        "<retrieved_context>\n{retrieved_context}\n</retrieved_context>\n"
-                        "First, analyze the input step-by-step. Then, extract the data chunks.\n\n"
-                        "Additionally, write a comprehensive `refined_context` summary that synthesizes all the evidence above into a single coherent research brief. This summary is the ONLY thing the scriptwriter will see — make it count."
-                    ),
-                ),
-            ]
-        )
-
-        chain = prompt | self.llm.with_structured_output(ResearchSchema)
-        result: ResearchSchema = await chain.ainvoke(
-            {"topic": topic, "retrieved_context": retrieved_context_text}
-        )
-
-        if result.chunks:
-            logger.info(
-                f"ResearchAgent ingesting {len(result.chunks)} REFINED chunks to vector store for Job {job_id}"
-            )
-            await vector_store.ingest_chunks(
-                job_id=job_id,
-                chunks=result.chunks,
-                scope="LOCAL",
-                meta={"source_type": "INFERRED"},
-            )
-
-        return AgentResult(
-            status=AgentActionStatus.SUCCESS,
-            payload={
-                "chunks": result.chunks,
-                "refined_context": result.refined_context,
-                "citation_index": [c.model_dump() for c in result.citation_index],
-            },
-            reasoning=result.reasoning,
-            confidence_score=result.confidence,
-            metadata={"model": self.model_name},
-        )
-
-
 class CopywriterSchema(BaseModel):
     script_content: str = Field(description="The final narrated script text.")
     reasoning: str = Field(
@@ -254,12 +118,12 @@ class CopywriterAgent(BaseAgent):
                         "format-agnostic master narrative script.\n\n"
                         "## YOUR INPUT\n"
                         "You receive two sources of information:\n"
-                        "1. `refined_context` — a comprehensive research summary synthesizing all retrieved evidence into a "
-                        "single coherent narrative.\n"
+                         "1. `refined_context` — user-provided reference context combined with editorial directives "
+                        "(tone, angle, target audience), serving as the narrative foundation.\n"
                         "2. `retrieved_evidence` — raw evidence chunks retrieved from the knowledge base, each annotated "
                         "with similarity score and source type.\n\n"
                         "The `retrieved_evidence` is your PRIMARY source for factual claims. "
-                        "The `refined_context` provides narrative structure and context.\n"
+                        "The `refined_context` provides the editorial framing and reference background.\n"
                         "Cross-reference both sources. If a claim appears in the refined_context but is absent from or "
                         "contradicted by the retrieved_evidence, prefer the retrieved_evidence.\n"
                         "Do NOT introduce facts not present in either source.\n\n"
