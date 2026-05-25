@@ -20,6 +20,7 @@ import { CollapsibleSection } from "@/components/editorial/collapsible-section";
 import { BlogViewer } from "@/components/viewers/blog-viewer";
 import { CarouselViewer } from "@/components/viewers/carousel-viewer";
 import { VideoScriptViewer } from "@/components/viewers/video-script-viewer";
+import { TabBar } from "@/components/jobs/tab-bar";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -168,13 +169,6 @@ function JobDetailContent({
     return <ActiveOutput job={job} />;
   }
 
-  const defaultTab =
-    job.status === "COMPLETED"
-      ? "output"
-      : job.status === "HUMAN_REVIEW_NEEDED"
-        ? "review"
-        : "trail";
-
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
       <div className="space-y-2">
@@ -206,30 +200,15 @@ function JobDetailContent({
         </div>
       </div>
 
-      <Tabs defaultValue={defaultTab}>
-        <TabsList variant="line">
-          <TabsTrigger value="output">Output</TabsTrigger>
-          <TabsTrigger value="trail">Trail</TabsTrigger>
-          <TabsTrigger value="review" className="relative">
-            Review
-            {job.status === "HUMAN_REVIEW_NEEDED" ? (
-              <span className="ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold text-white" style={{ backgroundColor: 'var(--warning)' }}>
-                1
-              </span>
-            ) : (
-              <span className="ml-1.5 text-[10px] text-muted-foreground">0</span>
-            )}
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="output">
+      <TabBar status={job.status}>
+        <TabBar.Output>
           <div className="pt-4 space-y-4">
             <SectionHeader label="THE PUBLISHED PIECE" />
             {renderSection1()}
           </div>
-        </TabsContent>
+        </TabBar.Output>
 
-        <TabsContent value="trail">
+        <TabBar.Trail>
           <div className="pt-4 space-y-8">
             <div className="space-y-4">
               <SectionHeader label="THE EDITORIAL TRAIL" />
@@ -242,9 +221,9 @@ function JobDetailContent({
 
             <CitationIndexSection citationIndex={job.citation_index} />
           </div>
-        </TabsContent>
+        </TabBar.Trail>
 
-        <TabsContent value="review">
+        <TabBar.Review>
           <div className="pt-4 space-y-4">
             {job.status === "HUMAN_REVIEW_NEEDED" ? (
               <ReviewSection
@@ -263,8 +242,8 @@ function JobDetailContent({
               </div>
             )}
           </div>
-        </TabsContent>
-      </Tabs>
+        </TabBar.Review>
+      </TabBar>
     </div>
   );
 }
