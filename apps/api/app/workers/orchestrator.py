@@ -327,6 +327,11 @@ async def _run_copywriter(
         version = (latest.version + 1) if latest else 1
         await save_script(db, job.id, result.payload["script_content"], version)
         await update_job_status(db, job.id, JobStatusEnum.FACT_CHECKING_SCRIPT)
+    elif result.status in (AgentActionStatus.ESCALATE, AgentActionStatus.ERROR):
+        logger.warning(
+            f"Copywriter {result.status.value} for Job {job.id}: {result.reasoning}"
+        )
+        await update_job_status(db, job.id, JobStatusEnum.HUMAN_REVIEW_NEEDED)
     else:
         raise Exception(f"Copywriter failed: {result.reasoning}")
 
@@ -361,6 +366,9 @@ async def _run_optimizer(
         version = latest_script.version + 1
         await save_script(db, job.id, result.payload["script_content"], version)
         await update_job_status(db, job.id, JobStatusEnum.FACT_CHECKING_SCRIPT)
+    elif result.status == AgentActionStatus.ESCALATE:
+        logger.warning(f"Optimizer ESCALATE for Job {job.id}: {result.reasoning}")
+        await update_job_status(db, job.id, JobStatusEnum.HUMAN_REVIEW_NEEDED)
     else:
         raise Exception(f"Optimizer failed: {result.reasoning}")
 
@@ -706,6 +714,7 @@ async def _transition_formatting(db: AsyncSession, job) -> None:
 
     next_version = latest_script.version + 1
     any_success = False
+    any_escalated = False
 
     for i, raw_result in enumerate(harness_results):
         fmt_name, harness, ctx = formatter_specs[i]
@@ -743,10 +752,17 @@ async def _transition_formatting(db: AsyncSession, job) -> None:
                 f"(attempts={raw_result.attempts})"
             )
         else:
-            logger.error(
-                f"Formatter {fmt_name} failed for Job {job.id} after "
-                f"{raw_result.attempts} attempts: {raw_result.error_log}"
-            )
+            if getattr(raw_result, "escalated", False):
+                any_escalated = True
+                logger.warning(
+                    f"Formatter {fmt_name} ESCALATED for Job {job.id}: "
+                    f"{raw_result.error_log}"
+                )
+            else:
+                logger.error(
+                    f"Formatter {fmt_name} failed for Job {job.id} after "
+                    f"{raw_result.attempts} attempts: {raw_result.error_log}"
+                )
             await save_format_script(
                 db,
                 job_id=job.id,
@@ -758,6 +774,13 @@ async def _transition_formatting(db: AsyncSession, job) -> None:
             )
 
         next_version += 1
+
+    if any_escalated:
+        logger.warning(
+            f"Formatter escalation for Job {job.id}; routing to HUMAN_REVIEW_NEEDED"
+        )
+        await update_job_status(db, job.id, JobStatusEnum.HUMAN_REVIEW_NEEDED)
+        return
 
     if not any_success:
         raise Exception(
