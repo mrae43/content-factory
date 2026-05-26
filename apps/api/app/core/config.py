@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     # Remote deploys: set to the external domain/port of your S3-compatible gateway.
     s3_public_url: str = "http://localhost:8333"
 
+    # Embedding Model
+    embedding_model: str = "models/gemini-embedding-001"
+    embedding_dimension: int = 768
+
     # Eval Model Configuration (Together AI)
     eval_copywriter_model: str = "MiniMaxAI/MiniMax-M2.7"
     eval_copywriter_temperature: float = 0.7
