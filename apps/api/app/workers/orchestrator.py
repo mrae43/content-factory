@@ -204,10 +204,10 @@ def _format_narrative(user_reference: str, story_directives: dict) -> str:
 
 
 async def _transition_retrieval(db: AsyncSession, job) -> None:
-    vector_store = ContentFactoryVectorStore(db)
-
     # Build narrative directly from user_reference + story_directives (no ResearchAgent)
-    job.refined_context = _format_narrative(job.user_reference, job.story_directives or {})
+    job.refined_context = _format_narrative(
+        job.user_reference, job.story_directives or {}
+    )
     if not job.refined_context:
         raise Exception(
             "No refined_context could be built — user_reference is empty. "

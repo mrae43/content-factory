@@ -70,6 +70,7 @@ class BaseAgent(ABC):
         """The actual implementation required by child agents."""
         pass
 
+
 class CopywriterSchema(BaseModel):
     script_content: str = Field(description="The final narrated script text.")
     reasoning: str = Field(
@@ -118,7 +119,7 @@ class CopywriterAgent(BaseAgent):
                         "format-agnostic master narrative script.\n\n"
                         "## YOUR INPUT\n"
                         "You receive two sources of information:\n"
-                         "1. `refined_context` — user-provided reference context combined with editorial directives "
+                        "1. `refined_context` — user-provided reference context combined with editorial directives "
                         "(tone, angle, target audience), serving as the narrative foundation.\n"
                         "2. `retrieved_evidence` — raw evidence chunks retrieved from the knowledge base, each annotated "
                         "with similarity score and source type.\n\n"
