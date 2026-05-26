@@ -3,7 +3,7 @@ from uuid import uuid4
 
 from app.services.context_builder import (
     _compose_query,
-    _derive_title_relevance,
+    _derive_topic_relevance,
     _format_evidence_sections,
     build,
 )
@@ -49,7 +49,7 @@ class TestQueryComposition:
         long_ref = "x" * 1000
         directives = {}
         result = _compose_query("Title", directives, user_reference=long_ref)
-        assert len(result) <= len("Title") + 500
+        assert len(result) <= len("Title") + 1 + 500
 
     def test_user_reference_partial_inclusion(self):
         directives = {"tone": "analytical", "angle": "de-dollarization"}
@@ -62,22 +62,22 @@ class TestQueryComposition:
 @pytest.mark.unit
 class Relevance:
     def test_high_at_exact_threshold(self):
-        assert _derive_title_relevance(0.75) == "HIGH"
+        assert _derive_topic_relevance(0.75) == "HIGH"
 
     def test_high_above_threshold(self):
-        assert _derive_title_relevance(0.92) == "HIGH"
+        assert _derive_topic_relevance(0.92) == "HIGH"
 
     def test_medium_at_exact_threshold(self):
-        assert _derive_title_relevance(0.5) == "MEDIUM"
+        assert _derive_topic_relevance(0.5) == "MEDIUM"
 
     def test_medium_below_high(self):
-        assert _derive_title_relevance(0.6) == "MEDIUM"
+        assert _derive_topic_relevance(0.6) == "MEDIUM"
 
     def test_low_below_medium(self):
-        assert _derive_title_relevance(0.3) == "LOW"
+        assert _derive_topic_relevance(0.3) == "LOW"
 
     def test_low_at_zero(self):
-        assert _derive_title_relevance(0.0) == "LOW"
+        assert _derive_topic_relevance(0.0) == "LOW"
 
 
 @pytest.mark.unit
@@ -87,7 +87,7 @@ class TestEvidenceFormatting:
             {
                 "similarity_score": 0.89,
                 "source_type": "WEB_SEARCH",
-                "title_relevance": "HIGH",
+                "topic_relevance": "HIGH",
                 "content": "BRICS GDP grew 3.2% in 2024.",
             }
         ]
@@ -104,13 +104,13 @@ class TestEvidenceFormatting:
             {
                 "similarity_score": 0.5,
                 "source_type": "INFERRED",
-                "title_relevance": "MEDIUM",
+                "topic_relevance": "MEDIUM",
                 "content": "Low relevance chunk.",
             },
             {
                 "similarity_score": 0.92,
                 "source_type": "WEB_SEARCH",
-                "title_relevance": "HIGH",
+                "topic_relevance": "HIGH",
                 "content": "High relevance chunk.",
             },
         ]
@@ -128,13 +128,13 @@ class TestEvidenceFormatting:
             {
                 "similarity_score": 0.7,
                 "source_type": "WEB_SEARCH",
-                "title_relevance": "MEDIUM",
+                "topic_relevance": "MEDIUM",
                 "content": "Second",
             },
             {
                 "similarity_score": 0.9,
                 "source_type": "USER_PROVIDED",
-                "title_relevance": "HIGH",
+                "topic_relevance": "HIGH",
                 "content": "First",
             },
         ]
@@ -147,7 +147,7 @@ class TestEvidenceFormatting:
         chunks = [
             {
                 "source_type": "WEB_SEARCH",
-                "title_relevance": "HIGH",
+                "topic_relevance": "HIGH",
                 "content": "No score.",
             }
         ]
@@ -217,7 +217,7 @@ class TestBuildEdgeCases:
             job_id=uuid4(),
         )
         for chunk in result.raw_chunks:
-            assert "title_relevance" in chunk
+            assert "topic_relevance" in chunk
             assert "source_type" in chunk
 
     async def test_passes_correct_scopes(self, mock_vector_store):
