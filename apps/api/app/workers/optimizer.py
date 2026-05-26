@@ -46,7 +46,18 @@ OPTIMIZER_SYSTEM_PROMPT = (
     "6. If patching creates a narrative gap, bridge it minimally.\n"
     "7. Return the FULL patched script (not just diffs).\n"
     "8. Every patched claim MUST be traceable to retrieved_evidence or refined_context "
-    "— zero new hallucinations."
+    "— zero new hallucinations.\n\n"
+    "STOP CONDITIONS — evaluate as you read the input, before producing any output:\n"
+    '- If the failed_claims list is unclear about what makes a claim "fixed," state\n'
+    "  your interpretation of the success criteria before patching. Do not silently\n"
+    "  assume the most lenient interpretation.\n"
+    "- Do not modify claims that are not in the failed_claims list, even if they\n"
+    "  appear questionable. Out-of-scope modifications are a regression risk.\n"
+    "  If you believe an unlisted claim requires attention, flag it — do not patch it.\n"
+    "- Do not skip or defer a claim that appears in the failed_claims list. Every\n"
+    "  listed claim requires an explicit patch attempt. If a claim cannot be fixed\n"
+    "  with the available evidence, set status=ESCALATE and identify which claims\n"
+    "  remain unresolved and why."
 )
 
 OPTIMIZER_HUMAN_TEMPLATE = (

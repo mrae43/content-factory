@@ -104,7 +104,12 @@ BLOG_PLAN_SYSTEM = (
     "5. Suggest 3-8 tags.\n"
     "6. Define the call-to-action direction.\n"
     "7. Ensure every factual claim in the script is assigned to a section.\n"
-    "8. Order sections for narrative flow: hook → context → depth → takeaway → CTA."
+    "8. Order sections for narrative flow: hook → context → depth → takeaway → CTA.\n\n"
+    "STOP CONDITIONS — evaluate as you read the input, before producing any output:\n"
+    "- If the script_content is too thin to produce a coherent blog plan (e.g., no\n"
+    "  specific claims, argument structure, or section-level narrative), set\n"
+    "  status=ERROR and describe what is missing. Do not produce a generic outline\n"
+    "  from generic input."
 )
 
 BLOG_PLAN_HUMAN = (
@@ -134,7 +139,15 @@ BLOG_FORMATTER_SYSTEM = (
     "10. Structure: 4-8 sections with clear headings.\n"
     "11. CRITICAL: Do NOT mention key_takeaway, word_count, or sources_used "
     "inside the body text. These fields are displayed separately in the UI — "
-    "including them inline creates redundancy."
+    "including them inline creates redundancy.\n\n"
+    "STOP CONDITIONS — evaluate as you read the input, before producing any output:\n"
+    "- If the plan omits SEO specifications (meta_title length, meta_description\n"
+    "  constraints, target keyword placement), state the implicit standards you\n"
+    "  are applying before writing. Do not silently use defaults the plan did\n"
+    "  not specify.\n"
+    "- If correction_hint requests a change that directly contradicts a structural\n"
+    "  or factual constraint in the plan (not merely adds to it), set status=ESCALATE\n"
+    "  and describe the specific conflict. Do not silently prioritize one over the other."
 )
 
 BLOG_FORMATTER_HUMAN = (
@@ -158,7 +171,12 @@ CAROUSEL_PLAN_SYSTEM = (
     "4. Each slide has a purpose and hook_type.\n"
     "5. Note which verified claims map to which slides.\n"
     "6. Consider the platform's char limits when scoping slide content.\n"
-    "7. Suggest 3-5 hashtags and a thread title."
+    "7. Suggest 3-5 hashtags and a thread title.\n\n"
+    "STOP CONDITIONS — evaluate as you read the input, before producing any output:\n"
+    "- If the script_content is too thin to produce a coherent carousel plan (e.g.,\n"
+    "  no hook direction, no discrete claims to anchor slides, no CTA signal), set\n"
+    "  status=ERROR and describe what is missing. Do not map generic content onto\n"
+    "  a slide structure that the input does not support."
 )
 
 CAROUSEL_PLAN_HUMAN = (
@@ -191,7 +209,15 @@ CAROUSEL_FORMATTER_SYSTEM = (
     "8. Last slide is the CTA (use cta_slide field for this).\n"
     "9. Target 8-12 slides for a complete carousel.\n"
     "10. Each slide should be self-contained but flow as a narrative.\n"
-    "11. Include 3-5 relevant hashtags."
+    "11. Include 3-5 relevant hashtags.\n\n"
+    "STOP CONDITIONS — evaluate as you read the input, before producing any output:\n"
+    "- If the plan does not specify a platform (Twitter/LinkedIn/Instagram) and\n"
+    "  therefore does not specify character limits, state which platform you are\n"
+    "  assuming and what limit you are applying. Do not silently default to a\n"
+    "  platform that may not match the user's intent.\n"
+    "- If correction_hint requests a change that directly contradicts a structural\n"
+    "  or factual constraint in the plan (not merely adds to it), set status=ESCALATE\n"
+    "  and describe the specific conflict. Do not silently prioritize one over the other."
 )
 
 CAROUSEL_FORMATTER_HUMAN = (
@@ -217,7 +243,12 @@ VIDEO_PLAN_SYSTEM = (
     "5. Note which verified claims map to which scenes.\n"
     "6. Total duration must be 60-300 seconds (1-5 minutes).\n"
     "7. Each scene should be 5-45 seconds.\n"
-    "8. Define a visual style direction (cinematic, documentary, animated, etc.)."
+    "8. Define a visual style direction (cinematic, documentary, animated, etc.).\n\n"
+    "STOP CONDITIONS — evaluate as you read the input, before producing any output:\n"
+    "- If the script_content is too thin to produce a coherent video plan (e.g., no\n"
+    "  scene structure, no narration beats, no duration or pacing signals), set\n"
+    "  status=ERROR and describe what is missing. Do not fabricate scene breaks or\n"
+    "  timing from content that does not contain them."
 )
 
 VIDEO_PLAN_HUMAN = (
@@ -248,7 +279,15 @@ VIDEO_FORMATTER_SYSTEM = (
     "7. audio_direction: describe the overall audio/music direction.\n"
     "8. Scene transitions should feel natural and maintain narrative flow.\n"
     "9. Write narration in a conversational, engaging tone.\n"
-    "10. Visual prompts should be cinematic and specific (camera angles, lighting, colors)."
+    "10. Visual prompts should be cinematic and specific (camera angles, lighting, colors).\n\n"
+    "STOP CONDITIONS — evaluate as you read the input, before producing any output:\n"
+    "- If the plan omits scene duration estimates or total video length targets,\n"
+    "  state the pacing assumptions you are applying (e.g., 30s average scene,\n"
+    "  90-120s total) before writing. Do not apply timing constraints the plan\n"
+    "  did not specify without making them explicit.\n"
+    "- If correction_hint requests a change that directly contradicts a structural\n"
+    "  or factual constraint in the plan (not merely adds to it), set status=ESCALATE\n"
+    "  and describe the specific conflict. Do not silently prioritize one over the other."
 )
 
 VIDEO_FORMATTER_HUMAN = (
