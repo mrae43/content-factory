@@ -664,12 +664,18 @@
       },
       "JobCreateRequest": {
         "properties": {
-          "topic": {
+          "title": {
             "type": "string",
             "maxLength": 200,
             "minLength": 3,
-            "title": "Topic",
+            "title": "Title",
             "example": "BRICS De-dollarization 2025"
+          },
+          "user_reference": {
+            "type": "string",
+            "minLength": 1,
+            "title": "User Reference",
+            "description": "User-provided background text as narrative foundation"
           },
           "research_inputs": {
             "$ref": "#/components/schemas/ResearchInputs"
@@ -685,16 +691,29 @@
           "platform": {
             "$ref": "#/components/schemas/PlatformEnum",
             "description": "Target platform: twitter, linkedin, instagram, youtube, tiktok"
+          },
+          "device_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Id",
+            "description": "Client device identifier for S3 key prefixing. Sent from localStorage."
           }
         },
         "type": "object",
         "required": [
-          "topic",
+          "title",
+          "user_reference",
           "research_inputs",
           "platform"
         ],
         "title": "JobCreateRequest",
-        "description": "Payload for Step 1: User inserts topic & context."
+        "description": "Payload for Step 1: User inserts title & context."
       },
       "JobStatusEnum": {
         "type": "string",
@@ -731,12 +750,31 @@
             "format": "uuid",
             "title": "Id"
           },
-          "topic": {
+          "title": {
             "type": "string",
-            "title": "Topic"
+            "title": "Title"
           },
           "status": {
             "$ref": "#/components/schemas/JobStatusEnum"
+          },
+          "user_reference": {
+            "type": "string",
+            "title": "User Reference",
+            "description": "User-provided reference text"
+          },
+          "source_urls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Urls",
+            "description": "Source URLs for Tavily extraction"
+          },
+          "story_directives": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Story Directives",
+            "description": "Editorial directives"
           },
           "format_type": {
             "anyOf": [
@@ -781,32 +819,6 @@
             ],
             "title": "Refined Context"
           },
-          "research_confidence": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Research Confidence"
-          },
-          "citation_index": {
-            "anyOf": [
-              {
-                "items": {
-                  "additionalProperties": true,
-                  "type": "object"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Citation Index"
-          },
           "error_log": {
             "anyOf": [
               {
@@ -818,19 +830,6 @@
               }
             ],
             "title": "Error Log"
-          },
-          "pre_context": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pre Context",
-            "description": "Original user-provided context"
           },
           "scripts": {
             "items": {
@@ -860,8 +859,9 @@
         "type": "object",
         "required": [
           "id",
-          "topic",
+          "title",
           "status",
+          "user_reference",
           "final_video_url",
           "error_log",
           "created_at",
@@ -882,18 +882,6 @@
             "type": "array",
             "title": "Source Urls",
             "description": "URLs to scrape for research"
-          },
-          "raw_text": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Raw Text",
-            "description": "Raw copied text or book excerpts"
           }
         },
         "type": "object",

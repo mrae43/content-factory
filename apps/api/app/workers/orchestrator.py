@@ -5,6 +5,7 @@ from typing import Any, Dict
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.db.crud import (
     update_job_status,
@@ -27,14 +28,13 @@ from app.services.format_validator import (
 )
 from app.workers.tasks import cleanup_local_research_chunks
 from app.workers.agents import (
-    ResearchAgent,
     CopywriterAgent,
     RedTeamAgent,
     AssetStudioAgent,
     AgentActionStatus,
 )
 from app.workers.optimizer import ScriptOptimizerAgent
-from app.workers.carousel_image_agent import CarouselImageAgent
+from app.workers.carousel_image_agent import CarouselImageAgent, merge_image_urls
 from app.workers.formatters import (
     BlogFormatterAgent,
     CarouselFormatterAgent,
@@ -119,11 +119,7 @@ async def execute_state_transition(db: AsyncSession, job) -> None:
 
 async def _transition_pending(db: AsyncSession, job) -> None:
     logger.info(f"Job {job.id}: Running Extraction (Text Chunking)")
-    raw_text = (
-        job.pre_context.get("raw_text", "")
-        if isinstance(job.pre_context, dict)
-        else str(job.pre_context)
-    )
+    raw_text = job.user_reference or ""
     raw_chunks = await process_extraction_job(str(job.id), raw_text)
 
     if raw_chunks:
@@ -144,7 +140,9 @@ async def _transition_researching(db: AsyncSession, job) -> None:
     vector_store = ContentFactoryVectorStore(db)
 
     web_service = _web_search_service
-    web_results = await web_service.search(job.topic)
+
+    # 1. Tavily search by title
+    web_results = await web_service.search(job.title)
 
     if web_results:
         valid_results = [r for r in web_results if r.get("content")]
@@ -160,49 +158,63 @@ async def _transition_researching(db: AsyncSession, job) -> None:
                 scope="LOCAL",
                 meta={
                     "source_type": "WEB_SEARCH",
-                    "query": job.topic,
+                    "query": job.title,
                     "urls": web_urls,
                     "search_depth": "basic",
                 },
             )
 
+    # 2. Tavily extract from user-provided source URLs
+    source_urls = job.source_urls or []
+    if source_urls:
+        extracted = await web_service.extract(source_urls)
+        if extracted:
+            valid_extracted = [r for r in extracted if r.get("content")]
+            ext_texts = [r["content"] for r in valid_extracted]
+            ext_urls = [r.get("url", "") for r in valid_extracted]
+            if ext_texts:
+                logger.info(
+                    f"Ingesting {len(ext_texts)} URL extraction results for Job {job.id}"
+                )
+                await vector_store.ingest_chunks(
+                    job_id=job.id,
+                    chunks=ext_texts,
+                    scope="LOCAL",
+                    meta={
+                        "source_type": "URL_EXTRACT",
+                        "urls": ext_urls,
+                    },
+                )
+
     await update_job_status(db, job.id, JobStatusEnum.RETRIEVAL)
 
 
+def _format_narrative(user_reference: str, story_directives: dict) -> str:
+    """Format user reference + story directives into the refined_context narrative."""
+    truncated_ref = (user_reference or "")[:2000]
+    parts = [truncated_ref] if truncated_ref else []
+    entries = []
+    for key in ("target_audience", "tone", "angle"):
+        val = story_directives.get(key, "")
+        if val:
+            entries.append(f"{key}: {val}")
+    if entries:
+        parts.append("Editorial Directives: " + "; ".join(entries))
+    return "\n\n".join(parts) if parts else ""
+
+
 async def _transition_retrieval(db: AsyncSession, job) -> None:
-    vector_store = ContentFactoryVectorStore(db)
-
-    researcher = ResearchAgent(
-        model_name=settings.research_model,
-        temperature=settings.research_temperature,
+    # Build narrative directly from user_reference + story_directives (no ResearchAgent)
+    job.refined_context = _format_narrative(
+        job.user_reference, job.story_directives or {}
     )
-    agent_context = {
-        "job_id": job.id,
-        "topic": job.topic,
-        "vector_store": vector_store,
-    }
-    result = await researcher.run(context=agent_context)
+    if not job.refined_context:
+        raise Exception(
+            "No refined_context could be built — user_reference is empty. "
+            "Cannot proceed to scripting without a narrative foundation."
+        )
 
-    if result.status == AgentActionStatus.SUCCESS:
-        refined_context = result.payload.get("refined_context", "")
-        if not refined_context:
-            raise Exception(
-                "Research agent succeeded but produced no refined_context. "
-                "Cannot proceed to scripting without a research summary."
-            )
-        job.refined_context = refined_context
-
-        confidence = result.confidence_score
-        if confidence is not None:
-            job.research_confidence = confidence
-
-        citation_index = result.payload.get("citation_index", [])
-        if citation_index:
-            job.citation_index = citation_index
-
-        await db.commit()
-    else:
-        raise Exception(f"Research failed: {result.reasoning}")
+    await db.commit()
 
     assembled = await _build_script_context(db, job)
     job.assembled_context = assembled.model_dump()
@@ -213,19 +225,15 @@ async def _transition_retrieval(db: AsyncSession, job) -> None:
 async def _build_script_context(db: AsyncSession, job) -> AssembledContext:
     try:
         vector_store = ContentFactoryVectorStore(db)
-        pre_context = job.pre_context or {}
-        story_directives = {
-            "target_audience": pre_context.get("target_audience", "General"),
-            "tone": pre_context.get("tone", ""),
-            "angle": pre_context.get("angle", ""),
-        }
+        story_directives = job.story_directives or {}
         return await _build_context_from_service(
-            topic=job.topic,
+            title=job.title,
             story_directives=story_directives,
             refined_context=job.refined_context or "",
             vector_store=vector_store,
             job_id=job.id,
             top_k=settings.context_builder_top_k,
+            user_reference=job.user_reference or "",
         )
     except Exception:
         logger.exception(
@@ -299,16 +307,16 @@ async def _run_copywriter(
         model_name=settings.copywriter_model,
         temperature=settings.copywriter_temperature,
     )
-    pre_context = job.pre_context or {}
+    story_directives = job.story_directives or {}
     agent_context = {
         "job_id": job.id,
-        "topic": job.topic,
+        "topic": job.title,
         "refined_context": job.refined_context or "",
         "evidence_sections": evidence_sections,
         "story_directives": {
-            "target_audience": pre_context.get("target_audience", "General"),
-            "tone": pre_context.get("tone", ""),
-            "angle": pre_context.get("angle", ""),
+            "target_audience": story_directives.get("target_audience", "General"),
+            "tone": story_directives.get("tone", ""),
+            "angle": story_directives.get("angle", ""),
         },
         "feedback": feedback,
     }
@@ -334,7 +342,7 @@ async def _run_optimizer(
         model_name=settings.optimizer_model,
         temperature=settings.optimizer_temperature,
     )
-    pre_context = job.pre_context or {}
+    story_directives = job.story_directives or {}
     agent_context = {
         "job_id": job.id,
         "script_content": latest_script.content,
@@ -342,9 +350,9 @@ async def _run_optimizer(
         "refined_context": job.refined_context or "",
         "evidence_sections": evidence_sections,
         "story_directives": {
-            "target_audience": pre_context.get("target_audience", "General"),
-            "tone": pre_context.get("tone", ""),
-            "angle": pre_context.get("angle", ""),
+            "target_audience": story_directives.get("target_audience", "General"),
+            "tone": story_directives.get("tone", ""),
+            "angle": story_directives.get("angle", ""),
         },
     }
     result = await optimizer.run(context=agent_context)
@@ -367,20 +375,20 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
     latest_script_obj = await get_latest_script(db, job.id)
     latest_script = latest_script_obj.content if latest_script_obj else ""
 
-    pre_context = job.pre_context or {}
+    story_directives = job.story_directives or {}
     try:
         strictness = GuardrailStrictness(
-            pre_context.get("guardrail_strictness", "High")
+            story_directives.get("guardrail_strictness", "High")
         )
     except ValueError:
         logger.warning(
-            f"Invalid guardrail_strictness '{pre_context.get('guardrail_strictness')}' "
+            f"Invalid guardrail_strictness '{story_directives.get('guardrail_strictness')}' "
             f"for Job {job.id} — falling back to High"
         )
         strictness = GuardrailStrictness.High
     guardrail_cfg = get_guardrail_config(
         strictness=strictness,
-        uncertain_pass_through=pre_context.get("uncertain_pass_through", False),
+        uncertain_pass_through=story_directives.get("uncertain_pass_through", False),
     )
 
     agent_context = {
@@ -503,11 +511,16 @@ async def _transition_asset_generation(db: AsyncSession, job) -> None:
             "job_id": job.id,
             "format_payload": carousel_script.format_payload,
             "platform": job.platform or "instagram",
+            "device_id": job.device_id,
         }
         carousel_result = await agent.run(context)
 
         if carousel_result.status == AgentActionStatus.SUCCESS:
-            carousel_script.format_payload = carousel_result.payload["format_payload"]
+            carousel_script.format_payload = merge_image_urls(
+                carousel_script.format_payload,
+                carousel_result.payload["format_payload"],
+            )
+            flag_modified(carousel_script, "format_payload")
             any_success = True
         else:
             await log_error(
@@ -619,6 +632,7 @@ async def _transition_formatting(db: AsyncSession, job) -> None:
         "verified_claims": verified_claims,
         "hedge_index": hedge_index,
         "platform": job.platform or "",
+        "story_directives": job.story_directives or {},
     }
 
     db_format_type = (job.format_type or "all").lower()

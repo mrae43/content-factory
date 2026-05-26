@@ -21,12 +21,14 @@ from app.workers.agents import AgentActionStatus, AgentResult
 def make_mock_job(**overrides):
     defaults = {
         "id": uuid4(),
-        "topic": "BRICS De-dollarization 2025",
+        "title": "BRICS De-dollarization 2025",
+        "user_reference": "User provided context for the story.",
+        "source_urls": [],
+        "story_directives": {"target_audience": "general"},
         "status": JobStatusEnum.PENDING,
         "final_video_url": None,
         "refined_context": None,
         "error_log": None,
-        "pre_context": {},
         "scripts": [],
         "assets": [],
         "format_type": "all",
@@ -130,7 +132,7 @@ class TestCreateRenderJob:
     async def test_should_return_202_with_correct_response(
         self, client, mock_db, sample_job_payload
     ):
-        mock_job = make_mock_job(topic=sample_job_payload["topic"])
+        mock_job = make_mock_job(title=sample_job_payload["title"])
         mock_result = MagicMock()
         mock_result.scalar_one.return_value = mock_job
         mock_db.execute.return_value = mock_result
@@ -140,7 +142,7 @@ class TestCreateRenderJob:
         assert resp.status_code == 202
         data = resp.json()
         assert data["status"] == "PENDING"
-        assert data["topic"] == "BRICS De-dollarization 2025"
+        assert data["title"] == "BRICS De-dollarization 2025"
         assert "id" in data
         assert data["final_video_url"] is None
         assert data["error_log"] is None

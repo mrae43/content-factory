@@ -25,7 +25,6 @@ import pytest
 from app.workers.agents import (
     AgentActionStatus,
     AgentResult,
-    ResearchAgent,
     CopywriterAgent,
     RedTeamAgent,
 )
@@ -94,15 +93,24 @@ def _load_golden_dataset() -> List[GoldenCase]:
 def _validate_relevance_thresholds(calibration_set: RelevancyCalibrationSet):
     from app.services.context_builder import TOPIC_RELEVANCE_THRESHOLDS
 
+    # threshold → label from source of truth — no hardcoded labels
+    label_for_threshold = dict(TOPIC_RELEVANCE_THRESHOLDS)
+
     current = sorted(
-        [(t, label) for t, label in TOPIC_RELEVANCE_THRESHOLDS],
+        [(threshold, label) for threshold, label in TOPIC_RELEVANCE_THRESHOLDS],
         key=lambda x: -x[0],
     )
     stored_cfg = calibration_set.threshold_config
     stored = sorted(
         [
-            (stored_cfg.high_threshold, "HIGH"),
-            (stored_cfg.medium_threshold, "MEDIUM"),
+            (
+                stored_cfg.high_threshold,
+                label_for_threshold.get(stored_cfg.high_threshold, "UNKNOWN"),
+            ),
+            (
+                stored_cfg.medium_threshold,
+                label_for_threshold.get(stored_cfg.medium_threshold, "UNKNOWN"),
+            ),
         ],
         key=lambda x: -x[0],
     )
@@ -268,27 +276,6 @@ class EvalRunner:
             confidence_score=0.85,
             metadata={"source": "golden_reference"},
         )
-
-    async def run_research(self, case: GoldenCase, vector_store=None) -> AgentResult:
-        if not self.live:
-            golden = self._golden_result("research", case)
-            if golden is not None:
-                self.outputs["research"] = golden
-                return golden
-
-        vs = vector_store or self.vector_store
-        agent = ResearchAgent(
-            model_name=settings.eval_research_model,
-            temperature=settings.eval_research_temperature,
-        )
-        context = {
-            "job_id": uuid4(),
-            "topic": case.input.topic,
-            "vector_store": vs,
-        }
-        result = await agent.run(context=context)
-        self.outputs["research"] = result
-        return result
 
     async def run_copywriter(
         self, case: GoldenCase, refined_context: str, feedback: str = ""

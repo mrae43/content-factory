@@ -131,7 +131,7 @@ class TestTransitionPending:
             await execute_state_transition(mock_db_session, mock_job)
 
             mock_chunking.assert_awaited_once_with(
-                str(mock_job.id), mock_job.pre_context["raw_text"]
+                str(mock_job.id), mock_job.user_reference
             )
             mock_vector_store.ingest_chunks.assert_awaited_once()
             ingest_call = mock_vector_store.ingest_chunks.call_args
@@ -144,10 +144,8 @@ class TestTransitionPending:
         self, mock_db_session, mock_job, mock_vector_store
     ):
         mock_job.status = JobStatusEnum.PENDING
-        mock_job.pre_context = {
-            "raw_text": "Some custom raw text content",
-            "source_urls": [],
-        }
+        mock_job.user_reference = "Some custom raw text content"
+        mock_job.source_urls = []
 
         with (
             patch(
@@ -172,7 +170,7 @@ class TestTransitionPending:
         self, mock_db_session, mock_job, mock_vector_store
     ):
         mock_job.status = JobStatusEnum.PENDING
-        mock_job.pre_context = "Just a plain string"
+        mock_job.user_reference = "Just a plain string"
 
         with (
             patch(
@@ -277,13 +275,13 @@ class TestTransitionResearching:
 
             await execute_state_transition(mock_db_session, mock_job)
 
-            mock_web.search.assert_awaited_once_with(mock_job.topic)
+            mock_web.search.assert_awaited_once_with(mock_job.title)
             ingest_calls = mock_vector_store.ingest_chunks.call_args_list
             web_ingest = [c for c in ingest_calls if c.kwargs.get("scope") == "LOCAL"]
             assert len(web_ingest) == 1
             meta = web_ingest[0].kwargs["meta"]
             assert meta["source_type"] == "WEB_SEARCH"
-            assert meta["query"] == mock_job.topic
+            assert meta["query"] == mock_job.title
             assert meta["urls"] == ["https://example.com/brics"]
             assert meta["search_depth"] == "basic"
             mock_update.assert_awaited_once_with(
@@ -361,22 +359,16 @@ class TestTransitionResearching:
 
 @pytest.mark.integration
 class TestTransitionRetrieval:
-    async def test_should_run_research_agent_and_build_context(
+    async def test_should_build_context_and_proceed_to_scripting(
         self,
         mock_db_session,
         mock_job,
         mock_vector_store,
-        agent_result_success,
     ):
         mock_job.status = JobStatusEnum.RETRIEVAL
-        result = agent_result_success(
-            payload={
-                "refined_context": "BRICS research summary from synthesis.",
-                "citation_index": [{"source": "example.com", "relevance": 0.9}],
-            },
-            reasoning="Done",
-            confidence=0.85,
-        )
+        mock_job.title = "BRICS 2025"
+        mock_job.user_reference = "User context about BRICS."
+        mock_job.story_directives = {"tone": "analytical"}
 
         with (
             patch(
@@ -384,14 +376,10 @@ class TestTransitionRetrieval:
                 return_value=mock_vector_store,
             ),
             patch(
-                "app.workers.orchestrator.ResearchAgent",
-                return_value=_mock_agent_class(result).return_value,
-            ),
-            patch(
                 "app.workers.orchestrator._build_script_context",
                 new_callable=AsyncMock,
                 return_value=AssembledContext(
-                    narrative_summary="Test research.",
+                    narrative_summary="User context about BRICS.",
                     evidence_sections="## Retrieved Evidence\n\nChunk 1: evidence.",
                     raw_chunks=[{"id": "chunk-1", "content": "evidence"}],
                 ),
@@ -402,51 +390,9 @@ class TestTransitionRetrieval:
         ):
             await execute_state_transition(mock_db_session, mock_job)
 
-            assert mock_job.refined_context == "BRICS research summary from synthesis."
-            assert mock_job.research_confidence == 0.85
-            assert mock_job.citation_index == [
-                {"source": "example.com", "relevance": 0.9}
-            ]
             assert mock_job.assembled_context is not None
             mock_update.assert_awaited_once_with(
                 mock_db_session, mock_job.id, JobStatusEnum.SCRIPTING
-            )
-
-    async def test_should_handle_research_failure(
-        self,
-        mock_db_session,
-        mock_job,
-        mock_vector_store,
-    ):
-        mock_job.status = JobStatusEnum.RETRIEVAL
-        error_result = AgentResult(
-            status=AgentActionStatus.ERROR,
-            payload={},
-            reasoning="No research context available",
-            confidence_score=0.0,
-        )
-
-        with (
-            patch(
-                "app.workers.orchestrator.ContentFactoryVectorStore",
-                return_value=mock_vector_store,
-            ),
-            patch(
-                "app.workers.orchestrator.ResearchAgent",
-                return_value=_mock_agent_class(error_result).return_value,
-            ),
-            patch(
-                "app.workers.orchestrator.log_error", new_callable=AsyncMock
-            ) as mock_log,
-            patch(
-                "app.workers.orchestrator.update_job_status", new_callable=AsyncMock
-            ) as mock_update,
-        ):
-            await execute_state_transition(mock_db_session, mock_job)
-
-            mock_log.assert_awaited_once()
-            mock_update.assert_awaited_once_with(
-                mock_db_session, mock_job.id, JobStatusEnum.FAILED
             )
 
     async def test_should_continue_on_context_builder_failure(
@@ -454,23 +400,13 @@ class TestTransitionRetrieval:
         mock_db_session,
         mock_job,
         mock_vector_store,
-        agent_result_success,
     ):
         mock_job.status = JobStatusEnum.RETRIEVAL
-        result = agent_result_success(
-            payload={
-                "refined_context": "Research summary.",
-            },
-        )
 
         with (
             patch(
                 "app.workers.orchestrator.ContentFactoryVectorStore",
                 return_value=mock_vector_store,
-            ),
-            patch(
-                "app.workers.orchestrator.ResearchAgent",
-                return_value=_mock_agent_class(result).return_value,
             ),
             patch(
                 "app.workers.orchestrator._build_context_from_service",
@@ -898,7 +834,7 @@ class TestTransitionFactCheckingScript:
         agent_result_success,
     ):
         mock_job.status = JobStatusEnum.FACT_CHECKING_SCRIPT
-        mock_job.pre_context["guardrail_strictness"] = "Medium"
+        mock_job.story_directives["guardrail_strictness"] = "Medium"
         claims_data = [
             {
                 "claim_text": "BRICS announced new system",
@@ -954,7 +890,7 @@ class TestTransitionFactCheckingScript:
         agent_result_success,
     ):
         mock_job.status = JobStatusEnum.FACT_CHECKING_SCRIPT
-        mock_job.pre_context["guardrail_strictness"] = "Medium"
+        mock_job.story_directives["guardrail_strictness"] = "Medium"
         result = agent_result_success(payload={"claims": [], "verdict": "SUPPORTED"})
 
         with (
@@ -996,7 +932,7 @@ class TestTransitionFactCheckingScript:
         agent_result_success,
     ):
         mock_job.status = JobStatusEnum.FACT_CHECKING_SCRIPT
-        mock_job.pre_context["guardrail_strictness"] = "High"
+        mock_job.story_directives["guardrail_strictness"] = "High"
         claims_data = [
             {
                 "claim_text": "BRICS announced new system",
@@ -1052,8 +988,8 @@ class TestTransitionFactCheckingScript:
         agent_result_success,
     ):
         mock_job.status = JobStatusEnum.FACT_CHECKING_SCRIPT
-        mock_job.pre_context["guardrail_strictness"] = "High"
-        mock_job.pre_context["uncertain_pass_through"] = True
+        mock_job.story_directives["guardrail_strictness"] = "High"
+        mock_job.story_directives["uncertain_pass_through"] = True
         claims_data = [
             {
                 "claim_text": "BRICS announced new system",
@@ -1600,7 +1536,6 @@ class TestOrchestratorErrorHandling:
                 "app.workers.orchestrator.ContentFactoryVectorStore",
                 return_value=mock_vector_store,
             ),
-            patch("app.workers.orchestrator.ResearchAgent", return_value=mock_agent),
             patch(
                 "app.workers.orchestrator.log_error", new_callable=AsyncMock
             ) as mock_log,
@@ -1633,15 +1568,6 @@ class TestOrchestratorMultiStep:
     async def test_full_happy_path_pending_to_completed(
         self, mock_db_session, mock_job, mock_vector_store, mock_script
     ):
-        research_result = AgentResult(
-            status=AgentActionStatus.SUCCESS,
-            payload={
-                "chunks": ["research chunk"],
-                "refined_context": "Comprehensive BRICS research summary",
-            },
-            reasoning="Done",
-            confidence_score=0.9,
-        )
         copy_result = AgentResult(
             status=AgentActionStatus.SUCCESS,
             payload={"script_content": "Script v1"},
@@ -1661,7 +1587,7 @@ class TestOrchestratorMultiStep:
             confidence_score=0.9,
         )
 
-        mock_job.pre_context = {"guardrail_strictness": "Low"}
+        mock_job.story_directives = {"guardrail_strictness": "Low"}
 
         builder_patch = patch(
             "app.workers.orchestrator._build_script_context",
@@ -1684,10 +1610,6 @@ class TestOrchestratorMultiStep:
             patch(
                 "app.workers.orchestrator.ContentFactoryVectorStore",
                 return_value=mock_vector_store,
-            ),
-            patch(
-                "app.workers.orchestrator.ResearchAgent",
-                return_value=_mock_agent_class(research_result).return_value,
             ),
             patch(
                 "app.workers.orchestrator.CopywriterAgent",
@@ -1834,7 +1756,7 @@ class TestOrchestratorMultiStep:
         script_v2.is_approved = False
         script_v2.feedback_history = []
 
-        mock_job.pre_context = {"guardrail_strictness": "Low"}
+        mock_job.story_directives = {"guardrail_strictness": "Low"}
 
         with (
             _mock_build_script_context(),

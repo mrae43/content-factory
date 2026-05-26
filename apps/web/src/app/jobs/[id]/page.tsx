@@ -20,6 +20,7 @@ import { CollapsibleSection } from "@/components/editorial/collapsible-section";
 import { BlogViewer } from "@/components/viewers/blog-viewer";
 import { CarouselViewer } from "@/components/viewers/carousel-viewer";
 import { VideoScriptViewer } from "@/components/viewers/video-script-viewer";
+import { TabBar } from "@/components/jobs/tab-bar";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -169,10 +170,10 @@ function JobDetailContent({
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
       <div className="space-y-2">
         <h1 className="font-heading text-3xl font-bold tracking-tight">
-          {job.topic}
+{job.title}
         </h1>
         <p className="text-sm text-muted-foreground">
           Job{" "}
@@ -199,32 +200,50 @@ function JobDetailContent({
         </div>
       </div>
 
-      <div className="space-y-4">
-        <SectionHeader label="THE PUBLISHED PIECE" />
-        {renderSection1()}
-      </div>
+      <TabBar status={job.status}>
+        <TabBar.Output>
+          <div className="pt-4 space-y-4">
+            <SectionHeader label="THE PUBLISHED PIECE" />
+            {renderSection1()}
+          </div>
+        </TabBar.Output>
 
-      <div className="space-y-4">
-        <SectionHeader label="THE EDITORIAL TRAIL" />
-        <div className="rounded-lg border border-border p-6">
-          <EditorialTimeline job={job} />
-        </div>
-      </div>
+        <TabBar.Trail>
+          <div className="pt-4 space-y-8">
+            <div className="space-y-4">
+              <SectionHeader label="THE EDITORIAL TRAIL" />
+              <div className="rounded-lg border border-border p-6">
+                <EditorialTimeline job={job} />
+              </div>
+            </div>
 
-      <FactCheckAudit allClaims={allClaims} />
+            <FactCheckAudit allClaims={allClaims} />
 
-      <CitationIndexSection citationIndex={job.citation_index} />
+            <FactCheckAudit allClaims={allClaims} />
+          </div>
+        </TabBar.Trail>
 
-      {job.status === "HUMAN_REVIEW_NEEDED" && (
-        <ReviewSection
-          job={job}
-          approvalMutation={approvalMutation}
-          feedbackText={feedbackText}
-          setFeedbackText={setFeedbackText}
-          showRejectForm={showRejectForm}
-          setShowRejectForm={setShowRejectForm}
-        />
-      )}
+        <TabBar.Review>
+          <div className="pt-4 space-y-4">
+            {job.status === "HUMAN_REVIEW_NEEDED" ? (
+              <ReviewSection
+                job={job}
+                approvalMutation={approvalMutation}
+                feedbackText={feedbackText}
+                setFeedbackText={setFeedbackText}
+                showRejectForm={showRejectForm}
+                setShowRejectForm={setShowRejectForm}
+              />
+            ) : (
+              <div className="rounded-lg border border-border p-6 text-center">
+                <p className="text-sm text-muted-foreground">
+                  No review required at this stage.
+                </p>
+              </div>
+            )}
+          </div>
+        </TabBar.Review>
+      </TabBar>
     </div>
   );
 }
@@ -276,9 +295,8 @@ function FailedSection({ job }: { job: RenderJobResponse }) {
           type="button"
           className="text-primary hover:underline cursor-pointer"
           onClick={() => {
-            const rawText =
-              (job.pre_context as Record<string, unknown>)?.raw_text ?? "";
-            window.location.href = `/jobs/new?topic=${encodeURIComponent(job.topic)}&raw_text=${encodeURIComponent(typeof rawText === "string" ? rawText : "")}`;
+            const rawText = job.user_reference ?? "";
+            window.location.href = `/jobs/new?title=${encodeURIComponent(job.title)}&raw_text=${encodeURIComponent(rawText)}`;
           }}
         >
           Commission it again
@@ -507,7 +525,7 @@ function ActiveOutput({ job }: { job: RenderJobResponse }) {
   if (status === "PENDING") {
     return (
       <div className="rounded-lg border border-border p-6 space-y-3">
-        <h4 className="font-heading text-base font-semibold">{job.topic}</h4>
+        <h4 className="font-heading text-base font-semibold">{job.title}</h4>
         <div className="flex flex-wrap gap-2">
           <FormatBadge formatType={job.format_type} />
           {job.platform && (
@@ -675,60 +693,6 @@ function FactCheckAudit({
             opinion-based material.
           </p>
         )}
-      </div>
-    </div>
-  );
-}
-
-type CitationEntry = {
-  claim_fragment?: string;
-  source_url?: string;
-  chunk_id?: string;
-};
-
-function CitationIndexSection({
-  citationIndex,
-}: {
-  citationIndex: { [key: string]: unknown }[] | null | undefined;
-}) {
-  if (!citationIndex || citationIndex.length === 0) return null;
-
-  const entries = citationIndex as CitationEntry[];
-
-  return (
-    <div id="citation-index" className="space-y-4">
-      <SectionHeader label="CITATION INDEX" />
-      <div className="rounded-lg border border-border p-5 space-y-3">
-        <p className="text-xs text-muted-foreground">
-          {entries.length} citation{entries.length > 1 ? "s" : ""} mapped from research synthesis
-        </p>
-        <div className="space-y-2">
-          {entries.map((entry, i) => (
-            <div
-              key={i}
-              className="rounded-md bg-muted p-3 space-y-1 text-xs"
-            >
-              <p className="font-medium text-foreground">
-                &ldquo;{entry.claim_fragment ?? ""}&rdquo;
-              </p>
-              {entry.source_url && (
-                <a
-                  href={entry.source_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline break-all"
-                >
-                  {entry.source_url}
-                </a>
-              )}
-              {entry.chunk_id && (
-                <p className="text-muted-foreground font-mono">
-                  Chunk: {entry.chunk_id.slice(0, 8)}&hellip;
-                </p>
-              )}
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   );

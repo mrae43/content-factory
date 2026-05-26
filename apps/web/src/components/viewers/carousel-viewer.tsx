@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Image  from "next/image";
 import type { CarouselFormatPayload, PlatformEnum } from "@content-factory/shared-types";
+import { CopyButton } from "./copy-button";
 import {
   HelpCircle,
   TrendingUp,
@@ -44,6 +44,23 @@ const ASPECT_RATIO_MAP: Record<string, string> = {
   youtube: "16/9",
 };
 
+function carouselToText(p: CarouselFormatPayload): string {
+  const parts: string[] = [];
+  parts.push(`Thread: ${p.thread_title}`);
+  parts.push("");
+  for (const slide of p.slides) {
+    parts.push(`Slide ${slide.slide_number}: ${slide.text}`);
+    if (slide.visual_description) {
+      parts.push(`  Visual: ${slide.visual_description}`);
+    }
+    parts.push("");
+  }
+  if (p.hashtags.length > 0) {
+    parts.push(`Hashtags: ${p.hashtags.map((h) => `#${h}`).join(" ")}`);
+  }
+  return parts.join("\n");
+}
+
 export function CarouselViewer({ payload, platform }: CarouselViewerProps) {
   const limit = (platform && charLimits[platform]) ?? 500;
   const slides = payload.slides;
@@ -76,7 +93,10 @@ export function CarouselViewer({ payload, platform }: CarouselViewerProps) {
 
   return (
     <div className="space-y-4">
-      <h3 className="font-heading text-lg font-semibold">{payload.thread_title}</h3>
+      <div className="flex items-start justify-between gap-4">
+        <h3 className="font-heading text-lg font-semibold">{payload.thread_title}</h3>
+        <CopyButton getContent={() => carouselToText(payload)} label="Copy carousel" />
+      </div>
 
       <div
         className="max-w-sm md:max-w-md mx-auto"
@@ -84,7 +104,7 @@ export function CarouselViewer({ payload, platform }: CarouselViewerProps) {
       >
         {slide.image_url ? (
           <div className="h-full rounded-lg border border-border overflow-hidden relative bg-black">
-            <Image
+            <img
               src={slide.image_url}
               alt={`Slide ${slide.slide_number}`}
               className="h-full w-full object-contain"

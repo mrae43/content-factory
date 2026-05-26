@@ -16,8 +16,13 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB, ENUM
+from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import declarative_base, relationship
 from pgvector.sqlalchemy import Vector
+
+# Mutation-tracked JSONB variant — in-place dict changes (e.g.
+# slide["image_url"] = url) are detected by SQLAlchemy on commit.
+TrackedJSONB = MutableDict.as_mutable(JSONB)
 
 Base = declarative_base()
 
@@ -95,18 +100,20 @@ class RenderJob(Base):
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    topic = Column(String, nullable=False)
+    title = Column(String, nullable=False)
 
-    # Step 1: Pre-context given by the user (URLs, base text, constraints)
-    pre_context = Column(JSONB, nullable=False, server_default="{}")
+    # Client device identifier for S3 key prefixing
+    device_id = Column(String, nullable=True)
+
+    user_reference = Column(Text, nullable=False, server_default="")
+    source_urls = Column(JSONB, nullable=False, server_default="[]")
+    story_directives = Column(JSONB, nullable=False, server_default="{}")
 
     status = Column(JobStatusEnum, nullable=False, server_default="PENDING")
 
     # Step 8: Final outputs
     final_video_url = Column(String, nullable=True)
     refined_context = Column(Text, nullable=True)
-    research_confidence = Column(Float, nullable=True)
-    citation_index = Column(JSONB, nullable=True)
     assembled_context = Column(JSONB, nullable=True)
     retrieval_retry_count = Column(Integer, nullable=False, server_default="0")
     error_log = Column(JSONB, nullable=True)
@@ -143,6 +150,7 @@ class ResearchChunk(Base):
         Index("ix_research_meta_gin", "meta", postgresql_using="gin"),
         Index(
             "ix_research_embedding_hnsw",
+            "embedding",
             postgresql_using="hnsw",
             postgresql_with={"m": 16, "ef_construction": 64},
             postgresql_ops={"embedding": "vector_cosine_ops"},
@@ -201,7 +209,7 @@ class Script(Base):
     feedback_history = Column(JSONB, nullable=False, server_default="[]")
 
     format_type = Column(String, nullable=True)
-    format_payload = Column(JSONB, nullable=True)
+    format_payload = Column(TrackedJSONB, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
     updated_at = Column(DateTime(timezone=True), server_default=text("now()"))

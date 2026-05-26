@@ -43,14 +43,16 @@ export function Header() {
           {title}
         </h1>
       </div>
-      {!isCommission && (
-        <Link
-          href="/jobs/new"
-          className="inline-flex h-8 items-center rounded-md bg-primary px-4 text-[0.8125rem] font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-        >
-          Commission
-        </Link>
-      )}
+      <div className="flex items-center gap-3">
+        {!isCommission && (
+          <Link
+            href="/jobs/new"
+            className="inline-flex h-8 items-center rounded-md bg-primary px-4 text-[0.8125rem] font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Commission
+          </Link>
+        )}
+      </div>
     </header>
   );
 }

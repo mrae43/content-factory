@@ -270,14 +270,19 @@ export interface components {
         };
         /**
          * JobCreateRequest
-         * @description Payload for Step 1: User inserts topic & context.
+         * @description Payload for Step 1: User inserts title & context.
          */
         JobCreateRequest: {
             /**
-             * Topic
+             * Title
              * @example BRICS De-dollarization 2025
              */
-            topic: string;
+            title: string;
+            /**
+             * User Reference
+             * @description User-provided background text as narrative foundation
+             */
+            user_reference: string;
             research_inputs: components["schemas"]["ResearchInputs"];
             story_directives?: components["schemas"]["StoryDirectives"];
             /**
@@ -287,6 +292,11 @@ export interface components {
             format_type: components["schemas"]["FormatTypeEnum"];
             /** @description Target platform: twitter, linkedin, instagram, youtube, tiktok */
             platform: components["schemas"]["PlatformEnum"];
+            /**
+             * Device Id
+             * @description Client device identifier for S3 key prefixing. Sent from localStorage.
+             */
+            device_id?: string | null;
         };
         /**
          * JobStatusEnum
@@ -308,9 +318,26 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            /** Topic */
-            topic: string;
+            /** Title */
+            title: string;
             status: components["schemas"]["JobStatusEnum"];
+            /**
+             * User Reference
+             * @description User-provided reference text
+             */
+            user_reference: string;
+            /**
+             * Source Urls
+             * @description Source URLs for Tavily extraction
+             */
+            source_urls?: string[];
+            /**
+             * Story Directives
+             * @description Editorial directives
+             */
+            story_directives?: {
+                [key: string]: unknown;
+            };
             /** @default all */
             format_type: components["schemas"]["FormatTypeEnum"] | null;
             platform?: components["schemas"]["PlatformEnum"] | null;
@@ -318,21 +345,8 @@ export interface components {
             final_video_url: string | null;
             /** Refined Context */
             refined_context?: string | null;
-            /** Research Confidence */
-            research_confidence?: number | null;
-            /** Citation Index */
-            citation_index?: {
-                [key: string]: unknown;
-            }[] | null;
             /** Error Log */
             error_log: {
-                [key: string]: unknown;
-            } | null;
-            /**
-             * Pre Context
-             * @description Original user-provided context
-             */
-            pre_context?: {
                 [key: string]: unknown;
             } | null;
             /** Scripts */
@@ -360,11 +374,6 @@ export interface components {
              * @description URLs to scrape for research
              */
             source_urls?: string[];
-            /**
-             * Raw Text
-             * @description Raw copied text or book excerpts
-             */
-            raw_text?: string | null;
         };
         /**
          * ScriptApprovalRequest

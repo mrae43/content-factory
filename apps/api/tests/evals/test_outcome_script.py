@@ -4,9 +4,9 @@ Script (Copywriter) Agent Outcome Evals — scored against SCRIPT_RUBRIC.
 Case coverage (6): H-001..H-004, R-003, M-004
 
 Modes:
-  - Golden mode (default): Uses reference_outputs.research for refined_context input,
+  - Golden mode (default): Uses reference_outputs.research.refined_context for input,
     scores reference_outputs.script deterministically.
-  - Live mode (--live): Chains ResearchAgent -> CopywriterAgent with real LLM calls.
+  - Live mode (--live): Runs CopywriterAgent with real LLM calls.
 """
 
 import pytest
@@ -20,7 +20,6 @@ from tests.evals.assertions import (
     assert_scene_count_in_range,
     assert_storyboard_fields,
     assert_word_count_in_range,
-    build_case_aware_vector_store,
 )
 from tests.evals.judge import judge_score
 from tests.evals.schemas import GoldenCase
@@ -35,14 +34,14 @@ SCRIPT_CASE_IDS = [
 ]
 
 
-def _get_refined_context(case: GoldenCase, research_result) -> str:
+def _get_refined_context(case: GoldenCase) -> str:
     if (
         case.reference_outputs
         and case.reference_outputs.research
         and case.reference_outputs.research.refined_context
     ):
         return case.reference_outputs.research.refined_context
-    return research_result.payload.get("refined_context", "")
+    return ""
 
 
 @pytest.mark.eval
@@ -54,14 +53,7 @@ async def test_script_outcome(
     score_aggregator,
     baseline_recorder,
 ):
-    case_vs = build_case_aware_vector_store(golden_case)
-    research_result = await eval_runner.run_research(golden_case, vector_store=case_vs)
-
-    assert research_result.status == AgentActionStatus.SUCCESS, (
-        f"Research failed for {golden_case.id}: {research_result.reasoning}"
-    )
-
-    refined_context = _get_refined_context(golden_case, research_result)
+    refined_context = _get_refined_context(golden_case)
 
     script_spec = golden_case.expected_outcomes.script
     if script_spec is None:

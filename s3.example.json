@@ -1,0 +1,18 @@
+{
+	"identities": [
+		{
+			"name": "anonymous",
+			"actions": ["Read"]
+		},
+		{
+			"name": "factory",
+			"credentials": [
+				{
+					"accessKey": "factory",
+					"secretKey": "factory-secret"
+				}
+			],
+			"actions": ["Admin", "Read", "List", "Tagging", "Write", "Delete"]
+		}
+	]
+}

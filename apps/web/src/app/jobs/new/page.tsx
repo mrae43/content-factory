@@ -71,7 +71,7 @@ function NewJobForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const createJob = useCreateJob();
-  const [topic, setTopic] = useState(() => searchParams.get("topic") ?? "");
+  const [title, setTitle] = useState(() => searchParams.get("title") ?? "");
   const [rawText, setRawText] = useState(
     () => searchParams.get("raw_text") ?? ""
   );
@@ -95,10 +95,17 @@ function NewJobForm() {
   const handleSubmit = async () => {
     try {
       setErrorMessage(null);
+
+      let device_id = localStorage.getItem("device_id");
+      if (!device_id) {
+        device_id = crypto.randomUUID();
+        localStorage.setItem("device_id", device_id);
+      }
+
       const result = await createJob.mutateAsync({
-        topic,
+        title,
+        user_reference: rawText,
         research_inputs: {
-          raw_text: rawText || undefined,
           source_urls: parsedSourceUrls.length > 0 ? parsedSourceUrls : [],
         },
         story_directives: {
@@ -110,6 +117,7 @@ function NewJobForm() {
         },
         format_type: formatType as "all" | "video" | "blog" | "carousel",
         platform: platform as "twitter" | "linkedin" | "instagram" | "youtube" | "tiktok",
+        device_id,
       });
       router.push(`/jobs/${result.id}`);
       toast.success("Story commissioned — pipeline started.");
@@ -154,12 +162,12 @@ function NewJobForm() {
                   htmlFor="headline"
                   className="block font-heading text-[1rem] font-semibold text-foreground sm:text-[1.125rem]"
                 >
-                  Headline
+                  Title
                 </label>
                 <Input
                   id="headline"
-                  value={topic}
-                  onChange={(e) => setTopic(e.target.value)}
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
                   placeholder="What's the story?"
                   required
                   className="h-11 text-base sm:h-9 sm:text-sm"
@@ -171,7 +179,7 @@ function NewJobForm() {
                   htmlFor="brief"
                   className="block font-heading text-[1rem] font-semibold text-foreground sm:text-[1.125rem]"
                 >
-                  Editorial Brief
+                  User Reference
                 </label>
                 <Textarea
                   id="brief"
@@ -179,6 +187,7 @@ function NewJobForm() {
                   onChange={(e) => setRawText(e.target.value)}
                   placeholder="Background, key points, angle, tone..."
                   rows={5}
+                  required
                   className="min-h-[100px] text-base sm:min-h-[120px] sm:text-sm sm:rows-6"
                 />
               </div>
@@ -377,7 +386,7 @@ function NewJobForm() {
               <div className="px-5 py-4 sm:px-6 sm:py-5">
                 <div className="rounded-lg bg-muted p-4 sm:p-4 space-y-2.5 sm:space-y-2">
                   <p className="font-heading text-[1rem] sm:text-[0.9375rem] font-semibold text-foreground leading-snug">
-                    &ldquo;{topic}&rdquo;
+                    &ldquo;{title}&rdquo;
                   </p>
                   <p className="text-[0.8125rem] sm:text-[0.75rem] font-medium tracking-[0.02em] text-muted-foreground">
                     {formatLabel}

@@ -7,4 +7,9 @@ def get_storage():
 
         return LocalStorage()
 
+    if settings.storage_backend == "s3":
+        from app.storage.s3 import S3Storage
+
+        return S3Storage()
+
     raise ValueError(f"Unknown storage backend: {settings.storage_backend}")

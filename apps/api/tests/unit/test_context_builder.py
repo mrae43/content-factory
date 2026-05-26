@@ -3,7 +3,7 @@ from uuid import uuid4
 
 from app.services.context_builder import (
     _compose_query,
-    _derive_topic_relevance,
+    _derive_title_relevance,
     _format_evidence_sections,
     build,
 )
@@ -35,31 +35,49 @@ class TestQueryComposition:
         result = _compose_query("Quantum computing", directives)
         assert result == "Quantum computing"
 
-    def test_fallback_to_topic_only(self):
+    def test_fallback_to_title_only(self):
         directives = {}
         result = _compose_query("AI regulation", directives)
         assert result == "AI regulation"
 
+    def test_user_reference_included_in_query(self):
+        directives = {"tone": "urgent"}
+        result = _compose_query("BRICS", directives, user_reference="Some context")
+        assert "Some context" in result
+
+    def test_user_reference_truncated_to_500_chars(self):
+        long_ref = "x" * 1000
+        directives = {}
+        result = _compose_query("Title", directives, user_reference=long_ref)
+        assert len(result) <= len("Title") + 500
+
+    def test_user_reference_partial_inclusion(self):
+        directives = {"tone": "analytical", "angle": "de-dollarization"}
+        long_ref = "a" * 600
+        result = _compose_query("BRICS", directives, user_reference=long_ref)
+        assert "a" * 500 in result
+        assert "a" * 600 not in result
+
 
 @pytest.mark.unit
-class TestTopicRelevance:
+class Relevance:
     def test_high_at_exact_threshold(self):
-        assert _derive_topic_relevance(0.75) == "HIGH"
+        assert _derive_title_relevance(0.75) == "HIGH"
 
     def test_high_above_threshold(self):
-        assert _derive_topic_relevance(0.92) == "HIGH"
+        assert _derive_title_relevance(0.92) == "HIGH"
 
     def test_medium_at_exact_threshold(self):
-        assert _derive_topic_relevance(0.5) == "MEDIUM"
+        assert _derive_title_relevance(0.5) == "MEDIUM"
 
     def test_medium_below_high(self):
-        assert _derive_topic_relevance(0.6) == "MEDIUM"
+        assert _derive_title_relevance(0.6) == "MEDIUM"
 
     def test_low_below_medium(self):
-        assert _derive_topic_relevance(0.3) == "LOW"
+        assert _derive_title_relevance(0.3) == "LOW"
 
     def test_low_at_zero(self):
-        assert _derive_topic_relevance(0.0) == "LOW"
+        assert _derive_title_relevance(0.0) == "LOW"
 
 
 @pytest.mark.unit
@@ -69,7 +87,7 @@ class TestEvidenceFormatting:
             {
                 "similarity_score": 0.89,
                 "source_type": "WEB_SEARCH",
-                "topic_relevance": "HIGH",
+                "title_relevance": "HIGH",
                 "content": "BRICS GDP grew 3.2% in 2024.",
             }
         ]
@@ -86,13 +104,13 @@ class TestEvidenceFormatting:
             {
                 "similarity_score": 0.5,
                 "source_type": "INFERRED",
-                "topic_relevance": "MEDIUM",
+                "title_relevance": "MEDIUM",
                 "content": "Low relevance chunk.",
             },
             {
                 "similarity_score": 0.92,
                 "source_type": "WEB_SEARCH",
-                "topic_relevance": "HIGH",
+                "title_relevance": "HIGH",
                 "content": "High relevance chunk.",
             },
         ]
@@ -110,13 +128,13 @@ class TestEvidenceFormatting:
             {
                 "similarity_score": 0.7,
                 "source_type": "WEB_SEARCH",
-                "topic_relevance": "MEDIUM",
+                "title_relevance": "MEDIUM",
                 "content": "Second",
             },
             {
                 "similarity_score": 0.9,
                 "source_type": "USER_PROVIDED",
-                "topic_relevance": "HIGH",
+                "title_relevance": "HIGH",
                 "content": "First",
             },
         ]
@@ -129,7 +147,7 @@ class TestEvidenceFormatting:
         chunks = [
             {
                 "source_type": "WEB_SEARCH",
-                "topic_relevance": "HIGH",
+                "title_relevance": "HIGH",
                 "content": "No score.",
             }
         ]
@@ -142,7 +160,7 @@ class TestBuildEdgeCases:
     async def test_zero_chunks_returns_empty_evidence(self, mock_vector_store):
         mock_vector_store.semantic_search.return_value = []
         result = await build(
-            topic="Test topic",
+            title="Test title",
             story_directives={},
             refined_context="Some narrative.",
             vector_store=mock_vector_store,
@@ -155,7 +173,7 @@ class TestBuildEdgeCases:
 
     async def test_empty_directives_proceeds(self, mock_vector_store):
         result = await build(
-            topic="Topic only",
+            title="title only",
             story_directives={},
             refined_context="Narrative.",
             vector_store=mock_vector_store,
@@ -165,7 +183,7 @@ class TestBuildEdgeCases:
 
     async def test_empty_refined_context_proceeds(self, mock_vector_store):
         result = await build(
-            topic="Test",
+            title="Test",
             story_directives={},
             refined_context="",
             vector_store=mock_vector_store,
@@ -176,7 +194,7 @@ class TestBuildEdgeCases:
     async def test_passes_top_k_to_vector_store(self, mock_vector_store):
         job_id = uuid4()
         await build(
-            topic="Test",
+            title="Test",
             story_directives={},
             refined_context="Narrative.",
             vector_store=mock_vector_store,
@@ -190,22 +208,22 @@ class TestBuildEdgeCases:
             top_k=5,
         )
 
-    async def test_enriches_with_topic_relevance(self, mock_vector_store):
+    async def test_enriches_with_title_relevance(self, mock_vector_store):
         result = await build(
-            topic="Test",
+            title="Test",
             story_directives={},
             refined_context="Narrative.",
             vector_store=mock_vector_store,
             job_id=uuid4(),
         )
         for chunk in result.raw_chunks:
-            assert "topic_relevance" in chunk
+            assert "title_relevance" in chunk
             assert "source_type" in chunk
 
     async def test_passes_correct_scopes(self, mock_vector_store):
         job_id = uuid4()
         await build(
-            topic="Test",
+            title="Test",
             story_directives={},
             refined_context="Narrative.",
             vector_store=mock_vector_store,

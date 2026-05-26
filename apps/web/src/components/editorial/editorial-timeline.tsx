@@ -50,14 +50,14 @@ function getStageState(stage: string, currentStatus: string): StageState {
   return "future";
 }
 
-// function formatDuration(startDate: string, endDate?: string): string {
-//   const start = new Date(startDate).getTime();
-//   const end = endDate ? new Date(endDate).getTime() : Date.now();
-//   const diffSec = Math.round((end - start) / 1000);
-//   if (diffSec < 60) return `${diffSec}s`;
-//   if (diffSec < 3600) return `${Math.round(diffSec / 60)} min`;
-//   return `${Math.round(diffSec / 3600)}h ${Math.round((diffSec % 3600) / 60)}m`;
-// }
+function formatDuration(startDate: string, endDate?: string): string {
+  const start = new Date(startDate).getTime();
+  const end = endDate ? new Date(endDate).getTime() : Date.now();
+  const diffSec = Math.round((end - start) / 1000);
+  if (diffSec < 60) return `${diffSec}s`;
+  if (diffSec < 3600) return `${Math.round(diffSec / 60)} min`;
+  return `${Math.round(diffSec / 3600)}h ${Math.round((diffSec % 3600) / 60)}m`;
+}
 
 function formatRelativeTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -116,6 +116,10 @@ function TimelineNode({ stage, state, isLast, job }: TimelineNodeProps) {
       : "bg-border";
 
   const checkMark = isCompleted ? "\u2713" : isActive ? "\u25CF" : "";
+
+  const durationStr = isCompleted
+    ? formatDuration(job.created_at, job.updated_at)
+    : "";
 
   let summaryText = "";
   let outputContent: React.ReactNode = null;
@@ -323,15 +327,19 @@ function TimelineNode({ stage, state, isLast, job }: TimelineNodeProps) {
           <div className="w-0.5 flex-1 bg-border mt-1" />
         )}
       </div>
-      <div className={`flex-1 pb-8 ${isLast ? "pb-0" : ""}`}>
+      <div className={`flex-1 pb-8 ${isLast ? "pb-0" : ""} group`}>
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
           <h4 className="font-heading text-base font-semibold leading-tight">
             {config.name}
+            <span className="ml-1 text-xs font-normal text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+              ({stage})
+            </span>
           </h4>
           {summaryText && (
             <span className="text-xs text-muted-foreground">
               {checkMark && <span className="mr-1">{checkMark}</span>}
               {summaryText}
+              {durationStr && <span> · {durationStr}</span>}
             </span>
           )}
           {isActive && (

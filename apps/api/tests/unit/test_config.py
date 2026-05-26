@@ -20,8 +20,6 @@ _ENV_KEYS = [
     "SIMILARITY_THRESHOLD",
     "WORKER_POLL_INTERVAL_SECONDS",
     "WORKER_LOCK_TIMEOUT_MINUTES",
-    "RESEARCH_MODEL",
-    "RESEARCH_TEMPERATURE",
     "COPYWRITER_MODEL",
     "COPYWRITER_TEMPERATURE",
     "EVALUATOR_MODEL",
@@ -30,8 +28,8 @@ _ENV_KEYS = [
     "OPTIMIZER_TEMPERATURE",
     "ASSET_MODEL",
     "ASSET_TEMPERATURE",
-    "EVAL_RESEARCH_MODEL",
-    "EVAL_RESEARCH_TEMPERATURE",
+    "FORMATTER_MODEL",
+    "FORMATTER_TEMPERATURE",
     "EVAL_COPYWRITER_MODEL",
     "EVAL_COPYWRITER_TEMPERATURE",
     "EVAL_RED_TEAM_MODEL",
@@ -86,7 +84,7 @@ class TestSettings:
         assert s.worker_poll_interval_seconds == 5
         assert s.worker_lock_timeout_minutes == 15
         assert s.image_storage_path == "static/carousel_images"
-        assert s.storage_backend == "local"
+        assert s.storage_backend == "s3"
 
     def test_custom_values_override_defaults(self):
         s = Settings(
@@ -106,7 +104,7 @@ class TestSettings:
         assert s.worker_poll_interval_seconds == 10
         assert s.worker_lock_timeout_minutes == 30
         assert s.image_storage_path == "static/carousel_images"
-        assert s.storage_backend == "local"
+        assert s.storage_backend == "s3"
 
     def test_custom_image_storage_path(self):
         s = Settings(

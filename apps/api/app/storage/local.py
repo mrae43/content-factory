@@ -6,13 +6,22 @@ UPLOAD_DIR = Path(settings.image_storage_path)
 
 
 class LocalStorage:
-    def upload_image(self, file_bytes: bytes, filename: str) -> str:
-        UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-        path = UPLOAD_DIR / filename
+    def upload_image(
+        self,
+        file_bytes: bytes,
+        filename: str,
+        folder: str = "",
+        content_type: str = "image/png",
+    ) -> str:
+        target = UPLOAD_DIR / folder if folder else UPLOAD_DIR
+        target.mkdir(parents=True, exist_ok=True)
+        path = target / filename
         path.write_bytes(file_bytes)
-        return f"/api/proxy/images/{filename}"
+        prefix = f"{folder}/" if folder else ""
+        return f"/api/proxy/images/{prefix}{filename}"
 
-    def delete_image(self, filename: str) -> None:
-        path = UPLOAD_DIR / filename
+    def delete_image(self, filename: str, folder: str = "") -> None:
+        target = UPLOAD_DIR / folder if folder else UPLOAD_DIR
+        path = target / filename
         if path.exists():
             path.unlink()
