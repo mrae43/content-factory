@@ -96,7 +96,9 @@ class RubricSet(str, Enum):
 
 class CaseInput(BaseModel):
     topic: str = Field(..., min_length=1, max_length=500)
-    user_reference: str = Field(default="", description="Raw copied text or book excerpts")
+    user_reference: str = Field(
+        default="", description="Raw copied text or book excerpts"
+    )
     source_urls: List[str] = Field(default_factory=list, description="URLs to scrape")
     story_directives: Dict[str, Any] = Field(
         default_factory=dict,
