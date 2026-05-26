@@ -591,7 +591,42 @@ class TestTransitionScripting:
             call_kwargs = mock_agent_instance.run.call_args.kwargs
             assert call_kwargs["context"]["feedback"] == "Tone too aggressive"
 
-    async def test_should_fail_when_copywriter_returns_error(
+    async def test_should_route_to_human_review_when_copywriter_returns_escalate(
+        self,
+        mock_db_session,
+        mock_job,
+        mock_vector_store,
+    ):
+        mock_job.status = JobStatusEnum.SCRIPTING
+        mock_job.assembled_context = _canned_assembled_context_dict()
+        escalate_result = AgentResult(
+            status=AgentActionStatus.ESCALATE,
+            payload={},
+            reasoning="retrieved_evidence contradicts refined_context on GDP growth claim",
+            confidence_score=0.0,
+        )
+
+        with (
+            patch(
+                "app.workers.orchestrator.CopywriterAgent",
+                return_value=_mock_agent_class(escalate_result).return_value,
+            ),
+            patch(
+                "app.workers.orchestrator.ContentFactoryVectorStore",
+                return_value=mock_vector_store,
+            ),
+            patch("app.workers.orchestrator.get_latest_script", new_callable=AsyncMock),
+            patch(
+                "app.workers.orchestrator.update_job_status", new_callable=AsyncMock
+            ) as mock_update,
+        ):
+            await execute_state_transition(mock_db_session, mock_job)
+
+            mock_update.assert_awaited_once_with(
+                mock_db_session, mock_job.id, JobStatusEnum.HUMAN_REVIEW_NEEDED
+            )
+
+    async def test_should_route_to_human_review_when_copywriter_returns_error(
         self,
         mock_db_session,
         mock_job,
@@ -602,7 +637,7 @@ class TestTransitionScripting:
         error_result = AgentResult(
             status=AgentActionStatus.ERROR,
             payload={},
-            reasoning="No research chunks found",
+            reasoning="evidence insufficient to construct coherent narrative arc",
             confidence_score=0.0,
         )
 
@@ -617,17 +652,13 @@ class TestTransitionScripting:
             ),
             patch("app.workers.orchestrator.get_latest_script", new_callable=AsyncMock),
             patch(
-                "app.workers.orchestrator.log_error", new_callable=AsyncMock
-            ) as mock_log,
-            patch(
                 "app.workers.orchestrator.update_job_status", new_callable=AsyncMock
             ) as mock_update,
         ):
             await execute_state_transition(mock_db_session, mock_job)
 
-            mock_log.assert_awaited_once()
             mock_update.assert_awaited_once_with(
-                mock_db_session, mock_job.id, JobStatusEnum.FAILED
+                mock_db_session, mock_job.id, JobStatusEnum.HUMAN_REVIEW_NEEDED
             )
 
 
@@ -821,6 +852,67 @@ class TestTransitionScriptingEvidence:
             call_kwargs = mock_agent_instance.run.call_args.kwargs
             ctx = call_kwargs["context"]
             assert "Chunk 1: the evidence." in ctx["evidence_sections"]
+
+    async def test_should_route_to_human_review_when_optimizer_returns_escalate(
+        self,
+        mock_db_session,
+        mock_job,
+        mock_vector_store,
+        mock_script,
+    ):
+        mock_job.status = JobStatusEnum.SCRIPTING
+        mock_job.assembled_context = {
+            "narrative_summary": "Summary.",
+            "evidence_sections": "## Retrieved Evidence\n\nChunk 1: the evidence.",
+            "raw_chunks": [],
+        }
+        mock_script.feedback_history = [
+            {
+                "feedback_type": "structured_claims",
+                "failed_claims": [
+                    {
+                        "claim_text": "GDP grew 15%",
+                        "verdict": "UNSUPPORTED",
+                        "confidence": 0.3,
+                        "evidence_text": "",
+                    }
+                ],
+                "overall_reasoning": "Bad claim",
+                "revision_number": 1,
+            }
+        ]
+        escalate_result = AgentResult(
+            status=AgentActionStatus.ESCALATE,
+            payload={},
+            reasoning="Cannot fix claim 'GDP grew 15%' — no supporting evidence available",
+            confidence_score=0.0,
+        )
+        mock_agent_instance = AsyncMock()
+        mock_agent_instance.run = AsyncMock(return_value=escalate_result)
+
+        with (
+            patch(
+                "app.workers.orchestrator.ScriptOptimizerAgent",
+                return_value=mock_agent_instance,
+            ),
+            patch(
+                "app.workers.orchestrator.ContentFactoryVectorStore",
+                return_value=mock_vector_store,
+            ),
+            patch(
+                "app.workers.orchestrator.get_latest_script", new_callable=AsyncMock
+            ) as mock_get_script,
+            patch(
+                "app.workers.orchestrator.update_job_status", new_callable=AsyncMock
+            ) as mock_update,
+        ):
+            mock_get_script.return_value = mock_script
+
+            await execute_state_transition(mock_db_session, mock_job)
+
+            mock_update.assert_awaited_once_with(
+                mock_db_session, mock_job.id, JobStatusEnum.HUMAN_REVIEW_NEEDED
+            )
 
 
 @pytest.mark.integration

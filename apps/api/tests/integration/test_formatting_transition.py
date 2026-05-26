@@ -27,6 +27,16 @@ def _harness_failure(fmt_type: str = "blog") -> HarnessResult:
     )
 
 
+def _harness_escalated(fmt_type: str = "blog") -> HarnessResult:
+    return HarnessResult(
+        success=False,
+        format_type=fmt_type,
+        error_log=["Agent escalated: correction_hint contradicts plan constraints"],
+        attempts=1,
+        escalated=True,
+    )
+
+
 def _mock_harness(result: HarnessResult):
     harness = AsyncMock()
     harness.run_with_harness = AsyncMock(return_value=result)
@@ -361,6 +371,58 @@ class TestTransitionFormattingFailure:
             mock_log.assert_awaited_once()
             mock_update.assert_awaited_once_with(
                 mock_db_session, mock_job.id, JobStatusEnum.FAILED
+            )
+
+    async def test_should_route_to_human_review_when_formatter_escalates(
+        self, mock_db_session, mock_job
+    ):
+        mock_job.status = JobStatusEnum.FORMATTING
+        mock_job.format_type = "blog"
+        mock_job.refined_context = "Context"
+        mock_job.platform = ""
+
+        mock_script = MagicMock()
+        mock_script.id = uuid4()
+        mock_script.version = 1
+        mock_script.content = "Script"
+
+        harness_result = _harness_escalated("blog")
+
+        with (
+            patch(
+                "app.workers.orchestrator.get_latest_script",
+                new_callable=AsyncMock,
+                return_value=mock_script,
+            ),
+            patch(
+                "app.workers.orchestrator.get_script_claims",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch(
+                "app.workers.orchestrator.FormatterHarness",
+                return_value=_mock_harness(harness_result),
+            ),
+            patch(
+                "app.workers.orchestrator.BlogFormatterAgent",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "app.workers.orchestrator.BlogValidator",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "app.workers.orchestrator.save_format_script",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "app.workers.orchestrator.update_job_status", new_callable=AsyncMock
+            ) as mock_update,
+        ):
+            await execute_state_transition(mock_db_session, mock_job)
+
+            mock_update.assert_awaited_once_with(
+                mock_db_session, mock_job.id, JobStatusEnum.HUMAN_REVIEW_NEEDED
             )
 
     async def test_should_raise_when_no_script_found(self, mock_db_session, mock_job):
