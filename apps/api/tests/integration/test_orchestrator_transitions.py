@@ -1536,7 +1536,6 @@ class TestOrchestratorErrorHandling:
                 "app.workers.orchestrator.ContentFactoryVectorStore",
                 return_value=mock_vector_store,
             ),
-            patch("app.workers.orchestrator.ResearchAgent", return_value=mock_agent),
             patch(
                 "app.workers.orchestrator.log_error", new_callable=AsyncMock
             ) as mock_log,
@@ -1569,15 +1568,6 @@ class TestOrchestratorMultiStep:
     async def test_full_happy_path_pending_to_completed(
         self, mock_db_session, mock_job, mock_vector_store, mock_script
     ):
-        research_result = AgentResult(
-            status=AgentActionStatus.SUCCESS,
-            payload={
-                "chunks": ["research chunk"],
-                "refined_context": "Comprehensive BRICS research summary",
-            },
-            reasoning="Done",
-            confidence_score=0.9,
-        )
         copy_result = AgentResult(
             status=AgentActionStatus.SUCCESS,
             payload={"script_content": "Script v1"},
@@ -1620,10 +1610,6 @@ class TestOrchestratorMultiStep:
             patch(
                 "app.workers.orchestrator.ContentFactoryVectorStore",
                 return_value=mock_vector_store,
-            ),
-            patch(
-                "app.workers.orchestrator.ResearchAgent",
-                return_value=_mock_agent_class(research_result).return_value,
             ),
             patch(
                 "app.workers.orchestrator.CopywriterAgent",
