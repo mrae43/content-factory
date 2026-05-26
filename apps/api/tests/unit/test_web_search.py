@@ -42,7 +42,7 @@ class TestTavilyExtract:
                         "https://example.com/article1",
                         "https://example.com/article2",
                     ],
-                    "api_key": "",
+                    "api_key": "test-tavily-key",
                 },
             )
 
