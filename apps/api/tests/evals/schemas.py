@@ -94,22 +94,16 @@ class RubricSet(str, Enum):
 # ==========================================
 
 
-class PreContextInput(BaseModel):
-    raw_text: Optional[str] = Field(
-        None, description="Raw copied text or book excerpts"
-    )
-    source_urls: List[str] = Field(default_factory=list, description="URLs to scrape")
-    target_audience: str = Field(
-        "General", description="e.g. Academics, TikTok, Investors"
-    )
-    guardrail_strictness: str = Field(
-        "High", description="How aggressively the Red Team operates"
-    )
-
-
 class CaseInput(BaseModel):
     topic: str = Field(..., min_length=1, max_length=500)
-    pre_context: PreContextInput
+    user_reference: str = Field(
+        default="", description="Raw copied text or book excerpts"
+    )
+    source_urls: List[str] = Field(default_factory=list, description="URLs to scrape")
+    story_directives: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Story directives: target_audience, guardrail_strictness, tone, angle",
+    )
 
     model_config = ConfigDict(extra="ignore")
 

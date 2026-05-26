@@ -146,7 +146,7 @@ def build_case_aware_vector_store(
 
     Respects job_id and scopes parameters for realistic mock behavior.
     """
-    raw_text = case.input.pre_context.raw_text or ""
+    raw_text = case.input.user_reference or ""
     if not raw_text.strip():
         return _empty_vector_store()
 

@@ -1528,8 +1528,8 @@ class TestOrchestratorErrorHandling:
         self, mock_db_session, mock_job, mock_vector_store
     ):
         mock_job.status = JobStatusEnum.RETRIEVAL
-        mock_agent = AsyncMock()
-        mock_agent.run = AsyncMock(side_effect=RuntimeError("API error"))
+        mock_job.user_reference = ""
+        mock_job.story_directives = {}
 
         with (
             patch(
