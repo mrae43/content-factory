@@ -66,28 +66,16 @@
   "$defs": {
     "CaseInput": {
       "type": "object",
-      "required": ["topic", "pre_context"],
+      "required": ["topic"],
       "properties": {
         "topic": {
           "type": "string",
           "minLength": 1,
           "maxLength": 500
         },
-        "pre_context": {
-          "$ref": "#/$defs/PreContextInput"
-        },
-        "strict_compliance_mode": {
-          "type": "boolean",
-          "default": true
-        }
-      }
-    },
-    "PreContextInput": {
-      "type": "object",
-      "properties": {
-        "raw_text": {
-          "type": ["string", "null"],
-          "default": null,
+        "user_reference": {
+          "type": "string",
+          "default": "",
           "description": "Raw copied text or book excerpts"
         },
         "source_urls": {
@@ -96,15 +84,14 @@
           "default": [],
           "description": "URLs to scrape"
         },
-        "target_audience": {
-          "type": "string",
-          "default": "General",
-          "description": "e.g. Academics, TikTok, Investors"
+        "story_directives": {
+          "type": "object",
+          "default": {},
+          "description": "Story directives: target_audience, guardrail_strictness, tone, angle"
         },
-        "guardrail_strictness": {
-          "type": "string",
-          "default": "High",
-          "description": "How aggressively the Red Team operates"
+        "strict_compliance_mode": {
+          "type": "boolean",
+          "default": true
         }
       }
     },
