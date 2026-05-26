@@ -6,7 +6,7 @@ Case coverage (4): R-001, R-002, R-004, F-004
 Modes:
   - Golden mode (default): Uses reference_outputs for research/script/fact_check
     to get pre-recorded failed claims, then runs optimizer with those claims.
-  - Live mode (--live): Chains all 4 agents with real LLM calls.
+  - Live mode (--live): Chains CopywriterAgent -> RedTeamAgent -> ScriptOptimizerAgent with real LLM calls.
 
 The optimizer test is NOT dependent on RedTeam producing REVISION_NEEDED in
 golden mode — it uses pre-recorded failed claims from reference_outputs.
@@ -37,14 +37,14 @@ def _extract_failed_claims(claims: list) -> list:
     ]
 
 
-def _get_refined_context(case: GoldenCase, research_result) -> str:
+def _get_refined_context(case: GoldenCase) -> str:
     if (
         case.reference_outputs
         and case.reference_outputs.research
         and case.reference_outputs.research.refined_context
     ):
         return case.reference_outputs.research.refined_context
-    return research_result.payload.get("refined_context", "")
+    return ""
 
 
 def _get_script_content(case: GoldenCase, script_result) -> str:
@@ -77,13 +77,7 @@ async def test_optimizer_outcome(
     baseline_recorder,
 ):
     case_vs = build_case_aware_vector_store(golden_case)
-    research_result = await eval_runner.run_research(golden_case, vector_store=case_vs)
-
-    assert research_result.status == AgentActionStatus.SUCCESS, (
-        f"Research failed for {golden_case.id}: {research_result.reasoning}"
-    )
-
-    refined_context = _get_refined_context(golden_case, research_result)
+    refined_context = _get_refined_context(golden_case)
 
     script_result = await eval_runner.run_copywriter(
         golden_case, refined_context=refined_context

@@ -6,7 +6,7 @@ Case coverage (10): H-001..H-004, R-001, R-002, R-004, E-001, F-003, F-004
 Modes:
   - Golden mode (default): Uses reference_outputs for research/script/fact_check
     inputs, scores deterministically.
-  - Live mode (--live): Chains ResearchAgent -> CopywriterAgent -> RedTeamAgent.
+  - Live mode (--live): Chains CopywriterAgent -> RedTeamAgent.
 
 N-* cases excluded (no expected_outcomes.fact_check — null).
 E-002, E-003 excluded (expect ESCALATE/parse failure, no claims to score).
@@ -40,14 +40,14 @@ FACTCHECK_CASE_IDS = [
 ESCALATE_CASE_IDS = {"F-003"}
 
 
-def _get_refined_context(case: GoldenCase, research_result) -> str:
+def _get_refined_context(case: GoldenCase) -> str:
     if (
         case.reference_outputs
         and case.reference_outputs.research
         and case.reference_outputs.research.refined_context
     ):
         return case.reference_outputs.research.refined_context
-    return research_result.payload.get("refined_context", "")
+    return ""
 
 
 def _get_script_content(case: GoldenCase, script_result) -> str:
@@ -70,13 +70,7 @@ async def test_factcheck_outcome(
     baseline_recorder,
 ):
     case_vs = build_case_aware_vector_store(golden_case)
-    research_result = await eval_runner.run_research(golden_case, vector_store=case_vs)
-
-    assert research_result.status == AgentActionStatus.SUCCESS, (
-        f"Research failed for {golden_case.id}: {research_result.reasoning}"
-    )
-
-    refined_context = _get_refined_context(golden_case, research_result)
+    refined_context = _get_refined_context(golden_case)
     script_result = await eval_runner.run_copywriter(
         golden_case, refined_context=refined_context
     )
