@@ -24,7 +24,7 @@ Multi-agent AI pipeline generating short/reel scripts, blog articles, and social
 
 - **Two apps:** `apps/api` (FastAPI) + `apps/web` (Next.js 16 App Router, React 19). One auto-generated types lib at `libs/shared-types/`.
 - **Queue:** asyncio `QueueWorker` with `FOR UPDATE SKIP LOCKED` — no Celery/Redis. Runs inside FastAPI lifespan. Polls every 5s, locks for 15 min.
-- **LLM routing:** model name starting with `gemini` → Google GenAI SDK; everything else → Together AI (OpenAI-compatible). Embeddings always use `models/gemini-embedding-001` (768-dim, cosine).
+- **LLM routing:** Config-driven provider registry in `app/services/llm.py`. Model names use `provider:model` prefix convention (e.g. `together:meta-llama/...`). Bare names default to Together AI; bare names starting with `gemini` resolve to Google GenAI SDK for backward compatibility. New providers are registered in the `PROVIDERS` dict. Embeddings use `models/gemini-embedding-001` (768-dim, cosine, L2-normalized — see ADR 0003).
 - **DB:** PostgreSQL 16 + pgvector, `factory` schema, pool size 20.
 - **Migrations:** Alembic (sync, psycopg2). `env.py` auto-replaces `asyncpg` with `psycopg2` in URL. Auto-runs on container start via `entrypoint.sh`.
 - **Generated code:** `libs/shared-types/src/types/api.ts` from Pydantic via OpenAPI. Run `nx generate-types api` after schema changes.
@@ -141,6 +141,33 @@ Three profiles in `app/core/guardrails.py`:
 
 Blog articles have no platform constraint.
 
+## Provider Abstraction
+
+The LLM layer in `app/services/llm.py` is provider-agnostic via a config-driven registry.
+
+**Registering a new provider:**
+
+1. Add an entry to the `PROVIDERS` dict:
+   ```python
+   "my_provider": {
+       "class": MyLLMClass,
+       "api_key_attr": "my_api_key",       # attr on settings
+       "base_url": "https://api.example.com/v1",  # optional
+   }
+   ```
+2. Add the corresponding env var to `Settings` in `app/core/config.py` (e.g. `my_api_key: str`).
+3. Use the `provider:model` convention when setting model env vars, e.g. `MY_MODEL=my_provider:MyModel/Name`.
+
+**Prefix convention:**
+
+- `together:meta-llama/Llama-3.3-70B-Instruct-Turbo` → Together AI via ChatOpenAI
+- `gemini-1.5-pro` → Google GenAI SDK (backward compat — no prefix needed for gemini)
+- `meta-llama/Llama-3.3-70B-Instruct-Turbo` → defaults to Together AI (no prefix)
+
+The current default model values are **ephemeral example config** — not hard-coded production decisions. Swap them via env vars without touching code.
+
+**Embedding model** is independently configurable via `EMBEDDING_MODEL` and `EMBEDDING_DIMENSION` env vars. The default (`models/gemini-embedding-001`, 768-dim) is documented in ADR 0003.
+
 ## Conventions
 
 - **Python:** Ruff lint/format via `apps/api/clean_code.ps1` (line-length 88). No `print()` in production.
@@ -150,7 +177,7 @@ Blog articles have no platform constraint.
 ## Gotchas
 
 - **Postgres port:** Docker maps to `127.0.0.1:5433`, not 5432. pgAdmin connects to internal hostname `db:5432`.
-- **`GEMINI_API_KEY` is mandatory** (used for embeddings even when runtime LLM is Together AI). `TOGETHER_API_KEY` is optional but needed if using default models.
+- **`GEMINI_API_KEY` is mandatory** (used for embeddings even when runtime LLM is Together AI — see ADR 0003). `TOGETHER_API_KEY` is optional but needed if using default models.
 - **Type generation** needs `GEMINI_API_KEY`, `TAVILY_API_KEY`, `DATABASE_URL` in env (skips gracefully if missing).
 - **pnpm 11:** `shamefully-hoist=true`, `node-linker=hoisted`. Build allowlist in `pnpm-workspace.yaml`.
 - **Hot reload:** `docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d`.
