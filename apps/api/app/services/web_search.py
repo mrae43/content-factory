@@ -57,7 +57,5 @@ class TavilySearchService:
                 )
                 return results
         except Exception:
-            logger.warning(
-                f"Tavily extract failed for {len(urls)} URLs", exc_info=True
-            )
+            logger.warning(f"Tavily extract failed for {len(urls)} URLs", exc_info=True)
             return []

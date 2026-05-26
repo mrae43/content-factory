@@ -224,7 +224,9 @@ class JobCreateRequest(BaseModel):
         ..., min_length=3, max_length=200, example="BRICS De-dollarization 2025"
     )
     user_reference: str = Field(
-        ..., min_length=1, description="User-provided background text as narrative foundation"
+        ...,
+        min_length=1,
+        description="User-provided background text as narrative foundation",
     )
     research_inputs: ResearchInputs
     story_directives: StoryDirectives = Field(default_factory=StoryDirectives)
@@ -327,8 +329,12 @@ class RenderJobResponse(BaseModel):
     title: str
     status: JobStatusEnum
     user_reference: str = Field(..., description="User-provided reference text")
-    source_urls: List[str] = Field(default_factory=list, description="Source URLs for Tavily extraction")
-    story_directives: Dict[str, Any] = Field(default_factory=dict, description="Editorial directives")
+    source_urls: List[str] = Field(
+        default_factory=list, description="Source URLs for Tavily extraction"
+    )
+    story_directives: Dict[str, Any] = Field(
+        default_factory=dict, description="Editorial directives"
+    )
     format_type: Optional[FormatTypeEnum] = FormatTypeEnum.ALL
     platform: Optional[PlatformEnum] = None
     final_video_url: Optional[str]
