@@ -248,11 +248,6 @@ Target: Yes/Yes on criteria 1–2 for ≥ 90% of patches; criterion 3 ≥ 4.0.
 | `remediation_depth >= max_cycles` | Escalate to `HUMAN_REVIEW_NEEDED` | Force max_cycles failures, assert escalation |
 | UNSUPPORTED claim survives all cycles | Escalate to `HUMAN_REVIEW_NEEDED` | Plant unfixable claim, assert escalation |
 
-| CopywriterAgent returns `ESCALATE` (source contradiction) | Route to `HUMAN_REVIEW_NEEDED` in one pass, no retry | Assert status transition, assert no further SCRIPTING attempts |
-| CopywriterAgent returns `ERROR` (evidence too thin) | Route to `HUMAN_REVIEW_NEEDED` (orchestrator cannot generate new evidence) | Assert status transition |
-| ScriptOptimizerAgent returns `ESCALATE` (unresolved claim) | Route to `HUMAN_REVIEW_NEEDED` in one pass, no retry | Assert status transition, assert no further optimizer iterations |
-| Formatter returns `ESCALATE` (correction_hint/plan conflict) | Route to `HUMAN_REVIEW_NEEDED` via harness short-circuit | Assert status transition |
-
 **Regression test — loop ceiling:**  
 Construct a script where the true answer is always UNSUPPORTED (claim contradicts all chunks). Verify the loop terminates at `remediation_depth == max_cycles` and never exceeds it.
 
@@ -335,10 +330,6 @@ No valid story should skip a non-terminal stage.
 | Unrecoverable error at any desk | `FAILED` | Inject fault at each desk |
 | Fact-Check Loop exhausted | `HUMAN_REVIEW_NEEDED` | Force max_cycles failures |
 | High strictness + all-SUPPORTED | `HUMAN_REVIEW_NEEDED` | Set strictness=High, clean script |
-| CopywriterAgent `ESCALATE` (source contradiction) | `HUMAN_REVIEW_NEEDED` — no retry | Mock agent returns `ESCALATE` at SCRIPTING stage |
-| CopywriterAgent `ERROR` (evidence too thin) | `HUMAN_REVIEW_NEEDED` — no retry | Mock agent returns `ERROR` at SCRIPTING stage |
-| ScriptOptimizerAgent `ESCALATE` (unresolved claim) | `HUMAN_REVIEW_NEEDED` — no retry | Mock agent returns `ESCALATE` at SCRIPTING stage (optimizer path) |
-| Formatter `ESCALATE` (correction_hint/plan conflict) | `HUMAN_REVIEW_NEEDED` — harness short-circuit | Mock harness returns `escalated=True` |
 | Human resolves review | Resumes from correct next desk | Simulate human approval |
 
 ### 7.3 Status Idempotency (Rule-based)

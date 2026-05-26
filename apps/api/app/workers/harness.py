@@ -17,7 +17,6 @@ class HarnessResult(BaseModel):
     payload: Optional[dict] = None
     error_log: List[str] = Field(default_factory=list)
     attempts: int = 0
-    escalated: bool = False
 
 
 class FormatterHarness:
@@ -43,21 +42,6 @@ class FormatterHarness:
 
         for attempt in range(1, max_attempts + 1):
             result = await self.formatter.run(context=context)
-
-            if result.status == AgentActionStatus.ESCALATE:
-                logger.warning(
-                    "Formatter ESCALATE for format_type=%s: %s",
-                    context.get("format_type", "unknown"),
-                    result.reasoning,
-                )
-                return HarnessResult(
-                    success=False,
-                    format_type=context.get("format_type", "unknown"),
-                    error_log=[f"Agent escalated: {result.reasoning}"],
-                    attempts=attempt,
-                    escalated=True,
-                )
-
             if result.status != AgentActionStatus.SUCCESS:
                 error_log.append(
                     f"Agent failed (attempt {attempt}): {result.reasoning}"
