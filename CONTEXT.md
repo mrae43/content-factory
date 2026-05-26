@@ -150,3 +150,9 @@ A single slide in a Carousel Slide Deck. Contains:
 
 _Avoid_: Calling it a "Visual Asset" — the Carousel Slide Deck is the Asset; a single slide is a component of it.
 
+## Model Tier
+
+The capability level of the LLM assigned to a pipeline agent. Two tiers:
+- **Premium** (`meta-llama/Llama-3.3-70B-Instruct-Turbo`): agents requiring deep reasoning, synthesis, or precise fact-checking (CopywriterAgent, RedTeamAgent).
+- **Standard** (`openai/gpt-oss-20b`): agents performing constrained structured-output tasks or prompt enrichment (ScriptOptimizerAgent, AssetStudioAgent, BlogFormatterAgent, CarouselFormatterAgent, VideoFormatterAgent).
+

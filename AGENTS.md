@@ -50,16 +50,22 @@ Multi-agent AI pipeline generating short/reel scripts, blog articles, and social
 
 ## Model Config (env vars)
 
-All production agents default to `meta-llama/Llama-3.3-70B-Instruct-Turbo` via Together AI:
+All production agents default via Together AI. Two tiers:
+
+**Premium tier** (`meta-llama/Llama-3.3-70B-Instruct-Turbo`):
 
 | Env var | Default | Temp | Purpose |
 |---------|---------|------|---------|
-| `research_model` | Llama-3.3-70B | 0.2 | Deep research |
 | `copywriter_model` | Llama-3.3-70B | 0.7 | Script drafting |
 | `evaluator_model` | Llama-3.3-70B | 0.0 | Red Team fact-check |
-| `optimizer_model` | Llama-3.3-70B | 0.3 | Surgical script patching |
-| `asset_model` | Llama-3.3-70B | 0.5 | Asset studio (video/audio prompts) |
-| `formatter_model` | Llama-3.3-70B | 0.3 | Blog/carousel/video formatting |
+
+**Standard tier** (`openai/gpt-oss-20b`):
+
+| Env var | Default | Temp | Purpose |
+|---------|---------|------|---------|
+| `optimizer_model` | gpt-oss-20b | 0.3 | Surgical script patching |
+| `asset_model` | gpt-oss-20b | 0.5 | Asset studio (video/audio prompts) |
+| `formatter_model` | gpt-oss-20b | 0.3 | Blog/carousel/video formatting |
 
 **Image generation:** `black-forest-labs/FLUX.1-schnell` via Together AI. Platform-specific dimensions. Storage via `StorageAdapter` (default: `s3` → SeaweedFS, fallback `local` → `static/carousel_images/`).
 
@@ -67,7 +73,6 @@ All production agents default to `meta-llama/Llama-3.3-70B-Instruct-Turbo` via T
 
 | Env var | Default | Temp |
 |---------|---------|------|
-| `eval_research_model` | Llama-3.3-70B | 0.2 |
 | `eval_copywriter_model` | `MiniMaxAI/MiniMax-M2.7` | 0.7 |
 | `eval_red_team_model` | `openai/gpt-oss-120b` | 0.0 |
 | `eval_optimizer_model` | `openai/gpt-oss-20b` | 0.3 |
