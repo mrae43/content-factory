@@ -14,7 +14,7 @@ for _k, _v in {
     "TOGETHER_API_KEY": "test-together-key",
     "DATABASE_URL": "postgresql+asyncpg://test:test@localhost:5432/test",
 }.items():
-    os.environ.setdefault(_k, _v)
+    os.environ[_k] = _v
 
 
 @pytest.fixture(scope="session")

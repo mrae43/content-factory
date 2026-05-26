@@ -36,14 +36,18 @@ def _create_store(mock_db_session):
         patch("app.services.vector_store.get_query_embeddings") as mock_get_qemb,
         patch("app.services.vector_store.get_embeddings") as mock_get_emb,
     ):
+        normalized_value = 1.0 / (16 * 3**0.5)  # 1/sqrt(768) — L2-normalized form
+
         mock_embedder = AsyncMock()
         mock_embedder.aembed_documents = AsyncMock(
-            return_value=[[0.1] * 768, [0.2] * 768, [0.3] * 768]
+            return_value=[[normalized_value] * 768] * 3
         )
         mock_get_emb.return_value = mock_embedder
 
         mock_query_embedder = AsyncMock()
-        mock_query_embedder.aembed_query = AsyncMock(return_value=[0.1] * 768)
+        mock_query_embedder.aembed_query = AsyncMock(
+            return_value=[normalized_value] * 768
+        )
         mock_get_qemb.return_value = mock_query_embedder
 
         store = ContentFactoryVectorStore(mock_db_session)

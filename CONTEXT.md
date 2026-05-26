@@ -12,7 +12,7 @@ The central unit of work flowing through the pipeline. Represented in the databa
 
 ## Research
 
-The first value-adding phase of the pipeline. Performed by the Research Desk. Web search only: TavilySearch on the Story's title. Results are chunked, embedded (Gemini 768-dim, cosine), and ingested into the vector store as `LOCAL`-scope chunks with `source_type: WEB_SEARCH`. Produces no narrative output — synthesis is handled by the Retrieval Desk.
+The first value-adding phase of the pipeline. Performed by the Research Desk. Web search only: TavilySearch on the Story's title. Results are chunked, embedded (Gemini 768-dim, L2-normalized — see ADR 0003), and ingested into the vector store as `LOCAL`-scope chunks with `source_type: WEB_SEARCH`. Produces no narrative output — synthesis is handled by the Retrieval Desk.
 
 _Ancillary term:_ **Research Chunks** — the individual vectorized text fragments stored in pgvector, tagged with a **source_type** enum (`USER_PROVIDED` from user-supplied URLs/raw text, `WEB_SEARCH` from Tavily results, `INFERRED` from the Retrieval Desk's synthesis), and a **scope** (`RAW-CONTEXT` for user-provided material, `LOCAL` for web results and refined chunks). source_type controls epistemic weight during fact-checking; scope controls lifecycle (LOCAL chunks are cleaned up after completion).
 
@@ -152,7 +152,9 @@ _Avoid_: Calling it a "Visual Asset" — the Carousel Slide Deck is the Asset; a
 
 ## Model Tier
 
-The capability level of the LLM assigned to a pipeline agent. Two tiers:
-- **Premium** (`meta-llama/Llama-3.3-70B-Instruct-Turbo`): agents requiring deep reasoning, synthesis, or precise fact-checking (CopywriterAgent, RedTeamAgent).
-- **Standard** (`openai/gpt-oss-20b`): agents performing constrained structured-output tasks or prompt enrichment (ScriptOptimizerAgent, AssetStudioAgent, BlogFormatterAgent, CarouselFormatterAgent, VideoFormatterAgent).
+The capability level of the LLM assigned to a pipeline agent. Two tiers (see ADR 0003 for embedding model — embedding is independent of agent LLM tier):
+- **Premium**: agents requiring deep reasoning, synthesis, or precise fact-checking (CopywriterAgent, RedTeamAgent).
+- **Standard**: agents performing constrained structured-output tasks or prompt enrichment (ScriptOptimizerAgent, AssetStudioAgent, BlogFormatterAgent, CarouselFormatterAgent, VideoFormatterAgent).
+
+The specific model names are **env-var-driven defaults** (see `app/core/config.py`). The architecture is the tier assignment, not the particular model name. Swap models via env vars without code changes.
 
