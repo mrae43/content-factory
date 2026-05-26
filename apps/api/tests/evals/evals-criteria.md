@@ -380,7 +380,7 @@ After a story reaches `COMPLETED`:
 | Dataset | Size | Construction method | Used by evals |
 |---|---|---|---|
 | Canonical topics | 10 stories | Hand-curated, diverse domains | 8.1 smoke test |
-| Research chunk labels | 200 chunks | Human-labelled `topic_relevance` | 1.3 calibration |
+| Research chunk labels | 50 chunks | Human-labelled `topic_relevance`, threshold-probing at 0.75/0.50 boundaries | 1.3 calibration |
 | Verdict ground truth | 100 (claim, chunks) pairs | Human-labelled verdicts | 4.2 verdict accuracy |
 | Adversarial scripts | 20 scripts × 5 planted false claims | Constructed synthetic | 4.2 adversarial |
 | Compound claim scripts | 15 scripts | Constructed synthetic | 4.1 edge cases |

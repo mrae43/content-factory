@@ -180,12 +180,49 @@ class QualityCorpus(BaseModel):
     entries: list[QualityCorpusEntry]
 
 
+# ==========================================
+# 2d. CALIBRATION EVAL SCHEMAS (Eval 1.3)
+# ==========================================
+
+
+class RelevancyThresholds(BaseModel):
+    high_threshold: float = Field(..., description="Score threshold for HIGH relevance")
+    medium_threshold: float = Field(
+        ..., description="Score threshold for MEDIUM relevance"
+    )
+    built_against: str = Field(
+        ...,
+        description="Canonical repr of thresholds at build time, "
+        "e.g. '[(0.75, HIGH), (0.5, MEDIUM)]'",
+    )
+
+
+class RelevanceChunk(BaseModel):
+    chunk_id: str
+    chunk_text: str
+    similarity_score: float = Field(..., ge=0.0, le=1.0)
+    human_label: str = Field(..., pattern=r"^(HIGH|MEDIUM|LOW)$")
+
+
+class RelevancyCalibrationSet(BaseModel):
+    description: str
+    threshold_config: RelevancyThresholds
+    chunks: list[RelevanceChunk]
+
+    @field_validator("chunks")
+    @classmethod
+    def validate_count(cls, v):
+        if len(v) == 0:
+            raise ValueError("Calibration set is empty")
+        return v
+
+
 class Eval1ResearchFixture(BaseModel):
     eval_version: str
     schema_version: str
     coverage_cases: list[ResearchingCase]
     quality_corpus: QualityCorpus
-    relevance_cases: list[dict]
+    relevance: RelevancyCalibrationSet | None = None
 
 
 # ==========================================
@@ -197,7 +234,7 @@ class AgentCallSpec(BaseModel):
     state: str = Field(
         ..., description="Pipeline state, e.g. 'SCRIPTING:2' for revision cycle"
     )
-    agent: str = Field(..., description="Agent class name, e.g. 'ResearchAgent'")
+    agent: str = Field(..., description="Agent class name, e.g. 'CopywriterAgent'")
     model: Optional[str] = Field(
         None, description="Expected LLM model, e.g. 'gemini-1.5-pro'"
     )

@@ -72,16 +72,21 @@ Instagram, TikTok, Twitter/X, and LinkedIn.
 
 ---
 
-## Contract 6 — `source_type` coverage for all three values
+## Contract 6 — `source_type` coverage for all four values
 
-The eval suite MUST test `source_type` correctness for all three source
-types: `WEB_SEARCH` (Tavily), `INFERRED` (Retrieval Desk synthesis), and
-`USER_PROVIDED` (user-supplied URLs/raw text).
+The eval suite MUST test `source_type` correctness for all four source
+types: `WEB_SEARCH` (Tavily search), `URL_EXTRACT` (Tavily extract from
+user-provided source URLs), `INFERRED` (Retrieval Desk synthesis fallback),
+and `USER_PROVIDED` (user-supplied URLs/raw text).
 
-`INFERRED` chunks created during the Retrieval Desk synthesis step MUST
-carry the correct `source_type`.
-`USER_PROVIDED` chunks ingested from user-supplied URLs/raw text MUST
-carry the correct `source_type`.
+`INFERRED` is the default applied by ContextBuilder when source_type is not
+explicitly set in chunk metadata.
+
+`USER_PROVIDED` chunks ingested from user-supplied raw text in the PENDING
+stage MUST carry the correct `source_type`.
+
+`URL_EXTRACT` chunks ingested from user-supplied source URLs in the
+RESEARCHING stage MUST carry the correct `source_type`.
 
 **References:** `evals-criteria.md` Eval 1.1, `CONTEXT.md:11`
 
@@ -132,7 +137,7 @@ The eval `JobStatus` enum MUST recognise `FORMATTING` (see Contract 1).
 | 3 | `test_casecategory_enum_crosscheck` | Schema drift between Pydantic and JSON | Medium |
 | 4 | `test_calibration_dataset_size_consistent` | Internal document consistency | Low |
 | 5 | `test_youtube_platform_compliance` | Missing platform coverage | Medium |
-| 6 | `test_inferred_and_user_provided_source_types` | Behavioral coverage gap | High |
+| 6 | `test_all_four_source_types` | WEB_SEARCH, URL_EXTRACT, INFERRED, USER_PROVIDED coverage | High |
 | 7 | `test_asset_generation_stage_coverage` | Missing stage coverage | Medium |
 | 8 | `test_fact_checking_research_glossary_documented` | Stale domain documentation | Low |
 | 9 | `test_formatting_in_golden_dataset` | Happy-path sequence never exercised | Medium |

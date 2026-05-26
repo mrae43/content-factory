@@ -42,6 +42,7 @@ from tests.evals.schemas import (
     GoldenDataset,
     QualityCorpus,
     QualityCorpusEntry,
+    RelevancyCalibrationSet,
     ResearchingCase,
 )
 from tests.evals.chunk_quality_scorer import ChunkQualityScorer
@@ -90,10 +91,40 @@ def _load_golden_dataset() -> List[GoldenCase]:
     return dataset.cases
 
 
+def _validate_relevance_thresholds(calibration_set: RelevancyCalibrationSet):
+    from app.services.context_builder import TOPIC_RELEVANCE_THRESHOLDS
+
+    current = sorted(
+        [(t, label) for t, label in TOPIC_RELEVANCE_THRESHOLDS],
+        key=lambda x: -x[0],
+    )
+    stored_cfg = calibration_set.threshold_config
+    stored = sorted(
+        [
+            (stored_cfg.high_threshold, "HIGH"),
+            (stored_cfg.medium_threshold, "MEDIUM"),
+        ],
+        key=lambda x: -x[0],
+    )
+
+    if current != stored:
+        pytest.exit(
+            f"Relevance calibration set built against thresholds {stored} "
+            f"but current TOPIC_RELEVANCE_THRESHOLDS are {current}. "
+            f"Regenerate the calibration fixture or reconcile thresholds.",
+            returncode=2,
+        )
+
+
 def _load_eval1_research() -> dict:
     if not _EVAL1_RESEARCH_FIXTURES_PATH.exists():
-        return {"coverage_cases": [], "quality_corpus": None, "relevance_cases": []}
-    return json.loads(_EVAL1_RESEARCH_FIXTURES_PATH.read_text(encoding="utf-8"))
+        return {"coverage_cases": [], "quality_corpus": None, "relevance": None}
+    data = json.loads(_EVAL1_RESEARCH_FIXTURES_PATH.read_text(encoding="utf-8"))
+    if data.get("relevance"):
+        rel = RelevancyCalibrationSet(**data["relevance"])
+        _validate_relevance_thresholds(rel)
+        data["relevance"] = rel
+    return data
 
 
 def _load_researching_cases() -> List[ResearchingCase]:
@@ -431,6 +462,20 @@ def quality_entry(request, quality_corpus: QualityCorpus) -> QualityCorpusEntry:
 @pytest.fixture
 def chunk_quality_scorer(judge_llm) -> ChunkQualityScorer:
     return ChunkQualityScorer(judge_llm=judge_llm)
+
+
+# ==========================================
+# 4d. CALIBRATION FIXTURES (Eval 1.3)
+# ==========================================
+
+
+@pytest.fixture
+def calibration_set() -> RelevancyCalibrationSet:
+    data = _load_eval1_research()
+    rel = data.get("relevance")
+    if rel is None:
+        pytest.exit("relevance section missing from eval1_research.json", returncode=2)
+    return rel
 
 
 # ==========================================
