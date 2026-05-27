@@ -6,6 +6,8 @@ import time as time_module
 from dataclasses import dataclass
 from typing import Optional
 
+from app.services.tools import Tool
+
 import aiohttp
 
 from app.core.config import settings
@@ -305,3 +307,30 @@ class ImageGenerationService:
             height=expected_height,
             prompt_used=prompt,
         )
+
+
+def make_generate_image_tool(
+    image_service: ImageGenerationService | None = None,
+) -> Tool:
+    svc = image_service or ImageGenerationService()
+
+    async def _generate(
+        visual_description: str,
+        platform: str = "",
+    ) -> dict:
+        result = await svc.generate(visual_description, platform)
+        return {
+            "success": result.success,
+            "image_bytes": result.image_bytes,
+            "width": result.width,
+            "height": result.height,
+            "failure_reason": result.failure_reason,
+            "prompt_used": result.prompt_used,
+        }
+
+    return Tool(
+        name="generate_image",
+        description="Generate a carousel slide image via FLUX on Together AI.",
+        callable=_generate,
+        permissions={"CarouselImageAgent", "*"},
+    )
