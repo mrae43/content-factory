@@ -63,7 +63,24 @@ class AgentHarness:
         serialized = json.dumps(payload, sort_keys=True, default=str)
         return hashlib.sha256(serialized.encode()).hexdigest()
 
+    def _filter_context(self, context: Dict) -> Dict:
+        """Validate and filter context against the agent's input_schema.
+
+        If the agent declares an ``input_schema`` (a subclass of
+        ``BaseModel``), only fields matching the schema's model fields
+        are passed through.  Agents with no ``input_schema`` (``None``)
+        receive the full context dict unchanged.
+        """
+        schema = getattr(self.agent, "input_schema", None)
+        if schema is None:
+            return context
+        if not (isinstance(schema, type) and issubclass(schema, BaseModel)):
+            return context
+        model_fields = set(schema.model_fields.keys())
+        return {k: v for k, v in context.items() if k in model_fields}
+
     async def run_with_harness(self, context: Dict) -> HarnessResult:
+        context = self._filter_context(context)
         if isinstance(self.agent, ServiceAgent):
             return await self._run_service_agent(context)
         return await self._run_llm_agent_with_retry(context)
