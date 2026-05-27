@@ -19,7 +19,7 @@ from app.db.models import RenderJob, Script
 from app.db.session import get_db
 from app.db.crud import list_render_jobs as crud_list_jobs, get_latest_format_script
 from app.workers.carousel_image_agent import CarouselImageAgent, merge_image_urls
-from app.workers.agents import AgentActionStatus
+from app.workers.harness import AgentHarness
 
 logger = logging.getLogger(__name__)
 
@@ -224,16 +224,17 @@ async def regenerate_assets(
             detail="No carousel format script found to regenerate assets for",
         )
 
-    agent = CarouselImageAgent()
+    harness = AgentHarness(agent=CarouselImageAgent())
     context = {
+        "format_type": "carousel",
         "job_id": job.id,
         "format_payload": carousel_script.format_payload,
         "platform": job.platform or "instagram",
         "device_id": job.device_id,
     }
-    carousel_result = await agent.run(context)
+    carousel_result = await harness.run_with_harness(context)
 
-    if carousel_result.status == AgentActionStatus.SUCCESS:
+    if carousel_result.success:
         carousel_script.format_payload = merge_image_urls(
             carousel_script.format_payload,
             carousel_result.payload["format_payload"],
@@ -242,7 +243,8 @@ async def regenerate_assets(
         await db.commit()
         return {"status": "ok", **carousel_script.format_payload}
 
+    error_msg = carousel_result.error_log[0] if carousel_result.error_log else "Unknown error"
     raise HTTPException(
         status_code=500,
-        detail=f"Asset regeneration failed: {carousel_result.reasoning}",
+        detail=f"Asset regeneration failed: {error_msg}",
     )
