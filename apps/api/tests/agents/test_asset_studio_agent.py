@@ -70,3 +70,42 @@ async def test_mock_url_contains_job_id(
     assert result.confidence_score == 0.9
     assert "model" in result.metadata
     assert "synth_id_enabled" in result.metadata
+
+
+@pytest.mark.agent
+async def test_underspecified_scene_returns_error(
+    job_id,
+    chain_mock,
+):
+    from app.workers.agents import StudioPromptSchema
+
+    agent = _make_agent()
+    error_output = StudioPromptSchema(
+        status=AgentActionStatus.ERROR,
+        visual_prompts=[],
+        audio_prompts="",
+        reasoning="Scene input is underspecified: generic visual_prompt, empty audio_cue, zero duration.",
+    )
+    context = {
+        "script_content": "Something happened.",
+        "scenes": [
+            {
+                "scene_number": 1,
+                "narration_text": "A thing happened.",
+                "visual_prompt": "A thing",
+                "audio_cue": "",
+                "duration_seconds": 0,
+            }
+        ],
+        "visual_style": "vague style",
+        "job_id": job_id,
+    }
+
+    with chain_mock(error_output):
+        result = await agent._execute(context)
+
+    assert result.status == AgentActionStatus.ERROR
+    assert any(
+        word in result.reasoning.lower()
+        for word in ["underspecified", "ambiguous", "generic"]
+    )
