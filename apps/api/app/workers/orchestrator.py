@@ -319,6 +319,7 @@ async def _run_copywriter(
         model_name=settings.copywriter_model,
         temperature=settings.copywriter_temperature,
     )
+    harness = AgentHarness(agent=copywriter)
     story_directives = job.story_directives or {}
     agent_context = {
         "job_id": job.id,
@@ -332,20 +333,17 @@ async def _run_copywriter(
         },
         "feedback": feedback,
     }
-    result = await copywriter.run(context=agent_context)
+    result = await harness.run_with_harness(agent_context)
 
-    if result.status == AgentActionStatus.SUCCESS:
+    if result.success:
         latest = await get_latest_script(db, job.id)
         version = (latest.version + 1) if latest else 1
         await save_script(db, job.id, result.payload["script_content"], version)
         await update_job_status(db, job.id, JobStatusEnum.FACT_CHECKING_SCRIPT)
-    elif result.status in (AgentActionStatus.ESCALATE, AgentActionStatus.ERROR):
-        logger.warning(
-            f"Copywriter {result.status.value} for Job {job.id}: {result.reasoning}"
-        )
-        await update_job_status(db, job.id, JobStatusEnum.HUMAN_REVIEW_NEEDED)
     else:
-        raise Exception(f"Copywriter failed: {result.reasoning}")
+        error_msg = result.error_log[-1] if result.error_log else "Unknown error"
+        logger.warning(f"Copywriter {result.error_log[0] if result.error_log else 'FAILED'} for Job {job.id}: {error_msg}")
+        await update_job_status(db, job.id, JobStatusEnum.HUMAN_REVIEW_NEEDED)
 
 
 async def _run_optimizer(
@@ -359,6 +357,7 @@ async def _run_optimizer(
         model_name=settings.optimizer_model,
         temperature=settings.optimizer_temperature,
     )
+    harness = AgentHarness(agent=optimizer)
     story_directives = job.story_directives or {}
     agent_context = {
         "job_id": job.id,
@@ -372,17 +371,19 @@ async def _run_optimizer(
             "angle": story_directives.get("angle", ""),
         },
     }
-    result = await optimizer.run(context=agent_context)
+    result = await harness.run_with_harness(agent_context)
 
-    if result.status == AgentActionStatus.SUCCESS:
+    if result.success:
         version = latest_script.version + 1
         await save_script(db, job.id, result.payload["script_content"], version)
         await update_job_status(db, job.id, JobStatusEnum.FACT_CHECKING_SCRIPT)
-    elif result.status == AgentActionStatus.ESCALATE:
-        logger.warning(f"Optimizer ESCALATE for Job {job.id}: {result.reasoning}")
+    elif result.escalated:
+        error_msg = result.error_log[0] if result.error_log else "Unknown escalation"
+        logger.warning(f"Optimizer ESCALATE for Job {job.id}: {error_msg}")
         await update_job_status(db, job.id, JobStatusEnum.HUMAN_REVIEW_NEEDED)
     else:
-        raise Exception(f"Optimizer failed: {result.reasoning}")
+        error_msg = result.error_log[-1] if result.error_log else "Unknown error"
+        raise Exception(f"Optimizer failed: {error_msg}")
 
 
 async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
@@ -390,6 +391,7 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
         model_name=settings.evaluator_model,
         temperature=settings.evaluator_temperature,
     )
+    harness = AgentHarness(agent=red_team)
     vector_store = _get_vector_store(db)
 
     latest_script_obj = await get_latest_script(db, job.id)
@@ -416,9 +418,13 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
         "script_content": latest_script,
         "guardrail_config": guardrail_cfg,
     }
-    result = await red_team.run(context=agent_context)
+    result = await harness.run_with_harness(agent_context)
 
-    if result.status == AgentActionStatus.SUCCESS:
+    if result.escalated:
+        error_msg = result.error_log[0] if result.error_log else "Unknown escalation"
+        logger.error(f"Red Team escalated Job {job.id}: {error_msg}")
+        await update_job_status(db, job.id, JobStatusEnum.HUMAN_REVIEW_NEEDED)
+    elif result.success:
         claims_data = result.payload.get("claims", [])
         await _resolve_evidence_refs(db, vector_store, job.id, claims_data)
 
@@ -452,41 +458,52 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
                 await update_job_status(
                     db, job.id, next_status_after_fact_check(job.format_type)
                 )
+    else:
+        if result.agent_status == AgentActionStatus.REVISION_NEEDED and result.payload is not None:
+            claims_data = result.payload.get("claims", [])
+            await _resolve_evidence_refs(db, vector_store, job.id, claims_data)
 
-    elif result.status == AgentActionStatus.REVISION_NEEDED:
-        claims_data = result.payload.get("claims", [])
-        await _resolve_evidence_refs(db, vector_store, job.id, claims_data)
+            if claims_data and latest_script_obj:
+                await save_fact_check_claims(db, latest_script_obj.id, claims_data)
+                await db.commit()
 
-        if claims_data and latest_script_obj:
-            await save_fact_check_claims(db, latest_script_obj.id, claims_data)
-            await db.commit()
+            failed_claims = [
+                c
+                for c in claims_data
+                if c.get("verdict") in ("UNSUPPORTED", "CONTESTED")
+            ]
 
-        failed_claims = [
-            c for c in claims_data if c.get("verdict") in ("UNSUPPORTED", "CONTESTED")
-        ]
-
-        current_revision = latest_script_obj.version if latest_script_obj else 0
-        logger.warning(
-            f"Red Team Rejected Job {job.id}. Revision {current_revision}/{settings.max_red_team_revisions}"
-        )
-
-        if current_revision >= settings.max_red_team_revisions:
-            logger.error(f"Max revisions reached for Job {job.id}. Escalating.")
-            await update_job_status(db, job.id, JobStatusEnum.HUMAN_REVIEW_NEEDED)
-        else:
-            await append_script_feedback(
-                db,
-                job.id,
-                feedback=result.reasoning,
-                structured_claims=failed_claims,
-                overall_reasoning=result.reasoning,
-                revision_number=current_revision,
+            current_revision = latest_script_obj.version if latest_script_obj else 0
+            logger.warning(
+                f"Red Team Rejected Job {job.id}. Revision {current_revision}/{settings.max_red_team_revisions}"
             )
-            await update_job_status(db, job.id, JobStatusEnum.SCRIPTING)
 
-    elif result.status == AgentActionStatus.ESCALATE:
-        logger.error(f"Red Team escalated Job {job.id}: {result.reasoning}")
-        await update_job_status(db, job.id, JobStatusEnum.HUMAN_REVIEW_NEEDED)
+            if current_revision >= settings.max_red_team_revisions:
+                logger.error(f"Max revisions reached for Job {job.id}. Escalating.")
+                await update_job_status(db, job.id, JobStatusEnum.HUMAN_REVIEW_NEEDED)
+            else:
+                reasoning = (
+                    result.reasoning
+                    or (result.error_log[-1] if result.error_log else None)
+                    or "Claims require revision"
+                )
+                await append_script_feedback(
+                    db,
+                    job.id,
+                    feedback=reasoning,
+                    structured_claims=failed_claims,
+                    overall_reasoning=reasoning,
+                    revision_number=current_revision,
+                )
+                await update_job_status(db, job.id, JobStatusEnum.SCRIPTING)
+        else:
+            error_msg = (
+                result.error_log[-1]
+                if result.error_log
+                else "Unknown error after retries"
+            )
+            logger.error(f"Red Team failed Job {job.id}: {error_msg}")
+            await update_job_status(db, job.id, JobStatusEnum.HUMAN_REVIEW_NEEDED)
 
 
 async def _transition_asset_generation(db: AsyncSession, job) -> None:
