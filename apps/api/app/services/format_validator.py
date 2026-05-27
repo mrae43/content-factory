@@ -86,7 +86,7 @@ class CarouselValidator(FormatValidator):
         dump["char_limit_violations"] = []
         return FormatValidationResult(
             valid=True,
-            validated_payload=validated.model_dump(by_alias=True, mode="json"),
+            validated_payload=dump,
         )
 
 

@@ -114,9 +114,20 @@ class TestValidateFormatTool:
         tool = make_validate_format_tool(validator)
 
         payload = {
+            "_format": "carousel",
             "slides": [
-                {"slide_number": 1, "text": "x" * 300, "visual_description": "test"},
-            ]
+                {
+                    "slide_number": 1,
+                    "text": "x" * 300,
+                    "visual_description": "A description",
+                    "hook_type": "question",
+                    "sources_used": [],
+                },
+            ],
+            "thread_title": "Test Title",
+            "hashtags": ["#test"],
+            "cta_slide": "Follow",
+            "char_limit_violations": [],
         }
 
         import asyncio
@@ -125,21 +136,45 @@ class TestValidateFormatTool:
         assert result["valid"] is False
         assert "char limit" in result.get("error_message", "").lower()
 
-    def test_video_validator_tool_rejects_few_scenes(self):
+    def test_video_validator_tool_rejects_empty_scene(self):
         validator = VideoValidator()
         tool = make_validate_format_tool(validator)
 
         payload = {
+            "_format": "video",
             "scenes": [
-                {"scene_number": 1, "visual_prompt": "test", "narration_text": "test"},
-            ]
+                {
+                    "scene_number": 1,
+                    "narration_text": "Narration for scene one that is long enough.",
+                    "visual_prompt": "A visual prompt that is long enough.",
+                    "audio_cue": "Tension build",
+                    "duration_seconds": 30.0,
+                },
+                {
+                    "scene_number": 2,
+                    "narration_text": " " * 15,
+                    "visual_prompt": "Another visual prompt long enough.",
+                    "audio_cue": "Silence",
+                    "duration_seconds": 30.0,
+                },
+                {
+                    "scene_number": 3,
+                    "narration_text": "Narration for scene three that is long enough.",
+                    "visual_prompt": "Yet another visual prompt long enough.",
+                    "audio_cue": "Climax",
+                    "duration_seconds": 30.0,
+                },
+            ],
+            "total_duration_seconds": 90.0,
+            "visual_style": "Cinematic documentary",
+            "audio_direction": "Orchestral",
         }
 
         import asyncio
 
         result = asyncio.run(tool.callable(payload=payload))
         assert result["valid"] is False
-        assert "at least 3 scenes" in result.get("error_message", "").lower()
+        assert "empty" in result.get("error_message", "").lower()
 
     def test_tool_is_di_only(self):
         validator = BlogValidator()
