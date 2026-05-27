@@ -96,3 +96,9 @@ def register_standard_tools() -> None:
     if "semantic_search" not in registry:
         # registered externally when vector_store is available
         pass
+    if "ingest_chunks" not in registry:
+        # registered externally when vector_store is available (orchestrator transitions)
+        pass
+    if "validate_format" not in registry:
+        # registered externally with a per-format validator instance
+        pass
