@@ -65,9 +65,7 @@ class TestAgentHarnessSuccess:
         mock_agent = AsyncMock(spec=LLMAgent)
         mock_agent.run = AsyncMock(return_value=_success_result({"title": "Blog Post"}))
         validator = _always_valid_validator()
-        harness = AgentHarness(
-            agent=mock_agent, validator=validator, max_retries=2
-        )
+        harness = AgentHarness(agent=mock_agent, validator=validator, max_retries=2)
 
         result = await harness.run_with_harness(
             {"format_type": "blog", "script_content": "script"}
@@ -83,9 +81,7 @@ class TestAgentHarnessSuccess:
         mock_agent = AsyncMock(spec=LLMAgent)
         mock_agent.run = AsyncMock(return_value=_success_result({"title": "Blog"}))
         validator = _always_valid_validator()
-        harness = AgentHarness(
-            agent=mock_agent, validator=validator, max_retries=2
-        )
+        harness = AgentHarness(agent=mock_agent, validator=validator, max_retries=2)
 
         result = await harness.run_with_harness({"format_type": "carousel"})
 
@@ -95,9 +91,7 @@ class TestAgentHarnessSuccess:
         mock_agent = AsyncMock(spec=LLMAgent)
         mock_agent.run = AsyncMock(return_value=_success_result({"title": "Blog"}))
         validator = _always_valid_validator()
-        harness = AgentHarness(
-            agent=mock_agent, validator=validator, max_retries=2
-        )
+        harness = AgentHarness(agent=mock_agent, validator=validator, max_retries=2)
 
         result = await harness.run_with_harness({})
 
@@ -125,9 +119,7 @@ class TestAgentHarnessRetry:
             ),
         ]
 
-        harness = AgentHarness(
-            agent=mock_agent, validator=validator, max_retries=2
-        )
+        harness = AgentHarness(agent=mock_agent, validator=validator, max_retries=2)
         context = {"format_type": "blog"}
         result = await harness.run_with_harness(context)
 
@@ -146,9 +138,7 @@ class TestAgentHarnessRetry:
             ]
         )
         validator = _always_valid_validator()
-        harness = AgentHarness(
-            agent=mock_agent, validator=validator, max_retries=2
-        )
+        harness = AgentHarness(agent=mock_agent, validator=validator, max_retries=2)
 
         context = {"format_type": "blog"}
         result = await harness.run_with_harness(context)
@@ -168,9 +158,7 @@ class TestAgentHarnessRetry:
             ]
         )
         validator = _always_invalid_validator("Always fails")
-        harness = AgentHarness(
-            agent=mock_agent, validator=validator, max_retries=2
-        )
+        harness = AgentHarness(agent=mock_agent, validator=validator, max_retries=2)
 
         result = await harness.run_with_harness({"format_type": "blog"})
 
@@ -182,9 +170,7 @@ class TestAgentHarnessRetry:
         mock_agent = AsyncMock(spec=LLMAgent)
         mock_agent.run = AsyncMock(return_value=_error_result("Boom"))
         validator = _always_valid_validator()
-        harness = AgentHarness(
-            agent=mock_agent, validator=validator, max_retries=2
-        )
+        harness = AgentHarness(agent=mock_agent, validator=validator, max_retries=2)
 
         result = await harness.run_with_harness({"format_type": "blog"})
 
@@ -213,9 +199,7 @@ class TestAgentHarnessDoomLoop:
             FormatValidationResult(valid=False, error_message="Validation fail 2"),
         ]
 
-        harness = AgentHarness(
-            agent=mock_agent, validator=validator, max_retries=2
-        )
+        harness = AgentHarness(agent=mock_agent, validator=validator, max_retries=2)
 
         result = await harness.run_with_harness({"format_type": "blog"})
 
@@ -240,9 +224,7 @@ class TestAgentHarnessDoomLoop:
             ),
         ]
 
-        harness = AgentHarness(
-            agent=mock_agent, validator=validator, max_retries=2
-        )
+        harness = AgentHarness(agent=mock_agent, validator=validator, max_retries=2)
 
         result = await harness.run_with_harness({"format_type": "blog"})
 
@@ -261,9 +243,7 @@ class TestAgentHarnessCorrectiveContext:
             ]
         )
         validator = _always_valid_validator()
-        harness = AgentHarness(
-            agent=mock_agent, validator=validator, max_retries=2
-        )
+        harness = AgentHarness(agent=mock_agent, validator=validator, max_retries=2)
 
         context = {"format_type": "blog"}
         await harness.run_with_harness(context)
@@ -288,9 +268,7 @@ class TestAgentHarnessCorrectiveContext:
             FormatValidationResult(valid=True, validated_payload={"_format": "blog"}),
         ]
 
-        harness = AgentHarness(
-            agent=mock_agent, validator=validator, max_retries=2
-        )
+        harness = AgentHarness(agent=mock_agent, validator=validator, max_retries=2)
 
         context = {"format_type": "blog"}
         await harness.run_with_harness(context)
@@ -314,9 +292,7 @@ class TestAgentHarnessCorrectiveContext:
             FormatValidationResult(valid=True, validated_payload={"_format": "blog"}),
         ]
 
-        harness = AgentHarness(
-            agent=mock_agent, validator=validator, max_retries=2
-        )
+        harness = AgentHarness(agent=mock_agent, validator=validator, max_retries=2)
 
         context = {"format_type": "blog"}
         result = await harness.run_with_harness(context)

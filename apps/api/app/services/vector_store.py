@@ -144,6 +144,7 @@ def make_semantic_search_tool(
     The returned ``Tool`` can be injected as a DI tool into agents that
     need to perform semantic retrieval (e.g. ``RedTeamAgent``).
     """
+
     async def _search(
         query: str,
         job_id: Optional[UUID] = None,

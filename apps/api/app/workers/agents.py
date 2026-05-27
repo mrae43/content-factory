@@ -111,6 +111,7 @@ class ServiceAgent(BaseAgent):
     These agents perform deterministic work using DI tools.  No ``self.llm``
     attribute is set — the type system prevents accidental LLM usage.
     """
+
     pass
 
 
@@ -129,6 +130,7 @@ class CopywriterAgent(LLMAgent):
     _required_llm_tools: ClassVar[List[str]] = []
     _permissions: ClassVar[Set[str]] = {"CopywriterAgent"}
     input_schema: ClassVar[Optional[Type[BaseModel]]] = None
+
     async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
         topic = context.get("topic", "Unknown")
         feedback = context.get("feedback", "")

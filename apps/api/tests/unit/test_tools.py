@@ -9,6 +9,7 @@ from app.services.tools import Tool, ToolRegistry
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
+
 def _make_tool(name: str = "test_tool", permissions: set | None = None) -> Tool:
     return Tool(
         name=name,
@@ -19,6 +20,7 @@ def _make_tool(name: str = "test_tool", permissions: set | None = None) -> Tool:
 
 
 # ── Tool dataclass ─────────────────────────────────────────────────────────────
+
 
 class TestToolDataclass:
     def test_basic_creation(self):
@@ -60,6 +62,7 @@ class TestToolDataclass:
 
 
 # ── ToolRegistry singleton ─────────────────────────────────────────────────────
+
 
 class TestToolRegistry:
     def setup_method(self):
@@ -106,6 +109,7 @@ class TestToolRegistry:
 
 
 # ── Permission filtering ──────────────────────────────────────────────────────
+
 
 class TestToolPermissions:
     def setup_method(self):
@@ -165,6 +169,7 @@ class TestToolPermissions:
 
 # ── Agent hierarchy (structural, no need for orchestrator) ─────────────────────
 
+
 class TestAgentHierarchy:
     def test_llm_agent_is_base_agent(self):
         from app.workers.agents import LLMAgent, ServiceAgent
@@ -178,6 +183,7 @@ class TestAgentHierarchy:
         class ConcreteService(ServiceAgent):
             async def _execute(self, context, **kwargs):
                 from app.workers.agents import AgentResult, AgentActionStatus
+
                 return AgentResult(
                     status=AgentActionStatus.SUCCESS,
                     payload={},
@@ -194,6 +200,7 @@ class TestAgentHierarchy:
         class ConcreteLLM(LLMAgent):
             async def _execute(self, context, **kwargs):
                 from app.workers.agents import AgentResult, AgentActionStatus
+
                 return AgentResult(
                     status=AgentActionStatus.SUCCESS,
                     payload={},
@@ -211,6 +218,7 @@ class TestAgentHierarchy:
         class ConcreteService(ServiceAgent):
             async def _execute(self, context, **kwargs):
                 from app.workers.agents import AgentResult, AgentActionStatus
+
                 return AgentResult(
                     status=AgentActionStatus.SUCCESS,
                     payload={},

@@ -243,7 +243,9 @@ async def regenerate_assets(
         await db.commit()
         return {"status": "ok", **carousel_script.format_payload}
 
-    error_msg = carousel_result.error_log[0] if carousel_result.error_log else "Unknown error"
+    error_msg = (
+        carousel_result.error_log[0] if carousel_result.error_log else "Unknown error"
+    )
     raise HTTPException(
         status_code=500,
         detail=f"Asset regeneration failed: {error_msg}",

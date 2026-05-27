@@ -141,7 +141,9 @@ async def test_partial_failure_still_succeeds():
     gen_tool = _make_gen_tool(
         side_effect=[
             _make_image_result(success=True, image_bytes=b"ok"),
-            _make_image_result(success=False, image_bytes=None, failure_reason="API error"),
+            _make_image_result(
+                success=False, image_bytes=None, failure_reason="API error"
+            ),
         ]
     )
     upload_tool = _make_upload_tool(return_url="/static/ok.png")
@@ -168,7 +170,9 @@ async def test_returns_error_when_all_slides_fail():
     jid = uuid4()
     gen_tool = _make_gen_tool(
         side_effect=[
-            _make_image_result(success=False, image_bytes=None, failure_reason="API error"),
+            _make_image_result(
+                success=False, image_bytes=None, failure_reason="API error"
+            ),
         ]
     )
     upload_tool = _make_upload_tool()
@@ -236,7 +240,9 @@ async def test_metadata_tracks_failures():
     gen_tool = _make_gen_tool(
         side_effect=[
             _make_image_result(success=True, image_bytes=b"a"),
-            _make_image_result(success=False, image_bytes=None, failure_reason="Rate limited"),
+            _make_image_result(
+                success=False, image_bytes=None, failure_reason="Rate limited"
+            ),
         ]
     )
     upload_tool = _make_upload_tool()

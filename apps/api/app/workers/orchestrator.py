@@ -532,7 +532,11 @@ async def _transition_asset_generation(db: AsyncSession, job) -> None:
             flag_modified(carousel_script, "format_payload")
             any_success = True
         else:
-            error_msg = carousel_result.error_log[0] if carousel_result.error_log else "Unknown error"
+            error_msg = (
+                carousel_result.error_log[0]
+                if carousel_result.error_log
+                else "Unknown error"
+            )
             await log_error(
                 db,
                 job.id,
