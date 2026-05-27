@@ -42,7 +42,7 @@ Multi-agent AI pipeline generating short/reel scripts, blog articles, and social
 | `FACT_CHECKING_RESEARCH` | Source Verification | Legacy state, auto-forwarded to `SCRIPTING` |
 | `SCRIPTING` | Writer's Desk | `CopywriterAgent` drafts script (or `ScriptOptimizerAgent` for revisions) |
 | `FACT_CHECKING_SCRIPT` | Fact-Check Desk | `RedTeamAgent` extracts atomic claims → per-claim evidence search → structured verdict |
-| `FORMATTING` | Layout Desk | `FormatterHarness` runs blog/carousel/video formatters in parallel |
+| `FORMATTING` | Layout Desk | `AgentHarness` runs blog/carousel/video formatters in parallel |
 | `ASSET_GENERATION` | Production Studio | `AssetStudioAgent` (video prompts) + `CarouselImageAgent` (images via FLUX) |
 | `COMPLETED` | Published | Garbage-collect LOCAL-scoped chunks, finalize |
 | `FAILED` | Killed Story | Orchestrator exception → logged |
@@ -92,10 +92,10 @@ All production agents default via Together AI. Two tiers:
 | `CarouselFormatterAgent` | `app/services/formatters.py` | Plan→Execute carousel with platform char limits |
 | `VideoFormatterAgent` | `app/services/formatters.py` | Plan→Execute with scene structure |
 | `AssetStudioAgent` | `app/services/agents.py` | Veo video prompts + Lyria audio prompts |
-| `CarouselImageAgent` | `app/services/carousel_image_agent.py` | Generate carousel images via FLUX + Together AI |
-| `FormatterHarness` | `app/services/harness.py` | Retry wrapper with validation and doom-loop detection |
+| `CarouselImageAgent` | `app/workers/carousel_image_agent.py` | Generate carousel images via FLUX + Together AI (ServiceAgent) |
+| `AgentHarness` | `app/workers/harness.py` | Retry wrapper with validation, doom-loop detection, and ServiceAgent path |
 
-**All agents** extend `BaseAgent` which provides tenacity retry (3 attempts, exponential backoff).
+**Agents** extend `BaseAgent` (ABC). `LLMAgent` subclasses get `self.llm` + tenacity retry; `ServiceAgent` subclasses use injected DI tools deterministically.
 
 ## Evaluator-Optimizer Pattern
 
