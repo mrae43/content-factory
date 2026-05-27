@@ -131,3 +131,37 @@ async def test_returns_escalate_on_llm_parse_error(
 
     assert result.status == AgentActionStatus.ESCALATE
     assert "Claim extraction LLM call failed" in result.reasoning
+
+
+@pytest.mark.agent
+async def test_returns_success_when_uncertain_for_no_evidence_claim(
+    mock_vector_store,
+    job_id,
+    claim_extraction_mixed_evidence,
+    red_team_verdict_uncertain_no_evidence,
+    multi_chain_mock,
+):
+    mock_vector_store.semantic_search.side_effect = [
+        [{"content": "IMF data confirms BRICS GDP grew 3.2% in 2024."}],
+        [],
+    ]
+    agent = _make_agent()
+    context = {
+        "script_content": "BRICS GDP grew 3.2% in 2024. New payment system launched.",
+        "vector_store": mock_vector_store,
+        "job_id": job_id,
+    }
+
+    with multi_chain_mock(
+        [claim_extraction_mixed_evidence, red_team_verdict_uncertain_no_evidence]
+    ):
+        result = await agent._execute(context)
+
+    assert result.status == AgentActionStatus.SUCCESS
+    assert result.payload["verdict"] == "SUPPORTED"
+    claims = result.payload["claims"]
+    assert len(claims) == 2
+    supported_claims = [c for c in claims if c.get("verdict") == "SUPPORTED"]
+    uncertain_claims = [c for c in claims if c.get("verdict") == "UNCERTAIN"]
+    assert len(supported_claims) == 1
+    assert len(uncertain_claims) == 1
