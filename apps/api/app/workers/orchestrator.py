@@ -40,7 +40,7 @@ from app.workers.formatters import (
     CarouselFormatterAgent,
     VideoFormatterAgent,
 )
-from app.workers.harness import FormatterHarness
+from app.workers.harness import AgentHarness
 from app.schemas.shorts import (
     JobStatusEnum,
     AssembledContext,
@@ -514,16 +514,17 @@ async def _transition_asset_generation(db: AsyncSession, job) -> None:
 
     # --- Carousel image generation ---
     if carousel_script and carousel_script.format_payload:
-        agent = CarouselImageAgent()
+        carousel_harness = AgentHarness(agent=CarouselImageAgent())
         context: Dict[str, Any] = {
+            "format_type": "carousel",
             "job_id": job.id,
             "format_payload": carousel_script.format_payload,
             "platform": job.platform or "instagram",
             "device_id": job.device_id,
         }
-        carousel_result = await agent.run(context)
+        carousel_result = await carousel_harness.run_with_harness(context)
 
-        if carousel_result.status == AgentActionStatus.SUCCESS:
+        if carousel_result.success:
             carousel_script.format_payload = merge_image_urls(
                 carousel_script.format_payload,
                 carousel_result.payload["format_payload"],
@@ -531,10 +532,15 @@ async def _transition_asset_generation(db: AsyncSession, job) -> None:
             flag_modified(carousel_script, "format_payload")
             any_success = True
         else:
+            error_msg = (
+                carousel_result.error_log[0]
+                if carousel_result.error_log
+                else "Unknown error"
+            )
             await log_error(
                 db,
                 job.id,
-                carousel_result.reasoning,
+                error_msg,
                 phase="CAROUSEL_IMAGE_GENERATION",
             )
 
@@ -651,12 +657,12 @@ async def _transition_formatting(db: AsyncSession, job) -> None:
     target_formats = resolve_formats(platform_enum, format_type_enum)
     target_format_names = [f.value.upper() for f in target_formats]
 
-    formatter_specs: list[tuple[str, FormatterHarness, dict]] = []
+    formatter_specs: list[tuple[str, AgentHarness, dict]] = []
 
     if "BLOG" in target_format_names:
         blog_ctx = {**base_context, "format_type": "blog"}
-        blog_harness = FormatterHarness(
-            formatter=BlogFormatterAgent(
+        blog_harness = AgentHarness(
+            agent=BlogFormatterAgent(
                 model_name=settings.formatter_model,
                 temperature=settings.formatter_temperature,
             ),
@@ -671,8 +677,8 @@ async def _transition_formatting(db: AsyncSession, job) -> None:
             "format_type": "carousel",
             "platform": job.platform or "default",
         }
-        carousel_harness = FormatterHarness(
-            formatter=CarouselFormatterAgent(
+        carousel_harness = AgentHarness(
+            agent=CarouselFormatterAgent(
                 model_name=settings.formatter_model,
                 temperature=settings.formatter_temperature,
             ),
@@ -683,8 +689,8 @@ async def _transition_formatting(db: AsyncSession, job) -> None:
 
     if "VIDEO" in target_format_names:
         video_ctx = {**base_context, "format_type": "video"}
-        video_harness = FormatterHarness(
-            formatter=VideoFormatterAgent(
+        video_harness = AgentHarness(
+            agent=VideoFormatterAgent(
                 model_name=settings.formatter_model,
                 temperature=settings.formatter_temperature,
             ),

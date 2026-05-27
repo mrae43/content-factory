@@ -1,11 +1,14 @@
 import asyncio
 import logging
-from typing import Any, Dict
+from typing import Any, ClassVar, Dict, List, Optional, Set, Type
 
 from app.core.config import settings
-from app.storage.adapter import get_storage
-from app.services.image_gen import ImageGenerationService
-from app.workers.agents import AgentActionStatus, AgentResult
+from app.workers.agents import (
+    AgentActionStatus,
+    AgentResult,
+    ServiceAgent,
+)
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -21,24 +24,12 @@ def merge_image_urls(existing_payload: dict | None, new_payload: dict) -> dict:
     return existing
 
 
-class CarouselImageAgent:
-    """
-    Generates images for carousel slides using ImageGenerationService.
-    Does NOT extend BaseAgent since no LLM call is needed.
+class CarouselImageAgent(ServiceAgent):
+    _required_di_tools: ClassVar[List[str]] = ["generate_image", "upload_image"]
+    _permissions: ClassVar[Set[str]] = {"CarouselImageAgent"}
+    input_schema: ClassVar[Optional[Type[BaseModel]]] = None
 
-    Uses the storage adapter (local/S3) to persist images and returns
-    URL paths in slide.image_url. The orchestrator saves the updated
-    format_payload to the DB.
-    """
-
-    def __init__(
-        self,
-        image_service: ImageGenerationService | None = None,
-    ):
-        self.image_service = image_service or ImageGenerationService()
-        self.storage = get_storage()
-
-    async def run(self, context: Dict[str, Any]) -> AgentResult:
+    async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
         format_payload = context.get("format_payload", {})
         job_id = context.get("job_id")
         platform = context.get("platform", "instagram")
@@ -61,6 +52,18 @@ class CarouselImageAgent:
                 confidence_score=0.0,
             )
 
+        for tool_name in self._required_di_tools:
+            if tool_name not in self.di_tools:
+                return AgentResult(
+                    status=AgentActionStatus.ERROR,
+                    payload={},
+                    reasoning=f"Required DI tool '{tool_name}' not injected into CarouselImageAgent",
+                    confidence_score=0.0,
+                )
+
+        gen_tool = self.di_tools["generate_image"]
+        upload_tool = self.di_tools["upload_image"]
+
         failures: list[dict] = []
         for i, slide in enumerate(slides):
             visual_description = slide.get("visual_description", "")
@@ -71,13 +74,13 @@ class CarouselImageAgent:
             if i > 0:
                 await asyncio.sleep(settings.image_gen_slide_delay)
 
-            result = await self.image_service.generate(visual_description, platform)
+            result = await gen_tool.callable(visual_description, platform)
 
-            if result.success and result.image_bytes:
+            if result["success"] and result["image_bytes"]:
                 filename = f"slide_{slide['slide_number']:02d}.png"
                 folder = f"{device_id or '__anonymous__'}/{job_id or 'standalone'}"
-                url = self.storage.upload_image(
-                    result.image_bytes, filename, folder=folder
+                url = await upload_tool.callable(
+                    result["image_bytes"], filename, folder=folder
                 )
                 slide["image_url"] = url
             else:
@@ -85,7 +88,7 @@ class CarouselImageAgent:
                 failures.append(
                     {
                         "slide_number": slide.get("slide_number"),
-                        "reason": result.failure_reason or "Unknown error",
+                        "reason": result.get("failure_reason") or "Unknown error",
                     }
                 )
 

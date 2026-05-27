@@ -1,9 +1,10 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from app.workers.agents import AgentActionStatus, AgentResult
-from app.workers.harness import FormatterHarness, HarnessResult
+from app.workers.agents import AgentActionStatus, AgentResult, ServiceAgent, LLMAgent
+from app.workers.harness import AgentHarness, HarnessResult
 from app.services.format_validator import FormatValidationResult
+from app.services.tools import Tool, ToolRegistry
 
 
 def _success_result(payload: dict) -> AgentResult:
@@ -42,15 +43,29 @@ def _always_invalid_validator(msg="Schema validation failed"):
     return validator
 
 
+def _make_mock_tool(name: str) -> Tool:
+    return Tool(
+        name=name,
+        description="Test tool",
+        callable=MagicMock(),
+        permissions={"*"},
+    )
+
+
+@pytest.fixture(autouse=True)
+def _clear_registry():
+    ToolRegistry().clear()
+    yield
+    ToolRegistry().clear()
+
+
 @pytest.mark.unit
-class TestFormatterHarnessSuccess:
+class TestAgentHarnessSuccess:
     async def test_should_succeed_on_first_attempt(self):
-        mock_agent = AsyncMock()
+        mock_agent = AsyncMock(spec=LLMAgent)
         mock_agent.run = AsyncMock(return_value=_success_result({"title": "Blog Post"}))
         validator = _always_valid_validator()
-        harness = FormatterHarness(
-            formatter=mock_agent, validator=validator, max_retries=2
-        )
+        harness = AgentHarness(agent=mock_agent, validator=validator, max_retries=2)
 
         result = await harness.run_with_harness(
             {"format_type": "blog", "script_content": "script"}
@@ -63,24 +78,20 @@ class TestFormatterHarnessSuccess:
         mock_agent.run.assert_awaited_once()
 
     async def test_should_set_format_type_from_context(self):
-        mock_agent = AsyncMock()
+        mock_agent = AsyncMock(spec=LLMAgent)
         mock_agent.run = AsyncMock(return_value=_success_result({"title": "Blog"}))
         validator = _always_valid_validator()
-        harness = FormatterHarness(
-            formatter=mock_agent, validator=validator, max_retries=2
-        )
+        harness = AgentHarness(agent=mock_agent, validator=validator, max_retries=2)
 
         result = await harness.run_with_harness({"format_type": "carousel"})
 
         assert result.format_type == "carousel"
 
     async def test_should_default_format_type_to_unknown(self):
-        mock_agent = AsyncMock()
+        mock_agent = AsyncMock(spec=LLMAgent)
         mock_agent.run = AsyncMock(return_value=_success_result({"title": "Blog"}))
         validator = _always_valid_validator()
-        harness = FormatterHarness(
-            formatter=mock_agent, validator=validator, max_retries=2
-        )
+        harness = AgentHarness(agent=mock_agent, validator=validator, max_retries=2)
 
         result = await harness.run_with_harness({})
 
@@ -88,9 +99,9 @@ class TestFormatterHarnessSuccess:
 
 
 @pytest.mark.unit
-class TestFormatterHarnessRetry:
+class TestAgentHarnessRetry:
     async def test_should_retry_on_validation_failure_and_succeed(self):
-        mock_agent = AsyncMock()
+        mock_agent = AsyncMock(spec=LLMAgent)
         first_payload = {"title": "Bad"}
         second_payload = {"title": "Good"}
         mock_agent.run = AsyncMock(
@@ -108,9 +119,7 @@ class TestFormatterHarnessRetry:
             ),
         ]
 
-        harness = FormatterHarness(
-            formatter=mock_agent, validator=validator, max_retries=2
-        )
+        harness = AgentHarness(agent=mock_agent, validator=validator, max_retries=2)
         context = {"format_type": "blog"}
         result = await harness.run_with_harness(context)
 
@@ -121,7 +130,7 @@ class TestFormatterHarnessRetry:
         assert context["correction_hint"] == "Missing sections"
 
     async def test_should_retry_on_agent_error_and_succeed(self):
-        mock_agent = AsyncMock()
+        mock_agent = AsyncMock(spec=LLMAgent)
         mock_agent.run = AsyncMock(
             side_effect=[
                 _error_result("API timeout"),
@@ -129,9 +138,7 @@ class TestFormatterHarnessRetry:
             ]
         )
         validator = _always_valid_validator()
-        harness = FormatterHarness(
-            formatter=mock_agent, validator=validator, max_retries=2
-        )
+        harness = AgentHarness(agent=mock_agent, validator=validator, max_retries=2)
 
         context = {"format_type": "blog"}
         result = await harness.run_with_harness(context)
@@ -142,7 +149,7 @@ class TestFormatterHarnessRetry:
         assert context["correction_hint"] == "Agent failed: API timeout"
 
     async def test_should_fail_after_exhausting_all_retries(self):
-        mock_agent = AsyncMock()
+        mock_agent = AsyncMock(spec=LLMAgent)
         mock_agent.run = AsyncMock(
             side_effect=[
                 _success_result({"title": "Bad", "attempt": 1}),
@@ -151,9 +158,7 @@ class TestFormatterHarnessRetry:
             ]
         )
         validator = _always_invalid_validator("Always fails")
-        harness = FormatterHarness(
-            formatter=mock_agent, validator=validator, max_retries=2
-        )
+        harness = AgentHarness(agent=mock_agent, validator=validator, max_retries=2)
 
         result = await harness.run_with_harness({"format_type": "blog"})
 
@@ -162,12 +167,10 @@ class TestFormatterHarnessRetry:
         assert len(result.error_log) == 3
 
     async def test_should_fail_when_agent_always_errors(self):
-        mock_agent = AsyncMock()
+        mock_agent = AsyncMock(spec=LLMAgent)
         mock_agent.run = AsyncMock(return_value=_error_result("Boom"))
         validator = _always_valid_validator()
-        harness = FormatterHarness(
-            formatter=mock_agent, validator=validator, max_retries=2
-        )
+        harness = AgentHarness(agent=mock_agent, validator=validator, max_retries=2)
 
         result = await harness.run_with_harness({"format_type": "blog"})
 
@@ -179,10 +182,10 @@ class TestFormatterHarnessRetry:
 
 
 @pytest.mark.unit
-class TestFormatterHarnessDoomLoop:
+class TestAgentHarnessDoomLoop:
     async def test_should_break_on_identical_payload_hash(self):
         identical_payload = {"title": "Same", "sections": []}
-        mock_agent = AsyncMock()
+        mock_agent = AsyncMock(spec=LLMAgent)
         mock_agent.run = AsyncMock(
             side_effect=[
                 _success_result(identical_payload),
@@ -196,9 +199,7 @@ class TestFormatterHarnessDoomLoop:
             FormatValidationResult(valid=False, error_message="Validation fail 2"),
         ]
 
-        harness = FormatterHarness(
-            formatter=mock_agent, validator=validator, max_retries=2
-        )
+        harness = AgentHarness(agent=mock_agent, validator=validator, max_retries=2)
 
         result = await harness.run_with_harness({"format_type": "blog"})
 
@@ -207,7 +208,7 @@ class TestFormatterHarnessDoomLoop:
         assert any("Doom loop" in e for e in result.error_log)
 
     async def test_should_not_break_when_payloads_differ(self):
-        mock_agent = AsyncMock()
+        mock_agent = AsyncMock(spec=LLMAgent)
         mock_agent.run = AsyncMock(
             side_effect=[
                 _success_result({"title": "First", "sections": []}),
@@ -223,9 +224,7 @@ class TestFormatterHarnessDoomLoop:
             ),
         ]
 
-        harness = FormatterHarness(
-            formatter=mock_agent, validator=validator, max_retries=2
-        )
+        harness = AgentHarness(agent=mock_agent, validator=validator, max_retries=2)
 
         result = await harness.run_with_harness({"format_type": "blog"})
 
@@ -234,9 +233,9 @@ class TestFormatterHarnessDoomLoop:
 
 
 @pytest.mark.unit
-class TestFormatterHarnessCorrectiveContext:
+class TestAgentHarnessCorrectiveContext:
     async def test_should_inject_correction_hint_on_agent_error(self):
-        mock_agent = AsyncMock()
+        mock_agent = AsyncMock(spec=LLMAgent)
         mock_agent.run = AsyncMock(
             side_effect=[
                 _error_result("Model returned empty"),
@@ -244,9 +243,7 @@ class TestFormatterHarnessCorrectiveContext:
             ]
         )
         validator = _always_valid_validator()
-        harness = FormatterHarness(
-            formatter=mock_agent, validator=validator, max_retries=2
-        )
+        harness = AgentHarness(agent=mock_agent, validator=validator, max_retries=2)
 
         context = {"format_type": "blog"}
         await harness.run_with_harness(context)
@@ -255,7 +252,7 @@ class TestFormatterHarnessCorrectiveContext:
         assert "Agent failed" in context["correction_hint"]
 
     async def test_should_inject_correction_hint_on_validation_failure(self):
-        mock_agent = AsyncMock()
+        mock_agent = AsyncMock(spec=LLMAgent)
         mock_agent.run = AsyncMock(
             side_effect=[
                 _success_result({"title": "Bad"}),
@@ -271,9 +268,7 @@ class TestFormatterHarnessCorrectiveContext:
             FormatValidationResult(valid=True, validated_payload={"_format": "blog"}),
         ]
 
-        harness = FormatterHarness(
-            formatter=mock_agent, validator=validator, max_retries=2
-        )
+        harness = AgentHarness(agent=mock_agent, validator=validator, max_retries=2)
 
         context = {"format_type": "blog"}
         await harness.run_with_harness(context)
@@ -281,7 +276,7 @@ class TestFormatterHarnessCorrectiveContext:
         assert context["correction_hint"] == "Missing required field: seo_meta"
 
     async def test_should_update_correction_hint_per_attempt(self):
-        mock_agent = AsyncMock()
+        mock_agent = AsyncMock(spec=LLMAgent)
         mock_agent.run = AsyncMock(
             side_effect=[
                 _success_result({"title": "A"}),
@@ -297,9 +292,7 @@ class TestFormatterHarnessCorrectiveContext:
             FormatValidationResult(valid=True, validated_payload={"_format": "blog"}),
         ]
 
-        harness = FormatterHarness(
-            formatter=mock_agent, validator=validator, max_retries=2
-        )
+        harness = AgentHarness(agent=mock_agent, validator=validator, max_retries=2)
 
         context = {"format_type": "blog"}
         result = await harness.run_with_harness(context)
@@ -309,16 +302,16 @@ class TestFormatterHarnessCorrectiveContext:
 
 
 @pytest.mark.unit
-class TestFormatterHarnessMaxRetries:
+class TestAgentHarnessMaxRetries:
     @pytest.mark.parametrize("max_retries,expected_attempts", [(0, 1), (1, 2), (2, 3)])
     async def test_should_respect_max_retries_setting(
         self, max_retries, expected_attempts
     ):
-        mock_agent = AsyncMock()
+        mock_agent = AsyncMock(spec=LLMAgent)
         mock_agent.run = AsyncMock(return_value=_error_result("Fail"))
         validator = _always_valid_validator()
-        harness = FormatterHarness(
-            formatter=mock_agent, validator=validator, max_retries=max_retries
+        harness = AgentHarness(
+            agent=mock_agent, validator=validator, max_retries=max_retries
         )
 
         result = await harness.run_with_harness({"format_type": "blog"})
@@ -352,18 +345,98 @@ class TestHarnessResultModel:
 
 
 @pytest.mark.unit
-class TestFormatterHarnessPayloadHash:
+class TestAgentHarnessPayloadHash:
     def test_should_produce_deterministic_hash(self):
         payload = {"title": "Test", "items": [1, 2, 3]}
-        h1 = FormatterHarness._hash_payload(payload)
-        h2 = FormatterHarness._hash_payload(payload)
+        h1 = AgentHarness._hash_payload(payload)
+        h2 = AgentHarness._hash_payload(payload)
 
         assert h1 == h2
         assert isinstance(h1, str)
         assert len(h1) == 64
 
     def test_should_hash_differently_for_different_payloads(self):
-        h1 = FormatterHarness._hash_payload({"title": "A"})
-        h2 = FormatterHarness._hash_payload({"title": "B"})
+        h1 = AgentHarness._hash_payload({"title": "A"})
+        h2 = AgentHarness._hash_payload({"title": "B"})
 
         assert h1 != h2
+
+
+# ── ServiceAgent path ──────────────────────────────────────────────────────
+
+
+class _ConcreteServiceAgent(ServiceAgent):
+    async def _execute(self, context, **kwargs):
+        return _success_result({"format_payload": context.get("format_payload", {})})
+
+
+class _FailingServiceAgent(ServiceAgent):
+    async def _execute(self, context, **kwargs):
+        return _error_result("Service failed")
+
+
+class _EscalatingServiceAgent(ServiceAgent):
+    async def _execute(self, context, **kwargs):
+        return AgentResult(
+            status=AgentActionStatus.ESCALATE,
+            payload={},
+            reasoning="Cannot proceed",
+            confidence_score=0.0,
+        )
+
+
+@pytest.mark.unit
+class TestServiceAgentPath:
+    async def test_service_agent_runs_once(self):
+        harness = AgentHarness(agent=_ConcreteServiceAgent())
+        context = {"format_type": "carousel", "format_payload": {"slides": [1]}}
+
+        result = await harness.run_with_harness(context)
+
+        assert result.success is True
+        assert result.attempts == 1
+        assert result.payload == {"format_payload": {"slides": [1]}}
+
+    async def test_service_agent_returns_error(self):
+        harness = AgentHarness(agent=_FailingServiceAgent())
+
+        result = await harness.run_with_harness({"format_type": "carousel"})
+
+        assert result.success is False
+        assert result.attempts == 1
+        assert "Service failed" in result.error_log[0]
+
+    async def test_service_agent_escalates(self):
+        harness = AgentHarness(agent=_EscalatingServiceAgent())
+
+        result = await harness.run_with_harness({"format_type": "carousel"})
+
+        assert result.success is False
+        assert result.escalated is True
+        assert result.attempts == 1
+        assert "Cannot proceed" in result.error_log[0]
+
+    async def test_service_agent_injects_tools_from_registry(self):
+        registry = ToolRegistry()
+        tool = _make_mock_tool("test_service_tool")
+        registry.register(tool)
+
+        agent = _ConcreteServiceAgent()
+        AgentHarness(agent=agent)
+        assert "test_service_tool" in agent.di_tools
+
+    async def test_service_agent_injects_no_tools_when_registry_empty(self):
+        agent = _ConcreteServiceAgent()
+        AgentHarness(agent=agent)
+        assert agent.di_tools == {}
+
+    async def test_llm_agent_without_validator_skips_validation(self):
+        mock_agent = AsyncMock(spec=LLMAgent)
+        mock_agent.run = AsyncMock(return_value=_success_result({"title": "Direct"}))
+        harness = AgentHarness(agent=mock_agent, validator=None)
+
+        result = await harness.run_with_harness({"format_type": "blog"})
+
+        assert result.success is True
+        assert result.payload == {"title": "Direct"}
+        assert result.attempts == 1

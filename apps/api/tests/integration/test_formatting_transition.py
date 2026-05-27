@@ -125,7 +125,7 @@ class TestTransitionFormattingBlog:
                 return_value=[],
             ),
             patch(
-                "app.workers.orchestrator.FormatterHarness",
+                "app.workers.orchestrator.AgentHarness",
                 return_value=_mock_harness(harness_result),
             ),
             patch(
@@ -188,7 +188,7 @@ class TestTransitionFormattingCarousel:
                 return_value=[],
             ),
             patch(
-                "app.workers.orchestrator.FormatterHarness",
+                "app.workers.orchestrator.AgentHarness",
                 return_value=_mock_harness(harness_result),
             ),
             patch(
@@ -265,7 +265,7 @@ class TestTransitionFormattingAll:
                 return_value=[],
             ),
             patch(
-                "app.workers.orchestrator.FormatterHarness",
+                "app.workers.orchestrator.AgentHarness",
                 side_effect=mock_harness_factory,
             ),
             patch(
@@ -342,7 +342,7 @@ class TestTransitionFormattingFailure:
                 return_value=[],
             ),
             patch(
-                "app.workers.orchestrator.FormatterHarness",
+                "app.workers.orchestrator.AgentHarness",
                 return_value=_mock_harness(harness_result),
             ),
             patch(
@@ -400,7 +400,7 @@ class TestTransitionFormattingFailure:
                 return_value=[],
             ),
             patch(
-                "app.workers.orchestrator.FormatterHarness",
+                "app.workers.orchestrator.AgentHarness",
                 return_value=_mock_harness(harness_result),
             ),
             patch(
@@ -483,7 +483,7 @@ class TestTransitionFormattingVideoOnly:
                 return_value=[],
             ),
             patch(
-                "app.workers.orchestrator.FormatterHarness",
+                "app.workers.orchestrator.AgentHarness",
                 return_value=_mock_harness(harness_result),
             ),
             patch(

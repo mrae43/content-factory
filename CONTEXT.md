@@ -172,3 +172,7 @@ The capability level of the LLM assigned to a pipeline agent. Two tiers (see ADR
 
 The specific model names are **env-var-driven defaults** (see `app/core/config.py`). The architecture is the tier assignment, not the particular model name. Swap models via env vars without code changes.
 
+## Tool
+
+A formal object wrapping a service capability with name, description, input/output schemas, workflow scope, and permissions. Tools serve two roles: **dependency injection** (DI tools, injected into agents at runtime by the harness) and **LLM function-calling** (LLM tools, registered with the model for dynamic invocation during execution). Defined alongside the backing service, registered in a central `ToolRegistry`. Agents declare tool dependencies explicitly via `di_tools` and `llm_tools` class attributes. Tool access is governed by symmetric permissions: both the tool and the agent must agree. See ADR 0004.
+

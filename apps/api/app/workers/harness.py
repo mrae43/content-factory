@@ -6,9 +6,12 @@ from typing import Dict, List, Optional, Set
 from pydantic import BaseModel, Field
 
 from app.services.format_validator import FormatValidator
-from app.workers.agents import AgentActionStatus, BaseAgent
+from app.services.tools import ToolRegistry, register_standard_tools
+from app.workers.agents import AgentActionStatus, BaseAgent, ServiceAgent
 
 logger = logging.getLogger(__name__)
+
+register_standard_tools()
 
 
 class HarnessResult(BaseModel):
@@ -20,16 +23,24 @@ class HarnessResult(BaseModel):
     escalated: bool = False
 
 
-class FormatterHarness:
+class AgentHarness:
     def __init__(
         self,
-        formatter: BaseAgent,
-        validator: FormatValidator,
+        agent: BaseAgent,
+        validator: Optional[FormatValidator] = None,
         max_retries: int = 2,
     ):
-        self.formatter = formatter
+        self.agent = agent
         self.validator = validator
         self.max_retries = max_retries
+        self._inject_tools()
+
+    def _inject_tools(self) -> None:
+        registry = ToolRegistry()
+        agent_name = type(self.agent).__name__
+        permitted = registry.get_permitted_tools(agent_name)
+        if permitted:
+            self.agent.inject_tools({t.name: t for t in permitted})
 
     @staticmethod
     def _hash_payload(payload: dict) -> str:
@@ -37,16 +48,53 @@ class FormatterHarness:
         return hashlib.sha256(serialized.encode()).hexdigest()
 
     async def run_with_harness(self, context: Dict) -> HarnessResult:
+        if isinstance(self.agent, ServiceAgent):
+            return await self._run_service_agent(context)
+        return await self._run_llm_agent_with_retry(context)
+
+    async def _run_service_agent(self, context: Dict) -> HarnessResult:
+        result = await self.agent.run(context=context)
+
+        if result.status == AgentActionStatus.ESCALATE:
+            logger.warning(
+                "ServiceAgent ESCALATE for %s: %s",
+                type(self.agent).__name__,
+                result.reasoning,
+            )
+            return HarnessResult(
+                success=False,
+                format_type=context.get("format_type", "unknown"),
+                error_log=[f"Agent escalated: {result.reasoning}"],
+                attempts=1,
+                escalated=True,
+            )
+
+        if result.status != AgentActionStatus.SUCCESS:
+            return HarnessResult(
+                success=False,
+                format_type=context.get("format_type", "unknown"),
+                error_log=[f"Agent failed: {result.reasoning}"],
+                attempts=1,
+            )
+
+        return HarnessResult(
+            success=True,
+            format_type=context.get("format_type", "unknown"),
+            payload=result.payload,
+            attempts=1,
+        )
+
+    async def _run_llm_agent_with_retry(self, context: Dict) -> HarnessResult:
         error_log: List[str] = []
         seen_payload_hashes: Set[str] = set()
         max_attempts = self.max_retries + 1
 
         for attempt in range(1, max_attempts + 1):
-            result = await self.formatter.run(context=context)
+            result = await self.agent.run(context=context)
 
             if result.status == AgentActionStatus.ESCALATE:
                 logger.warning(
-                    "Formatter ESCALATE for format_type=%s: %s",
+                    "Agent ESCALATE for format_type=%s: %s",
                     context.get("format_type", "unknown"),
                     result.reasoning,
                 )
@@ -79,20 +127,28 @@ class FormatterHarness:
                 break
             seen_payload_hashes.add(payload_hash)
 
-            validation = self.validator.validate(result.payload)
-            if validation.valid:
+            if self.validator is not None:
+                validation = self.validator.validate(result.payload)
+                if validation.valid:
+                    return HarnessResult(
+                        success=True,
+                        format_type=context.get("format_type", "unknown"),
+                        payload=validation.validated_payload,
+                        error_log=error_log,
+                        attempts=attempt,
+                    )
+                error_log.append(
+                    f"Validation failed (attempt {attempt}): {validation.error_message}"
+                )
+                context["correction_hint"] = validation.error_message
+            else:
                 return HarnessResult(
                     success=True,
                     format_type=context.get("format_type", "unknown"),
-                    payload=validation.validated_payload,
+                    payload=result.payload,
                     error_log=error_log,
                     attempts=attempt,
                 )
-
-            error_log.append(
-                f"Validation failed (attempt {attempt}): {validation.error_message}"
-            )
-            context["correction_hint"] = validation.error_message
 
         return HarnessResult(
             success=False,
