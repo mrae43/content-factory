@@ -19,7 +19,7 @@ from app.db.crud import (
     save_fact_check_claims,
 )
 from app.services.vector_store import ContentFactoryVectorStore
-from app.services.web_search import TavilySearchService
+from app.services.web_search import get_tavily_service
 from app.services.chunking import process_extraction_job
 from app.services.format_validator import (
     BlogValidator,
@@ -54,8 +54,6 @@ from app.core.config import settings
 from app.core.guardrails import get_guardrail_config, GuardrailStrictness
 
 logger = logging.getLogger("factory.orchestrator")
-
-_web_search_service = TavilySearchService()
 
 
 async def execute_state_transition(db: AsyncSession, job) -> None:
@@ -139,7 +137,7 @@ async def _transition_pending(db: AsyncSession, job) -> None:
 async def _transition_researching(db: AsyncSession, job) -> None:
     vector_store = ContentFactoryVectorStore(db)
 
-    web_service = _web_search_service
+    web_service = get_tavily_service()
 
     # 1. Tavily search by title
     web_results = await web_service.search(job.title)
@@ -402,7 +400,6 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
     agent_context = {
         "job_id": job.id,
         "script_content": latest_script,
-        "vector_store": vector_store,
         "guardrail_config": guardrail_cfg,
     }
     result = await red_team.run(context=agent_context)
