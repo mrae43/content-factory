@@ -1,7 +1,9 @@
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
+from uuid import UUID
 
 from app.workers.agents import RedTeamAgent, AgentActionStatus
+from app.services.tools import Tool
 
 
 def _make_agent():
@@ -9,7 +11,34 @@ def _make_agent():
     agent.model_name = "gemini-1.5-pro"
     agent.temperature = 0.1
     agent.llm = MagicMock()
+    agent.di_tools = {}
     return agent
+
+
+def _inject_search_tool(agent, vector_store_mock):
+    """Wire a mock semantic_search tool backed by the vector_store fixture."""
+    async def _search(
+        query: str,
+        job_id: str | None = None,
+        scope: str | None = None,
+        scopes: list[str] | None = None,
+        top_k: int = 5,
+        similarity_threshold: float | None = None,
+    ):
+        return await vector_store_mock.semantic_search(
+            query=query,
+            job_id=UUID(job_id) if job_id else None,
+            scope=scope,
+            scopes=scopes,
+            top_k=top_k,
+            similarity_threshold=similarity_threshold,
+        )
+
+    agent.di_tools["semantic_search"] = Tool(
+        name="semantic_search",
+        description="Mock semantic search",
+        callable=_search,
+    )
 
 
 @pytest.mark.agent
@@ -21,9 +50,9 @@ async def test_returns_success_when_all_supported(
     multi_chain_mock,
 ):
     agent = _make_agent()
+    _inject_search_tool(agent, mock_vector_store)
     context = {
         "script_content": "BRICS GDP grew 3.2% in 2024.",
-        "vector_store": mock_vector_store,
         "job_id": job_id,
     }
 
@@ -45,9 +74,9 @@ async def test_returns_revision_needed_when_unsupported(
     multi_chain_mock,
 ):
     agent = _make_agent()
+    _inject_search_tool(agent, mock_vector_store)
     context = {
         "script_content": "BRICS GDP grew 15% last year. New payment system launched.",
-        "vector_store": mock_vector_store,
         "job_id": job_id,
     }
 
@@ -72,9 +101,9 @@ async def test_returns_revision_needed_when_contested(
     multi_chain_mock,
 ):
     agent = _make_agent()
+    _inject_search_tool(agent, mock_vector_store)
     context = {
         "script_content": "BRICS controls 40% of global trade.",
-        "vector_store": mock_vector_store,
         "job_id": job_id,
     }
 
@@ -96,9 +125,9 @@ async def test_returns_escalate_when_no_sources(
 ):
     mock_vector_store.semantic_search.return_value = []
     agent = _make_agent()
+    _inject_search_tool(agent, mock_vector_store)
     context = {
         "script_content": "BRICS GDP grew 15% last year.",
-        "vector_store": mock_vector_store,
         "job_id": job_id,
     }
 
@@ -116,9 +145,9 @@ async def test_returns_escalate_on_llm_parse_error(
     job_id,
 ):
     agent = _make_agent()
+    _inject_search_tool(agent, mock_vector_store)
     context = {
         "script_content": "BRICS GDP grew 3.2% in 2024.",
-        "vector_store": mock_vector_store,
         "job_id": job_id,
     }
 
@@ -146,9 +175,9 @@ async def test_returns_success_when_uncertain_for_no_evidence_claim(
         [],
     ]
     agent = _make_agent()
+    _inject_search_tool(agent, mock_vector_store)
     context = {
         "script_content": "BRICS GDP grew 3.2% in 2024. New payment system launched.",
-        "vector_store": mock_vector_store,
         "job_id": job_id,
     }
 
