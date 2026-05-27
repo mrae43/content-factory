@@ -262,7 +262,7 @@ class TestTransitionResearching:
         ]
 
         with (
-            patch("app.workers.orchestrator._web_search_service") as mock_web,
+            patch("app.workers.orchestrator.get_tavily_service") as mock_web,
             patch(
                 "app.workers.orchestrator.ContentFactoryVectorStore",
                 return_value=mock_vector_store,
@@ -271,11 +271,11 @@ class TestTransitionResearching:
                 "app.workers.orchestrator.update_job_status", new_callable=AsyncMock
             ) as mock_update,
         ):
-            mock_web.search = AsyncMock(return_value=web_results)
+            mock_web.return_value.search = AsyncMock(return_value=web_results)
 
             await execute_state_transition(mock_db_session, mock_job)
 
-            mock_web.search.assert_awaited_once_with(mock_job.title)
+            mock_web.return_value.search.assert_awaited_once_with(mock_job.title)
             ingest_calls = mock_vector_store.ingest_chunks.call_args_list
             web_ingest = [c for c in ingest_calls if c.kwargs.get("scope") == "LOCAL"]
             assert len(web_ingest) == 1
@@ -297,7 +297,7 @@ class TestTransitionResearching:
         mock_job.status = JobStatusEnum.RESEARCHING
 
         with (
-            patch("app.workers.orchestrator._web_search_service") as mock_web,
+            patch("app.workers.orchestrator.get_tavily_service") as mock_web,
             patch(
                 "app.workers.orchestrator.ContentFactoryVectorStore",
                 return_value=mock_vector_store,
@@ -306,7 +306,7 @@ class TestTransitionResearching:
                 "app.workers.orchestrator.update_job_status", new_callable=AsyncMock
             ) as mock_update,
         ):
-            mock_web.search = AsyncMock(return_value=[])
+            mock_web.return_value.search = AsyncMock(return_value=[])
 
             await execute_state_transition(mock_db_session, mock_job)
 
@@ -334,14 +334,14 @@ class TestTransitionResearching:
         ]
 
         with (
-            patch("app.workers.orchestrator._web_search_service") as mock_web,
+            patch("app.workers.orchestrator.get_tavily_service") as mock_web,
             patch(
                 "app.workers.orchestrator.ContentFactoryVectorStore",
                 return_value=mock_vector_store,
             ),
             patch("app.workers.orchestrator.update_job_status", new_callable=AsyncMock),
         ):
-            mock_web.search = AsyncMock(return_value=web_results)
+            mock_web.return_value.search = AsyncMock(return_value=web_results)
 
             await execute_state_transition(mock_db_session, mock_job)
 
@@ -1698,7 +1698,7 @@ class TestOrchestratorMultiStep:
                 new_callable=AsyncMock,
                 return_value=["chunk1"],
             ),
-            patch("app.workers.orchestrator._web_search_service") as mock_web,
+            patch("app.workers.orchestrator.get_tavily_service") as mock_web,
             patch(
                 "app.workers.orchestrator.ContentFactoryVectorStore",
                 return_value=mock_vector_store,
@@ -1722,7 +1722,11 @@ class TestOrchestratorMultiStep:
                         return_value=HarnessResult(
                             success=True,
                             format_type="video",
-                            payload={"visual_style": "Cinematic", "_format": "video"},
+                            payload={
+                                "visual_style": "Cinematic",
+                                "_format": "video",
+                                "format_payload": {"slides": []},
+                            },
                             attempts=1,
                         )
                     )
@@ -1766,7 +1770,7 @@ class TestOrchestratorMultiStep:
                 new_callable=AsyncMock,
             ) as mock_cleanup,
         ):
-            mock_web.search = AsyncMock(return_value=[])
+            mock_web.return_value.search = AsyncMock(return_value=[])
             mock_get_script.return_value = mock_script
             mock_get_format_script.return_value = mock_script
             mock_script.format_payload = {"scenes": [], "visual_style": "Cinematic"}

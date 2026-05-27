@@ -1,12 +1,25 @@
 import logging
 import os
+from typing import Any, Dict, List
 
 import httpx
 from langchain_tavily import TavilySearch
 
+from app.services.tools import Tool
+
 logger = logging.getLogger(__name__)
 
 TAVILY_EXTRACT_URL = "https://api.tavily.com/extract"
+
+
+_tavily_service: "TavilySearchService | None" = None
+
+
+def get_tavily_service() -> "TavilySearchService":
+    global _tavily_service
+    if _tavily_service is None:
+        _tavily_service = TavilySearchService()
+    return _tavily_service
 
 
 class TavilySearchService:
@@ -59,3 +72,45 @@ class TavilySearchService:
         except Exception:
             logger.warning(f"Tavily extract failed for {len(urls)} URLs", exc_info=True)
             return []
+
+
+def make_execute_web_search_tool() -> Tool:
+    """Create a Tool wrapping TavilySearchService.search.
+
+    The returned ``Tool`` exposes ``llm_schema`` for ``bind_tools`` so
+    agents can let the LLM decide to call web search at runtime.
+    """
+    svc = get_tavily_service()
+
+    async def _search(query: str) -> List[Dict[str, Any]]:
+        return await svc.search(query)
+
+    return Tool(
+        name="execute_web_search",
+        description=(
+            "Search the web for current information on a given query. "
+            "Returns a list of result dicts with url, content, title, and score."
+        ),
+        callable=_search,
+        permissions={"RedTeamAgent", "*"},
+        llm_schema={
+            "type": "function",
+            "function": {
+                "name": "execute_web_search",
+                "description": (
+                    "Search the web for current information. "
+                    "Returns results with url, content, title, and score."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "The search query to look up on the web",
+                        },
+                    },
+                    "required": ["query"],
+                },
+            },
+        },
+    )

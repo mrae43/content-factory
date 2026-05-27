@@ -35,15 +35,15 @@ class TestTransitionResearchingSourceTypes:
         ]
 
         with (
-            patch("app.workers.orchestrator._web_search_service") as mock_web,
+            patch("app.workers.orchestrator.get_tavily_service") as mock_web,
             patch(
                 "app.workers.orchestrator.ContentFactoryVectorStore",
                 return_value=mock_vector_store,
             ),
             patch("app.workers.orchestrator.update_job_status", new_callable=AsyncMock),
         ):
-            mock_web.search = AsyncMock(return_value=web_results)
-            mock_web.extract = AsyncMock(return_value=extracted_results)
+            mock_web.return_value.search = AsyncMock(return_value=web_results)
+            mock_web.return_value.extract = AsyncMock(return_value=extracted_results)
 
             await execute_state_transition(mock_db_session, mock_job)
 
@@ -89,19 +89,19 @@ class TestTransitionResearchingSourceTypes:
         ]
 
         with (
-            patch("app.workers.orchestrator._web_search_service") as mock_web,
+            patch("app.workers.orchestrator.get_tavily_service") as mock_web,
             patch(
                 "app.workers.orchestrator.ContentFactoryVectorStore",
                 return_value=mock_vector_store,
             ),
             patch("app.workers.orchestrator.update_job_status", new_callable=AsyncMock),
         ):
-            mock_web.search = AsyncMock(return_value=web_results)
-            mock_web.extract = AsyncMock()
+            mock_web.return_value.search = AsyncMock(return_value=web_results)
+            mock_web.return_value.extract = AsyncMock()
 
             await execute_state_transition(mock_db_session, mock_job)
 
-            mock_web.extract.assert_not_awaited()
+            mock_web.return_value.extract.assert_not_awaited()
             ingest_calls = mock_vector_store.ingest_chunks.call_args_list
             web_ingest = [
                 c
@@ -125,19 +125,21 @@ class TestTransitionResearchingSourceTypes:
         ]
 
         with (
-            patch("app.workers.orchestrator._web_search_service") as mock_web,
+            patch("app.workers.orchestrator.get_tavily_service") as mock_web,
             patch(
                 "app.workers.orchestrator.ContentFactoryVectorStore",
                 return_value=mock_vector_store,
             ),
             patch("app.workers.orchestrator.update_job_status", new_callable=AsyncMock),
         ):
-            mock_web.search = AsyncMock(return_value=web_results)
-            mock_web.extract = AsyncMock(return_value=[])
+            mock_web.return_value.search = AsyncMock(return_value=web_results)
+            mock_web.return_value.extract = AsyncMock(return_value=[])
 
             await execute_state_transition(mock_db_session, mock_job)
 
-            mock_web.extract.assert_awaited_once_with(["https://example.com/source"])
+            mock_web.return_value.extract.assert_awaited_once_with(
+                ["https://example.com/source"]
+            )
             ingest_calls = mock_vector_store.ingest_chunks.call_args_list
             url_extract_ingest = [
                 c

@@ -167,4 +167,41 @@ def make_semantic_search_tool(
         description="Search the pgvector HNSW index for semantically similar chunks.",
         callable=_search,
         permissions={"RedTeamAgent", "*"},
+        llm_schema={
+            "type": "function",
+            "function": {
+                "name": "semantic_search",
+                "description": (
+                    "Search the vector store for semantically similar chunks "
+                    "to the given query text."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "The text to search semantically",
+                        },
+                        "job_id": {
+                            "type": "string",
+                            "description": "Filter to chunks from a specific job",
+                        },
+                        "scope": {
+                            "type": "string",
+                            "description": "Single scope filter (e.g. RAW-CONTEXT, LOCAL)",
+                        },
+                        "scopes": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Multi-scope filter, takes precedence over scope",
+                        },
+                        "top_k": {
+                            "type": "integer",
+                            "description": "Maximum number of results to return",
+                        },
+                    },
+                    "required": ["query"],
+                },
+            },
+        },
     )

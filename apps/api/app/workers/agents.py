@@ -8,6 +8,7 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
+from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 from langchain_core.prompts import ChatPromptTemplate
 
 from app.services.llm import get_llm
@@ -102,6 +103,60 @@ class LLMAgent(BaseAgent):
         self.model_name = model_name
         self.temperature = temperature
         self.llm = get_llm(model_name=self.model_name, temperature=self.temperature)
+
+    async def _run_tool_loop(
+        self,
+        system_prompt: str,
+        human_content: str,
+        max_rounds: int = 5,
+    ) -> str:
+        """Invoke the LLM with tools bound, resolving any tool calls.
+
+        Returns the final text content after all tool calls complete.
+        If ``llm_with_tools`` is not set (no tools bound), falls back
+        to a plain LLM invocation.
+        """
+        messages: list = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=human_content),
+        ]
+
+        llm = getattr(self, "llm_with_tools", None) or self.llm
+        response = await llm.ainvoke(messages)
+
+        for _ in range(max_rounds):
+            if not hasattr(response, "tool_calls") or not response.tool_calls:
+                return response.content or ""
+            for tc in response.tool_calls:
+                tool_name = tc.get("name", "")
+                tool_args = tc.get("args", {})
+                tool = (getattr(self, "llm_tools", {}) or {}).get(tool_name)
+                if tool:
+                    try:
+                        result = await tool.callable(**tool_args)
+                        messages.append(
+                            ToolMessage(
+                                content=str(result)[:8000],
+                                tool_call_id=tc.get("id", ""),
+                            )
+                        )
+                    except Exception as exc:
+                        messages.append(
+                            ToolMessage(
+                                content=f"Tool error: {exc}",
+                                tool_call_id=tc.get("id", ""),
+                            )
+                        )
+                else:
+                    messages.append(
+                        ToolMessage(
+                            content=f"Unknown tool: {tool_name}",
+                            tool_call_id=tc.get("id", ""),
+                        )
+                    )
+            response = await llm.ainvoke(messages)
+
+        return response.content or ""
 
 
 class ServiceAgent(BaseAgent):
@@ -356,13 +411,12 @@ EVALUATION_HUMAN = (
 
 class RedTeamAgent(LLMAgent):
     _required_di_tools: ClassVar[List[str]] = ["semantic_search"]
-    _required_llm_tools: ClassVar[List[str]] = []
+    _required_llm_tools: ClassVar[List[str]] = ["execute_web_search"]
     _permissions: ClassVar[Set[str]] = {"RedTeamAgent"}
     input_schema: ClassVar[Optional[Type[BaseModel]]] = None
 
     async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
         script_content = context.get("script_content", "")
-        vector_store = context.get("vector_store")
         job_id = context.get("job_id")
         guardrail_config = context.get("guardrail_config")
 
@@ -422,15 +476,16 @@ class RedTeamAgent(LLMAgent):
             f"RedTeamAgent extracted {len(extracted.claims)} claims for Job {job_id}"
         )
 
-        # Pass 2: Per-claim evidence retrieval
+        # Pass 2: Per-claim evidence retrieval via DI tool
+        search_tool = self.di_tools.get("semantic_search")
         top_k = guardrail_config.top_k_per_claim if guardrail_config else 5
         threshold = guardrail_config.similarity_threshold if guardrail_config else None
         enriched_claims: List[ClaimEvidence] = []
-        if vector_store and job_id:
+        if search_tool and job_id:
             for claim in extracted.claims:
-                evidence_results = await vector_store.semantic_search(
+                evidence_results = await search_tool.callable(
                     query=claim.search_query,
-                    job_id=job_id,
+                    job_id=str(job_id),
                     scopes=["RAW-CONTEXT", "LOCAL"],
                     top_k=top_k,
                     similarity_threshold=threshold,
@@ -458,6 +513,30 @@ class RedTeamAgent(LLMAgent):
             )
 
         enriched_claims_text = _format_enriched_claims(enriched_claims)
+
+        # Pass 2.5: LLM-driven web research for claims needing more evidence
+        llm_tools_avail = hasattr(self, "llm_with_tools") and getattr(
+            self, "llm_tools", {}
+        )
+        if llm_tools_avail:
+            research_prompt = (
+                "You are a research assistant reviewing claims and their evidence.\n\n"
+                "For each claim, decide if the provided evidence is sufficient to reach "
+                "a confident verdict. If evidence is insufficient, call "
+                "execute_web_search to find supporting or contradicting information.\n\n"
+                "Only search for claims where the current evidence is clearly insufficient "
+                "— do not waste searches on well-supported claims.\n\n"
+                f"Claims and current evidence:\n\n{enriched_claims_text}"
+            )
+            web_results = await self._run_tool_loop(
+                system_prompt="You are a precise research assistant.",
+                human_content=research_prompt,
+                max_rounds=3,
+            )
+            if web_results.strip():
+                enriched_claims_text += (
+                    f"\n\n## Additional Web Research\n\n{web_results}"
+                )
 
         # Pass 3: Evaluate with per-claim evidence
         evaluation_prompt = ChatPromptTemplate.from_messages(
