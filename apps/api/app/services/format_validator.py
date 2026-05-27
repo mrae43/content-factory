@@ -3,6 +3,8 @@ from typing import Optional
 
 from pydantic import BaseModel, ValidationError
 
+from app.services.tools import Tool
+
 from app.schemas.formats import (
     BlogFormatPayload,
     CarouselFormatPayload,
@@ -84,8 +86,29 @@ class CarouselValidator(FormatValidator):
         dump["char_limit_violations"] = []
         return FormatValidationResult(
             valid=True,
-            validated_payload=dump,
+            validated_payload=validated.model_dump(by_alias=True, mode="json"),
         )
+
+
+def make_validate_format_tool(
+    validator: FormatValidator,
+) -> Tool:
+    """Create a Tool wrapping ``FormatValidator.validate``.
+
+    The returned ``Tool`` is DI-only and wraps the given validator instance
+    so that AgentHarness can invoke format validation via the tool registry.
+    """
+
+    async def _validate(payload: dict) -> dict:
+        result = validator.validate(payload)
+        return result.model_dump()
+
+    return Tool(
+        name="validate_format",
+        description="Validate a formatted payload against format-specific rules.",
+        callable=_validate,
+        permissions={"AgentHarness", "*"},
+    )
 
 
 class VideoValidator(FormatValidator):
