@@ -104,6 +104,25 @@ class LLMAgent(BaseAgent):
         self.temperature = temperature
         self.llm = get_llm(model_name=self.model_name, temperature=self.temperature)
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        reraise=True,
+        before_sleep=lambda retry_state: logger.warning(
+            f"Agent API Error. Retrying in {retry_state.next_action.sleep}s..."
+        ),
+    )
+    async def run(self, context: Dict[str, Any], **kwargs) -> AgentResult:
+        for tool_name in getattr(self, "_required_di_tools", []):
+            if tool_name not in self.di_tools:
+                return AgentResult(
+                    status=AgentActionStatus.ERROR,
+                    payload={},
+                    reasoning=f"Required DI tool '{tool_name}' not injected into {type(self).__name__}",
+                    confidence_score=0.0,
+                )
+        return await self._execute(context, **kwargs)
+
     async def _run_tool_loop(
         self,
         system_prompt: str,
