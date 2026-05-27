@@ -60,6 +60,16 @@ A media artifact that must be rendered from a blueprint. Two sub-types, both pro
 
 _Avoid_: Calling a Carousel a "Format Output" — it's a Visual Asset that gets rendered, not formatted.
 
+## Visual Generation
+
+The role of the AssetStudioAgent: translate video scenes and visual style into technical visual/audio prompts for production-grade AI models (Veo for video, Lyria for audio). Visual Generation explicitly does NOT generate text or typography — text captions are a separate concern handled by the text generation layer (CopywriterAgent, formatters). This is a hard domain separation boundary: the visual model renders the image; the text agent renders the caption. Rule 2 in AssetStudioAgent's prompt enforces this: "Do NOT include text or typography in visual prompts."
+
+_Avoid_: Asking the Asset Studio to embed text into generated images. That is an integration failure, not a feature gap.
+
+## Underspecified Scene
+
+Input that lacks sufficient detail to produce a coherent visual/audio prompt within the 2-sentence hard limit. When a scene cannot be specified in 2 sentences of prompt, that is a signal the scene input is underspecified — the agent must return status=ERROR describing what is missing, not expand the prompt. This is enforced by AssetStudioAgent Rule 3.
+
 ## Red Team Report
 
 The output of a fact-checking pass over a Script. Produced by the Fact-Check Desk (Red Team agent). Contains a list of Claim Verdicts plus an overall reasoning summary. Each claim is extracted, cross-referenced against evidence chunks, and assigned a verdict.
@@ -73,6 +83,10 @@ The evaluation of a single atomic claim extracted from a script. Contains:
 - **evidence_text** — human-readable evidence summary
 - **evidence_references** — links to the Research Chunks that informed the verdict
 - **category** — `statistic`, `attribution`, `chronological`, `causal`, `comparative`
+
+## Evidence Grounding
+
+The constraint that every claim verdict from the RedTeamAgent must trace to specific evidence chunks retrieved from the vector store. If no evidence is available for a claim, the verdict must be assigned as UNCERTAIN — the agent must not fabricate a SUPPORTED or REFUTED verdict to fill the gap. Enforced by the ## RULES section in `EVALUATION_SYSTEM` (agents.py). Also prohibits misrepresenting evidence to fit a preferred verdict: if the evidence genuinely conflicts, the correct outcome is UNCERTAIN with `conflicting_evidence=true`, not a forced SUPPORTED or REFUTED.
 
 ## Guardrail Strictness
 
