@@ -21,6 +21,8 @@ class HarnessResult(BaseModel):
     error_log: List[str] = Field(default_factory=list)
     attempts: int = 0
     escalated: bool = False
+    agent_status: Optional[AgentActionStatus] = None
+    reasoning: str = ""
 
 
 class AgentHarness:
@@ -63,7 +65,24 @@ class AgentHarness:
         serialized = json.dumps(payload, sort_keys=True, default=str)
         return hashlib.sha256(serialized.encode()).hexdigest()
 
+    def _filter_context(self, context: Dict) -> Dict:
+        """Validate and filter context against the agent's input_schema.
+
+        If the agent declares an ``input_schema`` (a subclass of
+        ``BaseModel``), only fields matching the schema's model fields
+        are passed through.  Agents with no ``input_schema`` (``None``)
+        receive the full context dict unchanged.
+        """
+        schema = getattr(self.agent, "input_schema", None)
+        if schema is None:
+            return context
+        if not (isinstance(schema, type) and issubclass(schema, BaseModel)):
+            return context
+        model_fields = set(schema.model_fields.keys())
+        return {k: v for k, v in context.items() if k in model_fields}
+
     async def run_with_harness(self, context: Dict) -> HarnessResult:
+        context = self._filter_context(context)
         if isinstance(self.agent, ServiceAgent):
             return await self._run_service_agent(context)
         return await self._run_llm_agent_with_retry(context)
@@ -83,6 +102,7 @@ class AgentHarness:
                 error_log=[f"Agent escalated: {result.reasoning}"],
                 attempts=1,
                 escalated=True,
+                agent_status=result.status,
             )
 
         if result.status != AgentActionStatus.SUCCESS:
@@ -91,6 +111,7 @@ class AgentHarness:
                 format_type=context.get("format_type", "unknown"),
                 error_log=[f"Agent failed: {result.reasoning}"],
                 attempts=1,
+                agent_status=result.status,
             )
 
         return HarnessResult(
@@ -121,6 +142,20 @@ class AgentHarness:
                     error_log=[f"Agent escalated: {result.reasoning}"],
                     attempts=attempt,
                     escalated=True,
+                    agent_status=result.status,
+                    reasoning=result.reasoning or "",
+                )
+
+            if result.status == AgentActionStatus.REVISION_NEEDED:
+                return HarnessResult(
+                    success=False,
+                    format_type=context.get("format_type", "unknown"),
+                    payload=result.payload,
+                    error_log=[f"Agent requires revision: {result.reasoning}"],
+                    attempts=attempt,
+                    escalated=False,
+                    agent_status=result.status,
+                    reasoning=result.reasoning or "",
                 )
 
             if result.status != AgentActionStatus.SUCCESS:

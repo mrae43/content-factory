@@ -136,6 +136,36 @@ class ContentFactoryVectorStore:
         return filtered
 
 
+def make_ingest_chunks_tool(
+    vector_store: ContentFactoryVectorStore,
+) -> Tool:
+    """Create a Tool wrapping ``ContentFactoryVectorStore.ingest_chunks``.
+
+    The returned ``Tool`` is DI-only (no LLM schema) and is intended for
+    orchestrator transitions that need to embed and persist text chunks.
+    """
+
+    async def _ingest(
+        job_id: UUID,
+        chunks: List[str],
+        scope: str = "LOCAL",
+        meta: Optional[Dict[str, Any]] = None,
+    ) -> int:
+        return await vector_store.ingest_chunks(
+            job_id=job_id,
+            chunks=chunks,
+            scope=scope,
+            meta=meta,
+        )
+
+    return Tool(
+        name="ingest_chunks",
+        description="Embed text chunks and insert them into the pgvector table.",
+        callable=_ingest,
+        permissions={"*"},
+    )
+
+
 def make_semantic_search_tool(
     vector_store: ContentFactoryVectorStore,
 ) -> Tool:
