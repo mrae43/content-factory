@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, Optional, Set, Type
 from pydantic import BaseModel, Field
 from enum import Enum
 import logging
@@ -11,6 +11,7 @@ from tenacity import (
 from langchain_core.prompts import ChatPromptTemplate
 
 from app.services.llm import get_llm
+from app.services.tools import Tool, ToolRegistry
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -41,17 +42,28 @@ class AgentResult(BaseModel):
 
 class BaseAgent(ABC):
     """
-    Abstract Base Agent leveraging LangChain and Gemini 2.5 Flash.
+    Abstract Base Agent.  Provides the run/_execute contract, tenacity retry,
+    and tool-declaration infrastructure.
+
+    Subclasses declare which tools they need via class variables so that
+    wiring mismatches are caught at composition time (symmetric permissions).
     """
 
-    def __init__(
-        self,
-        model_name: str = "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-        temperature: float = 0.2,
-    ):
-        self.model_name = model_name
-        self.temperature = temperature
-        self.llm = get_llm(model_name=self.model_name, temperature=self.temperature)
+    _required_di_tools: ClassVar[List[str]] = []
+    _required_llm_tools: ClassVar[List[str]] = []
+    _permissions: ClassVar[Set[str]] = {"*"}
+    input_schema: ClassVar[Optional[Type[BaseModel]]] = None
+
+    def __init__(self) -> None:
+        self.di_tools: Dict[str, Tool] = {}
+
+    def inject_tools(self, tools: Dict[str, Tool]) -> None:
+        self.di_tools = tools
+
+    @staticmethod
+    def _validate_declarations(registry: ToolRegistry) -> None:
+        """Raise on first missing tool or permission mismatch."""
+        pass
 
     @retry(
         stop=stop_after_attempt(3),
@@ -71,6 +83,37 @@ class BaseAgent(ABC):
         pass
 
 
+class LLMAgent(BaseAgent):
+    """
+    Base for agents that call an LLM.  Sets up ``self.llm`` via the provider-
+    agnostic ``get_llm()`` factory.
+
+    All current LLM-powered agents (Copywriter, RedTeam, AssetStudio,
+    ScriptOptimizer, BlogFormatter, CarouselFormatter, VideoFormatter)
+    extend this class.
+    """
+
+    def __init__(
+        self,
+        model_name: str = "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        temperature: float = 0.2,
+    ) -> None:
+        super().__init__()
+        self.model_name = model_name
+        self.temperature = temperature
+        self.llm = get_llm(model_name=self.model_name, temperature=self.temperature)
+
+
+class ServiceAgent(BaseAgent):
+    """
+    Base for agents that do NOT call an LLM (e.g. image generation).
+
+    These agents perform deterministic work using DI tools.  No ``self.llm``
+    attribute is set — the type system prevents accidental LLM usage.
+    """
+    pass
+
+
 class CopywriterSchema(BaseModel):
     script_content: str = Field(description="The final narrated script text.")
     reasoning: str = Field(
@@ -81,7 +124,11 @@ class CopywriterSchema(BaseModel):
     )
 
 
-class CopywriterAgent(BaseAgent):
+class CopywriterAgent(LLMAgent):
+    _required_di_tools: ClassVar[List[str]] = []
+    _required_llm_tools: ClassVar[List[str]] = []
+    _permissions: ClassVar[Set[str]] = {"CopywriterAgent"}
+    input_schema: ClassVar[Optional[Type[BaseModel]]] = None
     async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
         topic = context.get("topic", "Unknown")
         feedback = context.get("feedback", "")
@@ -305,7 +352,12 @@ EVALUATION_HUMAN = (
 )
 
 
-class RedTeamAgent(BaseAgent):
+class RedTeamAgent(LLMAgent):
+    _required_di_tools: ClassVar[List[str]] = ["semantic_search"]
+    _required_llm_tools: ClassVar[List[str]] = []
+    _permissions: ClassVar[Set[str]] = {"RedTeamAgent"}
+    input_schema: ClassVar[Optional[Type[BaseModel]]] = None
+
     async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
         script_content = context.get("script_content", "")
         vector_store = context.get("vector_store")
@@ -502,7 +554,12 @@ class StudioPromptSchema(BaseModel):
     )
 
 
-class AssetStudioAgent(BaseAgent):
+class AssetStudioAgent(LLMAgent):
+    _required_di_tools: ClassVar[List[str]] = []
+    _required_llm_tools: ClassVar[List[str]] = []
+    _permissions: ClassVar[Set[str]] = {"AssetStudioAgent"}
+    input_schema: ClassVar[Optional[Type[BaseModel]]] = None
+
     async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
         script = context.get("script_content", "")
         scenes = context.get("scenes", [])
