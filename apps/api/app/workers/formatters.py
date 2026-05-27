@@ -1,10 +1,10 @@
 import logging
-from typing import Any, Dict, List
+from typing import Any, ClassVar, Dict, List, Optional, Set, Type
 
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
-from app.workers.agents import AgentActionStatus, AgentResult, BaseAgent
+from app.workers.agents import AgentActionStatus, AgentResult, LLMAgent
 from app.schemas.formats import BlogSection, SeoMeta, CarouselSlide, VideoScene
 
 logger = logging.getLogger(__name__)
@@ -302,7 +302,12 @@ VIDEO_FORMATTER_HUMAN = (
 )
 
 
-class BlogFormatterAgent(BaseAgent):
+class BlogFormatterAgent(LLMAgent):
+    _required_di_tools: ClassVar[List[str]] = []
+    _required_llm_tools: ClassVar[List[str]] = []
+    _permissions: ClassVar[Set[str]] = {"BlogFormatterAgent"}
+    input_schema: ClassVar[Optional[Type[BaseModel]]] = None
+
     async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
         script_content = context.get("script_content", "")
         refined_context = context.get("refined_context", "")
@@ -394,7 +399,12 @@ class BlogFormatterAgent(BaseAgent):
         )
 
 
-class CarouselFormatterAgent(BaseAgent):
+class CarouselFormatterAgent(LLMAgent):
+    _required_di_tools: ClassVar[List[str]] = []
+    _required_llm_tools: ClassVar[List[str]] = []
+    _permissions: ClassVar[Set[str]] = {"CarouselFormatterAgent"}
+    input_schema: ClassVar[Optional[Type[BaseModel]]] = None
+
     async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
         script_content = context.get("script_content", "")
         refined_context = context.get("refined_context", "")
@@ -494,7 +504,12 @@ class CarouselFormatterAgent(BaseAgent):
         )
 
 
-class VideoFormatterAgent(BaseAgent):
+class VideoFormatterAgent(LLMAgent):
+    _required_di_tools: ClassVar[List[str]] = []
+    _required_llm_tools: ClassVar[List[str]] = []
+    _permissions: ClassVar[Set[str]] = {"VideoFormatterAgent"}
+    input_schema: ClassVar[Optional[Type[BaseModel]]] = None
+
     async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
         script_content = context.get("script_content", "")
         refined_context = context.get("refined_context", "")

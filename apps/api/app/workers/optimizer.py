@@ -1,10 +1,10 @@
 import logging
-from typing import Any, Dict, List
+from typing import Any, ClassVar, Dict, List, Optional, Set, Type
 
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
-from app.workers.agents import BaseAgent, AgentResult, AgentActionStatus
+from app.workers.agents import LLMAgent, AgentResult, AgentActionStatus
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +84,12 @@ def format_failed_claims(claims: List[dict]) -> str:
     return "\n\n".join(sections)
 
 
-class ScriptOptimizerAgent(BaseAgent):
+class ScriptOptimizerAgent(LLMAgent):
+    _required_di_tools: ClassVar[List[str]] = []
+    _required_llm_tools: ClassVar[List[str]] = []
+    _permissions: ClassVar[Set[str]] = {"ScriptOptimizerAgent"}
+    input_schema: ClassVar[Optional[Type[BaseModel]]] = None
+
     async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
         original_script = context.get("script_content", "")
         failed_claims = context.get("failed_claims", [])
