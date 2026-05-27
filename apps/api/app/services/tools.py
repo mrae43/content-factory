@@ -77,3 +77,18 @@ class ToolRegistry:
 
     def __contains__(self, name: str) -> bool:
         return name in self._tools
+
+
+def register_standard_tools() -> None:
+    registry = ToolRegistry()
+    if "generate_image" not in registry:
+        from app.services.image_gen import make_generate_image_tool
+
+        registry.register(make_generate_image_tool())
+    if "upload_image" not in registry:
+        from app.storage.adapter import make_upload_image_tool
+
+        registry.register(make_upload_image_tool())
+    if "semantic_search" not in registry:
+        # registered externally when vector_store is available
+        pass
