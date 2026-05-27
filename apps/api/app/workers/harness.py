@@ -21,6 +21,8 @@ class HarnessResult(BaseModel):
     error_log: List[str] = Field(default_factory=list)
     attempts: int = 0
     escalated: bool = False
+    agent_status: Optional[AgentActionStatus] = None
+    reasoning: str = ""
 
 
 class AgentHarness:
@@ -100,6 +102,7 @@ class AgentHarness:
                 error_log=[f"Agent escalated: {result.reasoning}"],
                 attempts=1,
                 escalated=True,
+                agent_status=result.status,
             )
 
         if result.status != AgentActionStatus.SUCCESS:
@@ -108,6 +111,7 @@ class AgentHarness:
                 format_type=context.get("format_type", "unknown"),
                 error_log=[f"Agent failed: {result.reasoning}"],
                 attempts=1,
+                agent_status=result.status,
             )
 
         return HarnessResult(
@@ -138,6 +142,20 @@ class AgentHarness:
                     error_log=[f"Agent escalated: {result.reasoning}"],
                     attempts=attempt,
                     escalated=True,
+                    agent_status=result.status,
+                    reasoning=result.reasoning or "",
+                )
+
+            if result.status == AgentActionStatus.REVISION_NEEDED:
+                return HarnessResult(
+                    success=False,
+                    format_type=context.get("format_type", "unknown"),
+                    payload=result.payload,
+                    error_log=[f"Agent requires revision: {result.reasoning}"],
+                    attempts=attempt,
+                    escalated=False,
+                    agent_status=result.status,
+                    reasoning=result.reasoning or "",
                 )
 
             if result.status != AgentActionStatus.SUCCESS:
