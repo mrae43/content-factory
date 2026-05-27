@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from app.db.models import ResearchChunk
 from app.services.llm import get_embeddings, get_query_embeddings
+from app.services.tools import Tool
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -133,3 +134,36 @@ class ContentFactoryVectorStore:
             )
 
         return filtered
+
+
+def make_semantic_search_tool(
+    vector_store: ContentFactoryVectorStore,
+) -> Tool:
+    """Create a Tool wrapping ``ContentFactoryVectorStore.semantic_search``.
+
+    The returned ``Tool`` can be injected as a DI tool into agents that
+    need to perform semantic retrieval (e.g. ``RedTeamAgent``).
+    """
+    async def _search(
+        query: str,
+        job_id: Optional[UUID] = None,
+        scope: Optional[str] = None,
+        scopes: Optional[List[str]] = None,
+        top_k: int = 5,
+        similarity_threshold: Optional[float] = None,
+    ) -> List[Dict[str, Any]]:
+        return await vector_store.semantic_search(
+            query=query,
+            job_id=job_id,
+            scope=scope,
+            scopes=scopes,
+            top_k=top_k,
+            similarity_threshold=similarity_threshold,
+        )
+
+    return Tool(
+        name="semantic_search",
+        description="Search the pgvector HNSW index for semantically similar chunks.",
+        callable=_search,
+        permissions={"RedTeamAgent", "*"},
+    )
