@@ -89,6 +89,10 @@ def register_standard_tools() -> None:
         from app.storage.adapter import make_upload_image_tool
 
         registry.register(make_upload_image_tool())
+    if "execute_web_search" not in registry:
+        from app.services.web_search import make_execute_web_search_tool
+
+        registry.register(make_execute_web_search_tool())
     if "semantic_search" not in registry:
         # registered externally when vector_store is available
         pass
