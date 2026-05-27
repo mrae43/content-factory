@@ -50,14 +50,22 @@ async def test_tool_loop_falls_back_to_plain_llm_when_no_tools_bound():
 async def test_tool_loop_resolves_single_tool_call():
     agent = _make_agent()
     mock_tool = MagicMock()
-    mock_tool.callable = AsyncMock(return_value={"results": [{"url": "https://example.com", "content": "test"}]})
+    mock_tool.callable = AsyncMock(
+        return_value={"results": [{"url": "https://example.com", "content": "test"}]}
+    )
     agent.llm_tools = {"execute_web_search": mock_tool}
 
     from langchain_core.messages import AIMessage
 
     first = AIMessage(
         content="",
-        tool_calls=[{"name": "execute_web_search", "args": {"query": "BRICS GDP"}, "id": "call_1"}],
+        tool_calls=[
+            {
+                "name": "execute_web_search",
+                "args": {"query": "BRICS GDP"},
+                "id": "call_1",
+            }
+        ],
     )
     second = AIMessage(content="Found GDP data: 3.2%")
 
@@ -145,7 +153,9 @@ async def test_tool_loop_handles_tool_exception():
 
     first = AIMessage(
         content="",
-        tool_calls=[{"name": "execute_web_search", "args": {"query": "test"}, "id": "call_1"}],
+        tool_calls=[
+            {"name": "execute_web_search", "args": {"query": "test"}, "id": "call_1"}
+        ],
     )
     second = AIMessage(content="Tool errored, continuing without data")
 
@@ -174,7 +184,9 @@ async def test_tool_loop_respects_max_rounds():
     # Always returns tool calls — should stop after max_rounds
     tool_response = AIMessage(
         content="",
-        tool_calls=[{"name": "execute_web_search", "args": {"query": "again"}, "id": "call_x"}],
+        tool_calls=[
+            {"name": "execute_web_search", "args": {"query": "again"}, "id": "call_x"}
+        ],
     )
 
     agent.llm_with_tools = AsyncMock()
@@ -229,7 +241,10 @@ async def test_red_team_uses_di_tools_for_pass2(
     multi_chain_mock,
 ):
     mock_vector_store.semantic_search.return_value = [
-        {"content": "IMF confirms BRICS GDP grew 3.2% in 2024.", "similarity_score": 0.95},
+        {
+            "content": "IMF confirms BRICS GDP grew 3.2% in 2024.",
+            "similarity_score": 0.95,
+        },
     ]
     agent = RedTeamAgent.__new__(RedTeamAgent)
     agent.model_name = "gemini-1.5-pro"

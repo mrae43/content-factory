@@ -17,6 +17,7 @@ def _make_agent():
 
 def _inject_search_tool(agent, vector_store_mock):
     """Wire a mock semantic_search tool backed by the vector_store fixture."""
+
     async def _search(
         query: str,
         job_id: str | None = None,

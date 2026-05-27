@@ -137,7 +137,9 @@ class TestTransitionResearchingSourceTypes:
 
             await execute_state_transition(mock_db_session, mock_job)
 
-            mock_web.return_value.extract.assert_awaited_once_with(["https://example.com/source"])
+            mock_web.return_value.extract.assert_awaited_once_with(
+                ["https://example.com/source"]
+            )
             ingest_calls = mock_vector_store.ingest_chunks.call_args_list
             url_extract_ingest = [
                 c

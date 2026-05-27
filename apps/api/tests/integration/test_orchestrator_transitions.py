@@ -1722,7 +1722,11 @@ class TestOrchestratorMultiStep:
                         return_value=HarnessResult(
                             success=True,
                             format_type="video",
-                            payload={"visual_style": "Cinematic", "_format": "video", "format_payload": {"slides": []}},
+                            payload={
+                                "visual_style": "Cinematic",
+                                "_format": "video",
+                                "format_payload": {"slides": []},
+                            },
                             attempts=1,
                         )
                     )
