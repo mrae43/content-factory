@@ -1716,7 +1716,7 @@ class TestOrchestratorMultiStep:
                 return_value=_mock_agent_class(asset_result).return_value,
             ),
             patch(
-                "app.workers.orchestrator.FormatterHarness",
+                "app.workers.orchestrator.AgentHarness",
                 return_value=MagicMock(
                     run_with_harness=AsyncMock(
                         return_value=HarnessResult(
