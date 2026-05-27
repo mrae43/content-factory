@@ -18,7 +18,7 @@ from app.db.crud import (
     append_script_feedback,
     save_fact_check_claims,
 )
-from app.services.vector_store import ContentFactoryVectorStore
+from app.services.vector_store import ContentFactoryVectorStore, make_ingest_chunks_tool
 from app.services.web_search import get_tavily_service
 from app.services.chunking import process_extraction_job
 from app.services.format_validator import (
@@ -54,6 +54,18 @@ from app.core.config import settings
 from app.core.guardrails import get_guardrail_config, GuardrailStrictness
 
 logger = logging.getLogger("factory.orchestrator")
+
+_VECTOR_STORE_ATTR = "_transition_vector_store"
+
+
+def _get_vector_store(db: AsyncSession) -> ContentFactoryVectorStore:
+    """Obtain a ``ContentFactoryVectorStore`` for the current transition.
+
+    Creates a fresh instance.  Once the orchestrator gains access to a
+    pre-configured vector store via the tool registry this helper can be
+    replaced with a registry lookup.
+    """
+    return ContentFactoryVectorStore(db)
 
 
 async def execute_state_transition(db: AsyncSession, job) -> None:
@@ -121,8 +133,9 @@ async def _transition_pending(db: AsyncSession, job) -> None:
     raw_chunks = await process_extraction_job(str(job.id), raw_text)
 
     if raw_chunks:
-        vector_store = ContentFactoryVectorStore(db)
-        await vector_store.ingest_chunks(
+        vs = _get_vector_store(db)
+        ingest_tool = make_ingest_chunks_tool(vs)
+        await ingest_tool.callable(
             job_id=job.id,
             chunks=raw_chunks,
             scope="RAW-CONTEXT",
@@ -135,7 +148,8 @@ async def _transition_pending(db: AsyncSession, job) -> None:
 
 
 async def _transition_researching(db: AsyncSession, job) -> None:
-    vector_store = ContentFactoryVectorStore(db)
+    vs = _get_vector_store(db)
+    ingest_tool = make_ingest_chunks_tool(vs)
 
     web_service = get_tavily_service()
 
@@ -150,7 +164,7 @@ async def _transition_researching(db: AsyncSession, job) -> None:
             logger.info(
                 f"Ingesting {len(web_texts)} web search results for Job {job.id}"
             )
-            await vector_store.ingest_chunks(
+            await ingest_tool.callable(
                 job_id=job.id,
                 chunks=web_texts,
                 scope="LOCAL",
@@ -174,7 +188,7 @@ async def _transition_researching(db: AsyncSession, job) -> None:
                 logger.info(
                     f"Ingesting {len(ext_texts)} URL extraction results for Job {job.id}"
                 )
-                await vector_store.ingest_chunks(
+                await ingest_tool.callable(
                     job_id=job.id,
                     chunks=ext_texts,
                     scope="LOCAL",
@@ -222,7 +236,7 @@ async def _transition_retrieval(db: AsyncSession, job) -> None:
 
 async def _build_script_context(db: AsyncSession, job) -> AssembledContext:
     try:
-        vector_store = ContentFactoryVectorStore(db)
+        vector_store = _get_vector_store(db)
         story_directives = job.story_directives or {}
         return await _build_context_from_service(
             title=job.title,
@@ -376,7 +390,7 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
         model_name=settings.evaluator_model,
         temperature=settings.evaluator_temperature,
     )
-    vector_store = ContentFactoryVectorStore(db)
+    vector_store = _get_vector_store(db)
 
     latest_script_obj = await get_latest_script(db, job.id)
     latest_script = latest_script_obj.content if latest_script_obj else ""
