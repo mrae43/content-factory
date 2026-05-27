@@ -342,7 +342,9 @@ async def _run_copywriter(
         await update_job_status(db, job.id, JobStatusEnum.FACT_CHECKING_SCRIPT)
     else:
         error_msg = result.error_log[-1] if result.error_log else "Unknown error"
-        logger.warning(f"Copywriter {result.error_log[0] if result.error_log else 'FAILED'} for Job {job.id}: {error_msg}")
+        logger.warning(
+            f"Copywriter {result.error_log[0] if result.error_log else 'FAILED'} for Job {job.id}: {error_msg}"
+        )
         await update_job_status(db, job.id, JobStatusEnum.HUMAN_REVIEW_NEEDED)
 
 
@@ -459,7 +461,10 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
                     db, job.id, next_status_after_fact_check(job.format_type)
                 )
     else:
-        if result.agent_status == AgentActionStatus.REVISION_NEEDED and result.payload is not None:
+        if (
+            result.agent_status == AgentActionStatus.REVISION_NEEDED
+            and result.payload is not None
+        ):
             claims_data = result.payload.get("claims", [])
             await _resolve_evidence_refs(db, vector_store, job.id, claims_data)
 

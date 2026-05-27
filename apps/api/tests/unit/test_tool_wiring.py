@@ -77,7 +77,10 @@ class TestIngestChunksTool:
         chunks = ["chunk one", "chunk two"]
 
         import asyncio
-        result = asyncio.run(tool.callable(job_id=job_id, chunks=chunks, scope="RAW-CONTEXT"))
+
+        result = asyncio.run(
+            tool.callable(job_id=job_id, chunks=chunks, scope="RAW-CONTEXT")
+        )
 
         assert result == 2
 
@@ -101,6 +104,7 @@ class TestValidateFormatTool:
         tool = make_validate_format_tool(validator)
 
         import asyncio
+
         result = asyncio.run(tool.callable(payload={}))
         assert result["valid"] is False
         assert "error_message" in result
@@ -116,6 +120,7 @@ class TestValidateFormatTool:
         }
 
         import asyncio
+
         result = asyncio.run(tool.callable(payload=payload))
         assert result["valid"] is False
         assert "char limit" in result.get("error_message", "").lower()
@@ -131,6 +136,7 @@ class TestValidateFormatTool:
         }
 
         import asyncio
+
         result = asyncio.run(tool.callable(payload=payload))
         assert result["valid"] is False
         assert "at least 3 scenes" in result.get("error_message", "").lower()
