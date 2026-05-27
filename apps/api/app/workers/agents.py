@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 from enum import Enum
 import logging
@@ -288,7 +288,12 @@ EVALUATION_SYSTEM = (
     "   - UNSUPPORTED: Claim is not found in the evidence or is an exaggeration/misinterpretation.\n"
     "   - UNCERTAIN: Not enough evidence to confirm or deny the claim.\n"
     "3. Provide confidence (0.0-1.0) and the specific evidence text for each claim.\n"
-    "4. VERDICT: Overall is SUPPORTED only if every claim is SUPPORTED or UNCERTAIN."
+    "4. VERDICT: Overall is SUPPORTED only if every claim is SUPPORTED or UNCERTAIN.\n"
+    "\n## RULES\n"
+    "1. Do NOT fabricate evidence. Every verdict must reference specific evidence text\n"
+    "   from the provided evidence chunks.\n"
+    "2. If no evidence is available for a claim, assign UNCERTAIN — do not guess.\n"
+    "3. Do not misrepresent evidence to fit a preferred verdict.\n"
 )
 
 EVALUATION_HUMAN = (
@@ -481,6 +486,14 @@ class RedTeamAgent(BaseAgent):
 
 
 class StudioPromptSchema(BaseModel):
+    status: Optional[AgentActionStatus] = Field(
+        default=None,
+        description="ERROR if scene input is underspecified or ambiguous, otherwise None",
+    )
+    reasoning: Optional[str] = Field(
+        default=None,
+        description="Explanation when status is ERROR",
+    )
     visual_prompts: List[str] = Field(
         description="Prompts tailored for Veo video generation"
     )
@@ -519,7 +532,13 @@ class AssetStudioAgent(BaseAgent):
                         "INPUT FORMAT:\n"
                         "- scenes: list of {scene_number, narration_text, visual_prompt, audio_cue, duration_seconds}\n"
                         "- visual_style: overall visual direction for the video\n"
-                        "- script: the narrative text for reference"
+                        "- script: the narrative text for reference\n\n"
+                        "## RULES\n"
+                        "1. Do NOT invent visual/audio specs not grounded in the input scenes or script.\n"
+                        "2. Do NOT include text or typography in visual prompts.\n"
+                        "3. Each visual/audio prompt must not exceed 2 sentences. If a scene requires\n"
+                        "   more detail than 2 sentences to specify, that is a signal the scene input\n"
+                        "   is underspecified — set status=ERROR rather than expanding the prompt.\n"
                     ),
                 ),
                 (
@@ -543,6 +562,19 @@ class AssetStudioAgent(BaseAgent):
                 "script": script,
             }
         )
+
+        if result.status == AgentActionStatus.ERROR:
+            return AgentResult(
+                status=AgentActionStatus.ERROR,
+                payload={"prompts": result.model_dump()},
+                reasoning=result.reasoning
+                or "Scene input is underspecified or ambiguous.",
+                confidence_score=0.0,
+                metadata={
+                    "model": self.model_name,
+                    "synth_id_enabled": settings.synthid_watermark_enabled,
+                },
+            )
 
         video_url = f"s3://factory/renders/{context.get('job_id', 'mock')}_rendered.mp4"
 
