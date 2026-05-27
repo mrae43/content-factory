@@ -42,6 +42,22 @@ class AgentHarness:
         if permitted:
             self.agent.inject_tools({t.name: t for t in permitted})
 
+    def _inject_llm_tools(self) -> None:
+        """Bind permitted LLM-callable tools to the agent's LLM.
+
+        Sets ``agent.llm_with_tools`` (LLM bound with tool schemas) and
+        ``agent.llm_tools`` (list of Tool objects for execution) so the
+        agent can implement LLM-driven tool-calling inside ``_execute``.
+        """
+        registry = ToolRegistry()
+        agent_name = type(self.agent).__name__
+        llm_tools = registry.get_llm_tools(agent_name)
+        if llm_tools and hasattr(self.agent, "llm") and self.agent.llm is not None:
+            self.agent.llm_with_tools = self.agent.llm.bind_tools(
+                [t.llm_schema for t in llm_tools]
+            )
+            self.agent.llm_tools = {t.name: t for t in llm_tools}
+
     @staticmethod
     def _hash_payload(payload: dict) -> str:
         serialized = json.dumps(payload, sort_keys=True, default=str)
@@ -85,6 +101,7 @@ class AgentHarness:
         )
 
     async def _run_llm_agent_with_retry(self, context: Dict) -> HarnessResult:
+        self._inject_llm_tools()
         error_log: List[str] = []
         seen_payload_hashes: Set[str] = set()
         max_attempts = self.max_retries + 1
