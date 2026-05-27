@@ -68,7 +68,46 @@ def red_team_verdict_contested():
                 evidence_text="Sources disagree: IMF says 32%, BRICS says 38%.",
             ),
         ],
-        overall_reasoning="Claim is contested \u2014 sources contradict.",
+        overall_reasoning="Claim is contested — sources contradict.",
+    )
+
+
+@pytest.fixture
+def red_team_verdict_uncertain_no_evidence():
+    return RedTeamVerdict(
+        claims=[
+            ClaimItem(
+                claim_text="BRICS GDP grew 3.2% in 2024.",
+                verdict="SUPPORTED",
+                confidence=0.9,
+                evidence_text="IMF data confirms BRICS collective GDP growth of 3.2%.",
+            ),
+            ClaimItem(
+                claim_text="New payment system launched.",
+                verdict="UNCERTAIN",
+                confidence=0.4,
+                evidence_text="",
+            ),
+        ],
+        overall_reasoning="One claim supported by evidence, one claim lacks evidence — marked UNCERTAIN.",
+    )
+
+
+@pytest.fixture
+def claim_extraction_mixed_evidence():
+    return ClaimExtractionResult(
+        claims=[
+            ExtractedClaim(
+                claim_text="BRICS GDP grew 3.2% in 2024.",
+                claim_category="statistic",
+                search_query="BRICS GDP growth rate 2024",
+            ),
+            ExtractedClaim(
+                claim_text="New payment system launched.",
+                claim_category="attribution",
+                search_query="BRICS new payment system launch 2025",
+            ),
+        ]
     )
 
 
