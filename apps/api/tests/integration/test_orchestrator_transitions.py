@@ -1723,9 +1723,15 @@ class TestOrchestratorMultiStep:
                             success=True,
                             format_type="video",
                             payload={
-                                "visual_style": "Cinematic",
+                                "script_content": "Script v1",
+                                "patch_summary": "Patched claims",
+                                "claims": [],
+                                "verdict": "SUPPORTED",
+                                "title": "Test Video",
+                                "scenes": [],
                                 "_format": "video",
                                 "format_payload": {"slides": []},
+                                "visual_style": "Cinematic",
                             },
                             attempts=1,
                         )
