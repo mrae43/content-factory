@@ -639,9 +639,11 @@ class RedTeamAgent(LLMAgent):
 
         enriched_claims_text = _format_enriched_claims(enriched_claims)
 
-        enriched_claims_text = await self._run_web_research(enriched_claims_text)
+        try:
+            enriched_claims_text = await self._run_web_research(enriched_claims_text)
+        except Exception:
+            logger.warning("Web research enrichment failed, continuing without it.")
 
-        correction_hint = context.get("correction_hint", "")
         try:
             structured = await self._evaluate_claims(
                 enriched_claims_text, script_content, correction_hint
