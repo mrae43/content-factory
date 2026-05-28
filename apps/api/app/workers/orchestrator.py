@@ -343,7 +343,13 @@ async def _run_copywriter(
     if result.success:
         latest = await get_latest_script(db, job.id)
         version = (latest.version + 1) if latest else 1
-        await save_script(db, job.id, result.payload["script_content"], version)
+        await save_script(
+            db,
+            job.id,
+            result.payload["script_content"],
+            version,
+            optimization_history=latest.optimization_history,
+        )
         await update_job_status(db, job.id, JobStatusEnum.FACT_CHECKING_SCRIPT)
     else:
         error_msg = result.error_log[-1] if result.error_log else "Unknown error"
@@ -389,7 +395,17 @@ async def _run_optimizer(
 
     if result.success:
         version = latest_script.version + 1
-        await save_script(db, job.id, result.payload["script_content"], version)
+        opt_history = dict(latest_script.optimization_history or {})
+        patch_summary = result.payload.get("patch_summary", "")
+        if patch_summary:
+            opt_history["_pending_patch_summary"] = patch_summary
+        await save_script(
+            db,
+            job.id,
+            result.payload["script_content"],
+            version,
+            optimization_history=opt_history,
+        )
         await update_job_status(db, job.id, JobStatusEnum.FACT_CHECKING_SCRIPT)
     elif result.escalated:
         error_msg = result.error_log[0] if result.error_log else "Unknown escalation"
@@ -407,12 +423,20 @@ async def _update_optimization_ledger(
     if not claims_data or not latest_script_obj:
         return
     embedder = get_embeddings()
-    prev_ledger = latest_script_obj.optimization_history or {}
-    if prev_ledger.get("active_claims"):
-        prev_active = prev_ledger["active_claims"]
-        mapping = map_claims(prev_active, claims_data, embedder)
+    raw_ledger = latest_script_obj.optimization_history or {}
+    pending_patch = raw_ledger.pop("_pending_patch_summary", None)
+    patches_applied = [pending_patch] if pending_patch else None
+    if raw_ledger.get("active_claims"):
+        prev_active = raw_ledger["active_claims"]
+        mapping = await map_claims(prev_active, claims_data, embedder)
         delta = compute_verdict_delta(prev_active, claims_data, mapping)
-        updated = update_ledger(prev_ledger, claims_data, mapping, delta)
+        updated = update_ledger(
+            raw_ledger,
+            claims_data,
+            mapping,
+            delta,
+            patches_applied=patches_applied,
+        )
     else:
         updated = init_ledger(claims_data)
     latest_script_obj.optimization_history = updated
