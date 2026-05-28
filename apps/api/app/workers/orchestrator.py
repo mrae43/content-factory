@@ -344,7 +344,10 @@ async def _run_copywriter(
         latest = await get_latest_script(db, job.id)
         version = (latest.version + 1) if latest else 1
         await save_script(
-            db, job.id, result.payload["script_content"], version,
+            db,
+            job.id,
+            result.payload["script_content"],
+            version,
             optimization_history=latest.optimization_history,
         )
         await update_job_status(db, job.id, JobStatusEnum.FACT_CHECKING_SCRIPT)
@@ -397,7 +400,10 @@ async def _run_optimizer(
         if patch_summary:
             opt_history["_pending_patch_summary"] = patch_summary
         await save_script(
-            db, job.id, result.payload["script_content"], version,
+            db,
+            job.id,
+            result.payload["script_content"],
+            version,
             optimization_history=opt_history,
         )
         await update_job_status(db, job.id, JobStatusEnum.FACT_CHECKING_SCRIPT)
@@ -425,7 +431,10 @@ async def _update_optimization_ledger(
         mapping = await map_claims(prev_active, claims_data, embedder)
         delta = compute_verdict_delta(prev_active, claims_data, mapping)
         updated = update_ledger(
-            raw_ledger, claims_data, mapping, delta,
+            raw_ledger,
+            claims_data,
+            mapping,
+            delta,
             patches_applied=patches_applied,
         )
     else:
