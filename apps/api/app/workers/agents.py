@@ -565,7 +565,7 @@ class RedTeamAgent(LLMAgent):
                 confidence_score=0.0,
             )
 
-        checkpoint = context.get("_red_team_checkpoint", {})
+        checkpoint = context.setdefault("_red_team_checkpoint", {})
         self._validate_checkpoint(checkpoint, job_id)
 
         if "extracted_claims" in checkpoint:
@@ -643,6 +643,8 @@ class RedTeamAgent(LLMAgent):
             enriched_claims_text = await self._run_web_research(enriched_claims_text)
         except Exception:
             logger.warning("Web research enrichment failed, continuing without it.")
+
+        correction_hint = context.get("correction_hint", "")
 
         try:
             structured = await self._evaluate_claims(
