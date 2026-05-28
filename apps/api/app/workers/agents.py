@@ -1,19 +1,23 @@
 from abc import ABC, abstractmethod
 from typing import Any, ClassVar, Dict, List, Optional, Set, Type
-from pydantic import BaseModel, Field
+from uuid import UUID
+
+from pydantic import BaseModel, Field, ValidationError
 from enum import Enum
 import logging
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_exponential,
-)
+
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 from langchain_core.prompts import ChatPromptTemplate
 
 from app.services.llm import get_llm
 from app.services.tools import Tool, ToolRegistry
 from app.core.config import settings
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+)
+from app.workers.retry_policies import agent_api_retry, agent_parent_retry
 
 logger = logging.getLogger(__name__)
 
@@ -104,14 +108,7 @@ class LLMAgent(BaseAgent):
         self.temperature = temperature
         self.llm = get_llm(model_name=self.model_name, temperature=self.temperature)
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
-        reraise=True,
-        before_sleep=lambda retry_state: logger.warning(
-            f"Agent API Error. Retrying in {retry_state.next_action.sleep}s..."
-        ),
-    )
+    @agent_parent_retry
     async def run(self, context: Dict[str, Any], **kwargs) -> AgentResult:
         for tool_name in getattr(self, "_required_di_tools", []):
             if tool_name not in self.di_tools:
@@ -121,7 +118,16 @@ class LLMAgent(BaseAgent):
                     reasoning=f"Required DI tool '{tool_name}' not injected into {type(self).__name__}",
                     confidence_score=0.0,
                 )
-        return await self._execute(context, **kwargs)
+        try:
+            return await self._execute(context, **kwargs)
+        except (ValidationError, TypeError, KeyError, ValueError) as data_err:
+            logger.error(
+                "Checkpoint corruption — wiping state for %s.", type(self).__name__
+            )
+            for key in list(context.keys()):
+                if key.startswith("_") and key.endswith("_checkpoint"):
+                    del context[key]
+            raise data_err
 
     async def _run_tool_loop(
         self,
@@ -423,6 +429,7 @@ EVALUATION_HUMAN = (
     "Audit the following claims against their individually-retrieved evidence:\n"
     "<enriched_claims>\n{enriched_claims}\n</enriched_claims>\n"
     "<target_script>\n{script_content}\n</target_script>\n"
+    "{correction_hint_block}"
     "Analyze every claim step-by-step against its specific evidence. "
     "For each claim, provide the verdict, confidence, and supporting evidence text."
 )
@@ -433,6 +440,117 @@ class RedTeamAgent(LLMAgent):
     _required_llm_tools: ClassVar[List[str]] = ["execute_web_search"]
     _permissions: ClassVar[Set[str]] = {"RedTeamAgent"}
     input_schema: ClassVar[Optional[Type[BaseModel]]] = None
+
+    # ── Checkpoint ownership guard ────────────────────────────────────────────
+
+    @staticmethod
+    def _validate_checkpoint(checkpoint: dict, job_id: UUID) -> None:
+        cached_id = checkpoint.get("job_id")
+        if cached_id is not None and cached_id != job_id:
+            checkpoint.clear()
+        checkpoint["job_id"] = job_id
+
+    # ── Sub-methods (each does one conceptual unit of work) ───────────────────
+
+    @agent_api_retry
+    async def _extract_claims(self, script_content: str) -> ClaimExtractionResult:
+        extraction_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", CLAIM_EXTRACTION_SYSTEM),
+                ("human", CLAIM_EXTRACTION_HUMAN),
+            ]
+        )
+        extraction_chain = extraction_prompt | self.llm.with_structured_output(
+            ClaimExtractionResult
+        )
+        return await extraction_chain.ainvoke({"script_content": script_content})
+
+    async def _retrieve_evidence(
+        self,
+        extracted_claims: List[ExtractedClaim],
+        job_id: UUID,
+        guardrail_config: Any,
+    ) -> List[ClaimEvidence]:
+        search_tool = self.di_tools.get("semantic_search")
+        top_k = guardrail_config.top_k_per_claim if guardrail_config else 5
+        threshold = guardrail_config.similarity_threshold if guardrail_config else None
+        enriched_claims: List[ClaimEvidence] = []
+        if search_tool and job_id:
+            for claim in extracted_claims:
+                evidence_results = await search_tool.callable(
+                    query=claim.search_query,
+                    job_id=str(job_id),
+                    scopes=["RAW-CONTEXT", "LOCAL"],
+                    top_k=top_k,
+                    similarity_threshold=threshold,
+                )
+                evidence_chunks = [r["content"] for r in evidence_results]
+                enriched_claims.append(
+                    ClaimEvidence(
+                        claim_text=claim.claim_text,
+                        evidence_chunks=evidence_chunks,
+                    )
+                )
+        else:
+            enriched_claims = [
+                ClaimEvidence(claim_text=c.claim_text, evidence_chunks=[])
+                for c in extracted_claims
+            ]
+        return enriched_claims
+
+    async def _run_web_research(self, enriched_claims_text: str) -> str:
+        llm_tools_avail = hasattr(self, "llm_with_tools") and getattr(
+            self, "llm_tools", {}
+        )
+        if not llm_tools_avail:
+            return enriched_claims_text
+
+        research_prompt = (
+            "You are a research assistant reviewing claims and their evidence.\n\n"
+            "For each claim, decide if the provided evidence is sufficient to reach "
+            "a confident verdict. If evidence is insufficient, call "
+            "execute_web_search to find supporting or contradicting information.\n\n"
+            "Only search for claims where the current evidence is clearly insufficient "
+            "— do not waste searches on well-supported claims.\n\n"
+            f"Claims and current evidence:\n\n{enriched_claims_text}"
+        )
+        web_results = await self._run_tool_loop(
+            system_prompt="You are a precise research assistant.",
+            human_content=research_prompt,
+            max_rounds=3,
+        )
+        if web_results.strip():
+            enriched_claims_text += f"\n\n## Additional Web Research\n\n{web_results}"
+        return enriched_claims_text
+
+    @agent_api_retry
+    async def _evaluate_claims(
+        self,
+        enriched_text: str,
+        script_content: str,
+        correction_hint: str = "",
+    ) -> RedTeamVerdict:
+        evaluation_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", EVALUATION_SYSTEM),
+                ("human", EVALUATION_HUMAN),
+            ]
+        )
+        eval_chain = evaluation_prompt | self.llm.with_structured_output(RedTeamVerdict)
+        correction_hint_block = (
+            f"<correction_hint>\n{correction_hint}\n</correction_hint>\n"
+            if correction_hint
+            else ""
+        )
+        return await eval_chain.ainvoke(
+            {
+                "script_content": script_content,
+                "enriched_claims": enriched_text,
+                "correction_hint_block": correction_hint_block,
+            }
+        )
+
+    # ── Rewired _execute with checkpoint I/O ──────────────────────────────────
 
     async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
         script_content = context.get("script_content", "")
@@ -447,31 +565,26 @@ class RedTeamAgent(LLMAgent):
                 confidence_score=0.0,
             )
 
-        # Pass 1: Extract atomic claims
-        extraction_prompt = ChatPromptTemplate.from_messages(
-            [
-                ("system", CLAIM_EXTRACTION_SYSTEM),
-                ("human", CLAIM_EXTRACTION_HUMAN),
-            ]
-        )
-        try:
-            extraction_chain = extraction_prompt | self.llm.with_structured_output(
-                ClaimExtractionResult
-            )
-            extracted: ClaimExtractionResult = await extraction_chain.ainvoke(
-                {"script_content": script_content}
-            )
-        except Exception as exc:
-            logger.error(f"Red Team claim extraction failed: {exc}")
-            return AgentResult(
-                status=AgentActionStatus.ESCALATE,
-                payload={},
-                reasoning=f"Claim extraction LLM call failed: {exc}",
-                confidence_score=0.0,
-                metadata={"model": self.model_name},
-            )
+        checkpoint = context.setdefault("_red_team_checkpoint", {})
+        self._validate_checkpoint(checkpoint, job_id)
 
-        # Filter claims by guardrail claim_categories if configured
+        if "extracted_claims" in checkpoint:
+            extracted = ClaimExtractionResult(**checkpoint["extracted_claims"])
+        else:
+            try:
+                extracted = await self._extract_claims(script_content)
+            except Exception as exc:
+                logger.error(f"Red Team claim extraction failed: {exc}")
+                return AgentResult(
+                    status=AgentActionStatus.ESCALATE,
+                    payload={},
+                    reasoning=f"Claim extraction LLM call failed: {exc}",
+                    confidence_score=0.0,
+                    metadata={"model": self.model_name},
+                )
+            checkpoint["extracted_claims"] = extracted.model_dump()
+            context["_red_team_checkpoint"] = checkpoint
+
         if guardrail_config and extracted.claims:
             allowed = set(guardrail_config.claim_categories)
             extracted.claims = [
@@ -495,32 +608,25 @@ class RedTeamAgent(LLMAgent):
             f"RedTeamAgent extracted {len(extracted.claims)} claims for Job {job_id}"
         )
 
-        # Pass 2: Per-claim evidence retrieval via DI tool
-        search_tool = self.di_tools.get("semantic_search")
-        top_k = guardrail_config.top_k_per_claim if guardrail_config else 5
-        threshold = guardrail_config.similarity_threshold if guardrail_config else None
-        enriched_claims: List[ClaimEvidence] = []
-        if search_tool and job_id:
-            for claim in extracted.claims:
-                evidence_results = await search_tool.callable(
-                    query=claim.search_query,
-                    job_id=str(job_id),
-                    scopes=["RAW-CONTEXT", "LOCAL"],
-                    top_k=top_k,
-                    similarity_threshold=threshold,
-                )
-                evidence_chunks = [r["content"] for r in evidence_results]
-                enriched_claims.append(
-                    ClaimEvidence(
-                        claim_text=claim.claim_text,
-                        evidence_chunks=evidence_chunks,
-                    )
-                )
-        else:
+        if "enriched_claims" in checkpoint:
             enriched_claims = [
-                ClaimEvidence(claim_text=c.claim_text, evidence_chunks=[])
-                for c in extracted.claims
+                ClaimEvidence(**ec) for ec in checkpoint["enriched_claims"]
             ]
+        else:
+            try:
+                enriched_claims = await self._retrieve_evidence(
+                    extracted.claims, job_id, guardrail_config
+                )
+            except Exception as exc:
+                logger.error(f"Red Team evidence retrieval failed: {exc}")
+                return AgentResult(
+                    status=AgentActionStatus.ESCALATE,
+                    payload={},
+                    reasoning=f"Evidence retrieval failed: {exc}",
+                    confidence_score=0.0,
+                )
+            checkpoint["enriched_claims"] = [ec.model_dump() for ec in enriched_claims]
+            context["_red_team_checkpoint"] = checkpoint
 
         has_any_evidence = any(ec.evidence_chunks for ec in enriched_claims)
         if not has_any_evidence:
@@ -533,46 +639,16 @@ class RedTeamAgent(LLMAgent):
 
         enriched_claims_text = _format_enriched_claims(enriched_claims)
 
-        # Pass 2.5: LLM-driven web research for claims needing more evidence
-        llm_tools_avail = hasattr(self, "llm_with_tools") and getattr(
-            self, "llm_tools", {}
-        )
-        if llm_tools_avail:
-            research_prompt = (
-                "You are a research assistant reviewing claims and their evidence.\n\n"
-                "For each claim, decide if the provided evidence is sufficient to reach "
-                "a confident verdict. If evidence is insufficient, call "
-                "execute_web_search to find supporting or contradicting information.\n\n"
-                "Only search for claims where the current evidence is clearly insufficient "
-                "— do not waste searches on well-supported claims.\n\n"
-                f"Claims and current evidence:\n\n{enriched_claims_text}"
-            )
-            web_results = await self._run_tool_loop(
-                system_prompt="You are a precise research assistant.",
-                human_content=research_prompt,
-                max_rounds=3,
-            )
-            if web_results.strip():
-                enriched_claims_text += (
-                    f"\n\n## Additional Web Research\n\n{web_results}"
-                )
-
-        # Pass 3: Evaluate with per-claim evidence
-        evaluation_prompt = ChatPromptTemplate.from_messages(
-            [
-                ("system", EVALUATION_SYSTEM),
-                ("human", EVALUATION_HUMAN),
-            ]
-        )
         try:
-            eval_chain = evaluation_prompt | self.llm.with_structured_output(
-                RedTeamVerdict
-            )
-            structured: RedTeamVerdict = await eval_chain.ainvoke(
-                {
-                    "script_content": script_content,
-                    "enriched_claims": enriched_claims_text,
-                }
+            enriched_claims_text = await self._run_web_research(enriched_claims_text)
+        except Exception:
+            logger.warning("Web research enrichment failed, continuing without it.")
+
+        correction_hint = context.get("correction_hint", "")
+
+        try:
+            structured = await self._evaluate_claims(
+                enriched_claims_text, script_content, correction_hint
             )
         except Exception as exc:
             logger.error(f"Red Team structured output failed: {exc}")
@@ -597,7 +673,6 @@ class RedTeamAgent(LLMAgent):
                 metadata={"model": self.model_name},
             )
 
-        # Enrich claims with inline evidence text and hedge signals
         enrichment_map = {ec.claim_text: ec.evidence_chunks for ec in enriched_claims}
         for claim in structured.claims:
             if claim.claim_text in enrichment_map:
