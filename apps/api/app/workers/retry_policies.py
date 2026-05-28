@@ -1,5 +1,18 @@
 import logging
 
+from google.api_core.exceptions import (
+    DeadlineExceeded,
+    GatewayTimeout,
+    InternalServerError as GoogleInternalServerError,
+    ServiceUnavailable,
+)
+from openai import (
+    APIError,
+    APIConnectionError,
+    APITimeoutError,
+    InternalServerError as OpenAIInternalServerError,
+    RateLimitError,
+)
 from tenacity import (
     before_sleep_log,
     retry,
@@ -12,20 +25,16 @@ logger = logging.getLogger(__name__)
 
 
 def _is_transient_api_error(exception: BaseException) -> bool:
-    try:
-        import openai
-
-        from google.api_core import exceptions as google_exceptions
-    except ImportError:
-        return False
-
     transient_types: tuple = (
-        openai.APIError,
-        openai.APITimeoutError,
-        openai.RateLimitError,
-        openai.APIConnectionError,
-        openai.InternalServerError,
-        google_exceptions.GoogleAPIError,
+        APIError,
+        APITimeoutError,
+        RateLimitError,
+        APIConnectionError,
+        OpenAIInternalServerError,
+        ServiceUnavailable,
+        DeadlineExceeded,
+        GoogleInternalServerError,
+        GatewayTimeout,
     )
     return isinstance(exception, transient_types)
 
