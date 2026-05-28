@@ -164,6 +164,47 @@ A single slide in a Carousel Slide Deck. Contains:
 
 _Avoid_: Calling it a "Visual Asset" — the Carousel Slide Deck is the Asset; a single slide is a component of it.
 
+## Working Memory
+
+Ephemeral cross-stage state carried in the `working_memory` JSONB column on the
+`RenderJob` row. Replaces the previous absence of agent-accessible memory between
+pipeline transitions. Never explicitly cleared — retained on the job row as audit
+trail. Three sub-sections: `copywriter_rationale`, `optimizer_phase`, and
+`epistemic_ledger`. The orchestrator owns all reads and writes; agents remain
+stateless and receive relevant sections via the context dict.
+
+## Copywriter Rationale
+
+Sub-section of Working Memory (`working_memory.copywriter_rationale`). A lightweight
+metadata block produced by the CopywriterAgent alongside the script. Contains
+`narrative_intent` (one-sentence strategy summary) and `claim_disambiguations`
+(a list mapping script excerpts to their category — factual, stylistic, rhetorical,
+interpretive — with intent and optional source reference). NOT a substitute for
+the Red Team's claim extraction. Consumed by the Red Team to distinguish
+intentional framing from factual assertions, reducing false-positive flags.
+
+_LLM drift mitigation:_ Copywriter is instructed to match `script_excerpt` to
+`script_content` word-for-word; Red Team falls back to fuzzy/semantic matching
+on mismatch.
+
+## Optimizer Phase
+
+Sub-section of Working Memory (`working_memory.optimizer_phase`). Written after
+each optimizer iteration. Contains the optimizer's `patch_summary` (free-text)
+and `resolved_claims` (a list of `{claim_uuid, patch_intent, is_completely_resolved}`
+entries). The `claim_uuid` is the ADR 0006 identity anchor — the orchestrator
+translates the optimizer's text-keyed `original_claim_text` to the ledger UUID
+after the optimizer returns, keeping raw UUIDs out of LLM prompts.
+
+## Epistemic Ledger
+
+Sub-section of Working Memory (`working_memory.epistemic_ledger`). Written after
+each Red Team pass. Contains `weak_passes` — claims that the Red Team marked as
+UNCERTAIN or CONTESTED, or that passed with low confidence (< 0.75). Each entry
+includes the claim text, verdict, confidence, and a reason for the weakness.
+Consumed by the Formatters alongside the flat `hedge_index` to produce
+appropriately hedged language in the formatted output.
+
 ## Model Tier
 
 The capability level of the LLM assigned to a pipeline agent. Two tiers (see ADR 0003 for embedding model — embedding is independent of agent LLM tier):
