@@ -112,13 +112,20 @@ async def log_error(db: AsyncSession, job_id: UUID, error_message: str, phase: s
         await db.commit()
 
 
-async def save_script(db: AsyncSession, job_id: UUID, content: str, version: int):
+async def save_script(
+    db: AsyncSession,
+    job_id: UUID,
+    content: str,
+    version: int,
+    optimization_history: dict | None = None,
+):
     new_script = Script(
         job_id=job_id,
         role="master",
         content=content,
         version=version,
         is_approved=False,
+        optimization_history=optimization_history or {},
     )
     db.add(new_script)
     await db.commit()
