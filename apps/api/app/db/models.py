@@ -208,6 +208,10 @@ class Script(Base):
     # Agentic Reflection Loop history
     feedback_history = Column(JSONB, nullable=False, server_default="[]")
 
+    # Optimization History Ledger — tracks claim identity across evaluator-optimizer
+    # iterations via semantic embedding anchoring (ADR 0006).
+    optimization_history = Column(JSONB, nullable=False, server_default="{}")
+
     format_type = Column(String, nullable=True)
     format_payload = Column(TrackedJSONB, nullable=True)
 
