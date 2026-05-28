@@ -416,7 +416,7 @@ async def _update_optimization_ledger(
     prev_ledger = latest_script_obj.optimization_history or {}
     if prev_ledger.get("active_claims"):
         prev_active = prev_ledger["active_claims"]
-        mapping = map_claims(prev_active, claims_data, embedder)
+        mapping = await map_claims(prev_active, claims_data, embedder)
         delta = compute_verdict_delta(prev_active, claims_data, mapping)
         updated = update_ledger(prev_ledger, claims_data, mapping, delta)
     else:

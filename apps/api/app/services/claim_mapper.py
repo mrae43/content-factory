@@ -13,7 +13,7 @@ def cosine_similarity_matrix(
     return a @ b.T
 
 
-def map_claims(
+async def map_claims(
     prev_active: List[dict],
     new_claims: List[dict],
     embedder,
@@ -22,8 +22,8 @@ def map_claims(
     prev_texts = [c["text"] for c in prev_active]
     new_texts = [c["claim_text"] for c in new_claims]
 
-    prev_vecs = embedder.embed_documents(prev_texts)
-    new_vecs = embedder.embed_documents(new_texts)
+    prev_vecs = await embedder.aembed_documents(prev_texts)
+    new_vecs = await embedder.aembed_documents(new_texts)
 
     matrix = cosine_similarity_matrix(prev_vecs, new_vecs)
 
