@@ -429,6 +429,7 @@ EVALUATION_HUMAN = (
     "Audit the following claims against their individually-retrieved evidence:\n"
     "<enriched_claims>\n{enriched_claims}\n</enriched_claims>\n"
     "<target_script>\n{script_content}\n</target_script>\n"
+    "{correction_hint_block}"
     "Analyze every claim step-by-step against its specific evidence. "
     "For each claim, provide the verdict, confidence, and supporting evidence text."
 )
@@ -527,6 +528,7 @@ class RedTeamAgent(LLMAgent):
         self,
         enriched_text: str,
         script_content: str,
+        correction_hint: str = "",
     ) -> RedTeamVerdict:
         evaluation_prompt = ChatPromptTemplate.from_messages(
             [
@@ -535,10 +537,16 @@ class RedTeamAgent(LLMAgent):
             ]
         )
         eval_chain = evaluation_prompt | self.llm.with_structured_output(RedTeamVerdict)
+        correction_hint_block = (
+            f"<correction_hint>\n{correction_hint}\n</correction_hint>\n"
+            if correction_hint
+            else ""
+        )
         return await eval_chain.ainvoke(
             {
                 "script_content": script_content,
                 "enriched_claims": enriched_text,
+                "correction_hint_block": correction_hint_block,
             }
         )
 
@@ -633,9 +641,10 @@ class RedTeamAgent(LLMAgent):
 
         enriched_claims_text = await self._run_web_research(enriched_claims_text)
 
+        correction_hint = context.get("correction_hint", "")
         try:
             structured = await self._evaluate_claims(
-                enriched_claims_text, script_content
+                enriched_claims_text, script_content, correction_hint
             )
         except Exception as exc:
             logger.error(f"Red Team structured output failed: {exc}")
