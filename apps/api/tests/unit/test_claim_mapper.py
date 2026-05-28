@@ -43,10 +43,12 @@ async def test_map_claims_all_match():
         {"claim_text": "Inflation at 3%", "verdict": "SUPPORTED"},
     ]
     embedder = MagicMock()
-    embedder.aembed_documents = AsyncMock(side_effect=[
-        [[1.0, 0.0], [0.0, 1.0]],
-        [[1.0, 0.0], [0.0, 1.0]],
-    ])
+    embedder.aembed_documents = AsyncMock(
+        side_effect=[
+            [[1.0, 0.0], [0.0, 1.0]],
+            [[1.0, 0.0], [0.0, 1.0]],
+        ]
+    )
 
     mapping = await map_claims(prev_active, new_claims, embedder, threshold=0.5)
 
@@ -66,10 +68,12 @@ async def test_map_claims_partial_match():
         {"claim_text": "New unrelated claim", "verdict": "UNSUPPORTED"},
     ]
     embedder = MagicMock()
-    embedder.aembed_documents = AsyncMock(side_effect=[
-        [[1.0, 0.0], [0.0, 1.0]],
-        [[1.0, 0.0], [0.9, 0.1]],
-    ])
+    embedder.aembed_documents = AsyncMock(
+        side_effect=[
+            [[1.0, 0.0], [0.0, 1.0]],
+            [[1.0, 0.0], [0.9, 0.1]],
+        ]
+    )
 
     mapping = await map_claims(prev_active, new_claims, embedder, threshold=0.8)
 
@@ -94,10 +98,12 @@ async def test_map_claims_below_threshold():
         {"claim_text": "Completely different text", "verdict": "UNSUPPORTED"},
     ]
     embedder = MagicMock()
-    embedder.aembed_documents = AsyncMock(side_effect=[
-        [[1.0]],
-        [[0.0]],
-    ])
+    embedder.aembed_documents = AsyncMock(
+        side_effect=[
+            [[1.0]],
+            [[0.0]],
+        ]
+    )
 
     mapping = await map_claims(prev_active, new_claims, embedder, threshold=0.8)
 
