@@ -1,16 +1,34 @@
 import pytest
 from unittest.mock import MagicMock
 
-from app.workers.optimizer import ScriptOptimizerAgent, format_failed_claims
+from app.workers.optimizer import (
+    ScriptOptimizerAgent,
+    format_active_failures,
+    format_optimization_history,
+)
 from app.workers.agents import AgentActionStatus
 
 
-SAMPLE_FAILED_CLAIMS = [
+SAMPLE_ACTIVE_FAILURES = [
     {
-        "claim_text": "BRICS GDP grew 15% last year.",
-        "verdict": "UNSUPPORTED",
-        "confidence": 0.3,
-        "evidence_text": "No source confirms 15% GDP growth.",
+        "uuid": "test-uuid-1",
+        "text": "BRICS GDP grew 15% last year.",
+        "latest_verdict": "UNSUPPORTED",
+        "failure_reason": "No source confirms 15% GDP growth.",
+    }
+]
+
+SAMPLE_OPTIMIZATION_HISTORY = [
+    {
+        "iteration": 1,
+        "patches_applied": ["Replaced 15% with 3.2% based on IMF data"],
+        "claims_snapshot": [
+            {
+                "uuid": "test-uuid-1",
+                "text": "BRICS GDP grew 3.2% in 2024",
+                "verdict": "UNSUPPORTED",
+            }
+        ],
     }
 ]
 
@@ -33,7 +51,8 @@ async def test_returns_success_with_patched_script(
     agent = _make_agent()
     context = {
         "script_content": "BRICS GDP grew 15% last year. This is a big deal.",
-        "failed_claims": SAMPLE_FAILED_CLAIMS,
+        "active_failures": SAMPLE_ACTIVE_FAILURES,
+        "optimization_history": SAMPLE_OPTIMIZATION_HISTORY,
         "refined_context": SAMPLE_REFINED_CONTEXT,
         "evidence_sections": "## Retrieved Evidence\n\nChunk 1 (similarity: 0.92, source: WEB_SEARCH, relevance: HIGH):\nBRICS GDP grew 3.2% in 2024 according to IMF.\n",
         "story_directives": {
@@ -64,7 +83,7 @@ async def test_returns_error_when_no_script_content():
     agent = _make_agent()
     context = {
         "script_content": "",
-        "failed_claims": SAMPLE_FAILED_CLAIMS,
+        "active_failures": SAMPLE_ACTIVE_FAILURES,
         "refined_context": SAMPLE_REFINED_CONTEXT,
     }
 
@@ -76,18 +95,17 @@ async def test_returns_error_when_no_script_content():
 
 
 @pytest.mark.agent
-async def test_returns_error_when_no_failed_claims():
+async def test_returns_error_when_no_active_failures():
     agent = _make_agent()
     context = {
         "script_content": "Some script content.",
-        "failed_claims": [],
+        "active_failures": [],
         "refined_context": SAMPLE_REFINED_CONTEXT,
     }
 
     result = await agent._execute(context)
-
     assert result.status == AgentActionStatus.ERROR
-    assert "No failed claims" in result.reasoning
+    assert "No active failures" in result.reasoning
     assert result.confidence_score == 0.0
 
 
@@ -99,7 +117,8 @@ async def test_chain_receives_formatted_claims(
     agent = _make_agent()
     context = {
         "script_content": "BRICS GDP grew 15% last year.",
-        "failed_claims": SAMPLE_FAILED_CLAIMS,
+        "active_failures": SAMPLE_ACTIVE_FAILURES,
+        "optimization_history": SAMPLE_OPTIMIZATION_HISTORY,
         "refined_context": SAMPLE_REFINED_CONTEXT,
         "evidence_sections": "## Retrieved Evidence\n\nChunk 1 (similarity: 0.92): IMF data.",
     }
@@ -110,8 +129,10 @@ async def test_chain_receives_formatted_claims(
     assert result.status == AgentActionStatus.SUCCESS
     call_args = mock_ainvoke.call_args
     invoked_input = call_args[0][0]
-    assert "15%" in invoked_input["failed_claims"]
-    assert "UNSUPPORTED" in invoked_input["failed_claims"]
+    assert "15%" in invoked_input["active_failures"]
+    assert "UNSUPPORTED" in invoked_input["active_failures"]
+    assert "Iteration 1" in invoked_input["optimization_history"]
+    assert "Replaced 15%" in invoked_input["optimization_history"]
     assert invoked_input["original_script"] == "BRICS GDP grew 15% last year."
     assert invoked_input["refined_context"] == SAMPLE_REFINED_CONTEXT
     assert "Chunk 1 (similarity: 0.92): IMF data." in invoked_input["evidence_sections"]
@@ -125,7 +146,8 @@ async def test_handles_empty_evidence_sections(
     agent = _make_agent()
     context = {
         "script_content": "BRICS GDP grew 15% last year.",
-        "failed_claims": SAMPLE_FAILED_CLAIMS,
+        "active_failures": SAMPLE_ACTIVE_FAILURES,
+        "optimization_history": SAMPLE_OPTIMIZATION_HISTORY,
         "refined_context": SAMPLE_REFINED_CONTEXT,
         "evidence_sections": "",
         "story_directives": {
@@ -144,37 +166,54 @@ async def test_handles_empty_evidence_sections(
     assert "No additional evidence was retrieved" in invoked_input["evidence_sections"]
 
 
-def test_format_failed_claims_single():
-    result = format_failed_claims(SAMPLE_FAILED_CLAIMS)
+def test_format_active_failures_single():
+    result = format_active_failures(SAMPLE_ACTIVE_FAILURES)
     assert "Claim 1: BRICS GDP grew 15% last year." in result
     assert "Verdict: UNSUPPORTED" in result
-    assert "Confidence: 0.30" in result
-    assert "Evidence: No source confirms 15% GDP growth." in result
+    assert "Failure reason: No source confirms 15% GDP growth." in result
 
 
-def test_format_failed_claims_multiple():
+def test_format_active_failures_multiple():
     claims = [
         {
-            "claim_text": "GDP grew 15%.",
-            "verdict": "UNSUPPORTED",
-            "confidence": 0.3,
-            "evidence_text": "No evidence.",
+            "text": "GDP grew 15%.",
+            "latest_verdict": "UNSUPPORTED",
+            "failure_reason": "No evidence.",
         },
         {
-            "claim_text": "Payment system launched.",
-            "verdict": "CONTESTED",
-            "confidence": 0.5,
-            "evidence_text": "Sources disagree.",
+            "text": "Payment system launched.",
+            "latest_verdict": "CONTESTED",
+            "failure_reason": "Sources disagree.",
         },
     ]
-    result = format_failed_claims(claims)
+    result = format_active_failures(claims)
     assert "Claim 1:" in result
     assert "Claim 2:" in result
     assert "UNSUPPORTED" in result
     assert "CONTESTED" in result
 
 
-def test_format_failed_claims_missing_evidence():
-    claims = [{"claim_text": "Some claim.", "verdict": "UNSUPPORTED"}]
-    result = format_failed_claims(claims)
-    assert "Evidence: N/A" in result
+def test_format_active_failures_missing_reason():
+    claims = [{"text": "Some claim.", "latest_verdict": "UNSUPPORTED"}]
+    result = format_active_failures(claims)
+    assert "Failure reason: N/A" in result
+
+
+def test_format_optimization_history_empty():
+    result = format_optimization_history([])
+    assert "No prior optimization history" in result
+
+
+def test_format_optimization_history_with_data():
+    history = [
+        {
+            "iteration": 1,
+            "patches_applied": ["Replaced GDP metric"],
+            "claims_snapshot": [{"text": "GDP grew 3.2%", "verdict": "SUPPORTED"}],
+        }
+    ]
+    result = format_optimization_history(history)
+    assert "Iteration 1" in result
+    assert "Replaced GDP metric" in result
+    assert "GDP grew 3.2%" in result
+    assert "SUPPORTED" in result

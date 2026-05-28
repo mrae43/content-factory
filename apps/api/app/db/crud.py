@@ -189,6 +189,22 @@ async def append_script_feedback(
         await db.commit()
 
 
+async def get_optimization_history(db: AsyncSession, job_id: UUID) -> Optional[dict]:
+    script = await get_latest_script(db, job_id)
+    if script:
+        return script.optimization_history or {}
+    return None
+
+
+async def save_optimization_history(
+    db: AsyncSession, job_id: UUID, history: dict
+) -> None:
+    script = await get_latest_script(db, job_id)
+    if script:
+        script.optimization_history = history
+        await db.commit()
+
+
 async def save_fact_check_claims(
     db: AsyncSession, script_id: UUID, claims: list[dict]
 ) -> None:

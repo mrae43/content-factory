@@ -21,6 +21,13 @@ from app.db.crud import (
 from app.services.vector_store import ContentFactoryVectorStore, make_ingest_chunks_tool
 from app.services.web_search import get_tavily_service
 from app.services.chunking import process_extraction_job
+from app.services.claim_mapper import (
+    init_ledger,
+    map_claims,
+    compute_verdict_delta,
+    update_ledger,
+)
+from app.services.llm import get_embeddings
 from app.services.format_validator import (
     BlogValidator,
     CarouselValidator,
@@ -283,12 +290,10 @@ async def _transition_scripting(db: AsyncSession, job) -> None:
             isinstance(last_feedback, dict)
             and last_feedback.get("feedback_type") == "structured_claims"
         ):
-            failed_claims = last_feedback.get("failed_claims", [])
             await _run_optimizer(
                 db,
                 job,
                 latest_script,
-                failed_claims,
                 evidence_sections=evidence_sections,
             )
             return
@@ -352,7 +357,6 @@ async def _run_optimizer(
     db: AsyncSession,
     job,
     latest_script,
-    failed_claims: list,
     evidence_sections: str = "",
 ) -> None:
     optimizer = ScriptOptimizerAgent(
@@ -361,10 +365,18 @@ async def _run_optimizer(
     )
     harness = AgentHarness(agent=optimizer)
     story_directives = job.story_directives or {}
+    ledger = latest_script.optimization_history or {}
+    active_failures = [
+        c
+        for c in ledger.get("active_claims", [])
+        if c.get("latest_verdict") in ("UNSUPPORTED", "CONTESTED")
+    ]
+    optimization_history = ledger.get("historical_iterations", [])
     agent_context = {
         "job_id": job.id,
         "script_content": latest_script.content,
-        "failed_claims": failed_claims,
+        "active_failures": active_failures,
+        "optimization_history": optimization_history,
         "refined_context": job.refined_context or "",
         "evidence_sections": evidence_sections,
         "story_directives": {
@@ -386,6 +398,24 @@ async def _run_optimizer(
     else:
         error_msg = result.error_log[-1] if result.error_log else "Unknown error"
         raise Exception(f"Optimizer failed: {error_msg}")
+
+
+async def _update_optimization_ledger(
+    latest_script_obj,
+    claims_data: list,
+) -> None:
+    if not claims_data or not latest_script_obj:
+        return
+    embedder = get_embeddings()
+    prev_ledger = latest_script_obj.optimization_history or {}
+    if prev_ledger.get("active_claims"):
+        prev_active = prev_ledger["active_claims"]
+        mapping = map_claims(prev_active, claims_data, embedder)
+        delta = compute_verdict_delta(prev_active, claims_data, mapping)
+        updated = update_ledger(prev_ledger, claims_data, mapping, delta)
+    else:
+        updated = init_ledger(claims_data)
+    latest_script_obj.optimization_history = updated
 
 
 async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
@@ -439,6 +469,7 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
 
         if claims_data and latest_script_obj:
             await save_fact_check_claims(db, latest_script_obj.id, claims_data)
+            await _update_optimization_ledger(latest_script_obj, claims_data)
 
         if latest_script_obj:
             if guardrail_cfg.requires_human_review:
@@ -470,6 +501,7 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
 
             if claims_data and latest_script_obj:
                 await save_fact_check_claims(db, latest_script_obj.id, claims_data)
+                await _update_optimization_ledger(latest_script_obj, claims_data)
                 await db.commit()
 
             failed_claims = [
