@@ -463,9 +463,9 @@ class TestTransitionScripting:
 
             await execute_state_transition(mock_db_session, mock_job)
 
-            mock_save.assert_awaited_once_with(
-                mock_db_session, mock_job.id, "New script content", 1
-            )
+            mock_save.assert_awaited_once()
+            args, _ = mock_save.await_args
+            assert args == (mock_db_session, mock_job.id, "New script content", 1)
             mock_update.assert_awaited_once_with(
                 mock_db_session, mock_job.id, JobStatusEnum.FACT_CHECKING_SCRIPT
             )
@@ -504,9 +504,9 @@ class TestTransitionScripting:
 
             await execute_state_transition(mock_db_session, mock_job)
 
-            mock_save.assert_awaited_once_with(
-                mock_db_session, mock_job.id, "Revised script", 3
-            )
+            mock_save.assert_awaited_once()
+            args, _ = mock_save.await_args
+            assert args == (mock_db_session, mock_job.id, "Revised script", 3)
 
     async def test_should_pass_revision_feedback_to_agent(
         self,

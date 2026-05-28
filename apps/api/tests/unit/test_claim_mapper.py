@@ -1,6 +1,6 @@
 import pytest
 import uuid
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
 
@@ -33,7 +33,7 @@ def test_cosine_similarity_matrix_orthogonal():
 
 
 @pytest.mark.unit
-def test_map_claims_all_match():
+async def test_map_claims_all_match():
     prev_active = [
         {"uuid": str(uuid.uuid4()), "text": "GDP grew 5%"},
         {"uuid": str(uuid.uuid4()), "text": "Inflation at 3%"},
@@ -43,12 +43,12 @@ def test_map_claims_all_match():
         {"claim_text": "Inflation at 3%", "verdict": "SUPPORTED"},
     ]
     embedder = MagicMock()
-    embedder.embed_documents.side_effect = [
+    embedder.aembed_documents = AsyncMock(side_effect=[
         [[1.0, 0.0], [0.0, 1.0]],
         [[1.0, 0.0], [0.0, 1.0]],
-    ]
+    ])
 
-    mapping = map_claims(prev_active, new_claims, embedder, threshold=0.5)
+    mapping = await map_claims(prev_active, new_claims, embedder, threshold=0.5)
 
     assert len(mapping) == 2
     assert mapping[0] == prev_active[0]["uuid"]
@@ -56,7 +56,7 @@ def test_map_claims_all_match():
 
 
 @pytest.mark.unit
-def test_map_claims_partial_match():
+async def test_map_claims_partial_match():
     prev_active = [
         {"uuid": str(uuid.uuid4()), "text": "GDP grew 5%"},
         {"uuid": str(uuid.uuid4()), "text": "Inflation at 3%"},
@@ -66,25 +66,27 @@ def test_map_claims_partial_match():
         {"claim_text": "New unrelated claim", "verdict": "UNSUPPORTED"},
     ]
     embedder = MagicMock()
-    embedder.embed_documents.side_effect = [
+    embedder.aembed_documents = AsyncMock(side_effect=[
         [[1.0, 0.0], [0.0, 1.0]],
         [[1.0, 0.0], [0.9, 0.1]],
-    ]
+    ])
 
-    mapping = map_claims(prev_active, new_claims, embedder, threshold=0.8)
+    mapping = await map_claims(prev_active, new_claims, embedder, threshold=0.8)
 
     assert len(mapping) == 1
     assert mapping[0] == prev_active[0]["uuid"]
 
 
 @pytest.mark.unit
-def test_map_claims_empty():
-    mapping = map_claims([], [], MagicMock())
+async def test_map_claims_empty():
+    embedder = MagicMock()
+    embedder.aembed_documents = AsyncMock(return_value=[])
+    mapping = await map_claims([], [], embedder)
     assert mapping == {}
 
 
 @pytest.mark.unit
-def test_map_claims_below_threshold():
+async def test_map_claims_below_threshold():
     prev_active = [
         {"uuid": str(uuid.uuid4()), "text": "GDP grew 5%"},
     ]
@@ -92,12 +94,12 @@ def test_map_claims_below_threshold():
         {"claim_text": "Completely different text", "verdict": "UNSUPPORTED"},
     ]
     embedder = MagicMock()
-    embedder.embed_documents.side_effect = [
+    embedder.aembed_documents = AsyncMock(side_effect=[
         [[1.0]],
         [[0.0]],
-    ]
+    ])
 
-    mapping = map_claims(prev_active, new_claims, embedder, threshold=0.8)
+    mapping = await map_claims(prev_active, new_claims, embedder, threshold=0.8)
 
     assert mapping == {}
 
