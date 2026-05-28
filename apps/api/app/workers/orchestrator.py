@@ -343,12 +343,13 @@ async def _run_copywriter(
     if result.success:
         latest = await get_latest_script(db, job.id)
         version = (latest.version + 1) if latest else 1
+        opt_history = latest.optimization_history if latest else None
         await save_script(
             db,
             job.id,
             result.payload["script_content"],
             version,
-            optimization_history=latest.optimization_history,
+            optimization_history=opt_history,
         )
         await update_job_status(db, job.id, JobStatusEnum.FACT_CHECKING_SCRIPT)
     else:
@@ -422,13 +423,21 @@ async def _update_optimization_ledger(
 ) -> None:
     if not claims_data or not latest_script_obj:
         return
-    embedder = get_embeddings()
+    try:
+        embedder = get_embeddings()
+    except Exception:
+        logger.exception("Failed to initialise embedder for optimization ledger")
+        return
     raw_ledger = latest_script_obj.optimization_history or {}
     pending_patch = raw_ledger.pop("_pending_patch_summary", None)
     patches_applied = [pending_patch] if pending_patch else None
     if raw_ledger.get("active_claims"):
         prev_active = raw_ledger["active_claims"]
-        mapping = await map_claims(prev_active, claims_data, embedder)
+        try:
+            mapping = await map_claims(prev_active, claims_data, embedder)
+        except Exception:
+            logger.exception("Failed to map claims for optimization ledger")
+            return
         delta = compute_verdict_delta(prev_active, claims_data, mapping)
         updated = update_ledger(
             raw_ledger,
