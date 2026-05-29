@@ -9,6 +9,12 @@ from app.workers.agents import LLMAgent, AgentResult, AgentActionStatus
 logger = logging.getLogger(__name__)
 
 
+class ClaimPatch(BaseModel):
+    original_claim_text: str
+    patch_intent: str
+    is_completely_resolved: bool
+
+
 class OptimizerOutput(BaseModel):
     patched_script_content: str = Field(
         description="The revised script with only broken claims patched"
@@ -18,6 +24,7 @@ class OptimizerOutput(BaseModel):
     confidence: float = Field(
         description="Confidence that patches preserve narrative coherence"
     )
+    per_claim_patches: list[ClaimPatch] = []
 
 
 OPTIMIZER_SYSTEM_PROMPT = (
