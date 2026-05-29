@@ -438,7 +438,8 @@ async def _run_optimizer(
         opt_history = dict(latest_script.optimization_history or {})
         patch_summary = result.payload.get("patch_summary", "")
         if patch_summary:
-            opt_history["_pending_patch_summary"] = patch_summary
+            working_memory["_pending_patch_summary"] = patch_summary
+            job.working_memory = working_memory
         await save_script(
             db,
             job.id,
@@ -459,6 +460,7 @@ async def _run_optimizer(
 async def _update_optimization_ledger(
     latest_script_obj,
     claims_data: list,
+    pending_patch_summary: str | None = None,
 ) -> None:
     if not claims_data or not latest_script_obj:
         return
@@ -468,8 +470,7 @@ async def _update_optimization_ledger(
         logger.exception("Failed to initialise embedder for optimization ledger")
         return
     raw_ledger = latest_script_obj.optimization_history or {}
-    pending_patch = raw_ledger.pop("_pending_patch_summary", None)
-    patches_applied = [pending_patch] if pending_patch else None
+    patches_applied = [pending_patch_summary] if pending_patch_summary else None
     if raw_ledger.get("active_claims"):
         prev_active = raw_ledger["active_claims"]
         try:
@@ -566,7 +567,8 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
 
         if claims_data and latest_script_obj:
             await save_fact_check_claims(db, latest_script_obj.id, claims_data)
-            await _update_optimization_ledger(latest_script_obj, claims_data)
+            pending_patch_summary = (job.working_memory or {}).pop("_pending_patch_summary", None)
+            await _update_optimization_ledger(latest_script_obj, claims_data, pending_patch_summary=pending_patch_summary)
             await _update_epistemic_ledger(job, claims_data)
 
         if latest_script_obj:
@@ -599,7 +601,8 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
 
             if claims_data and latest_script_obj:
                 await save_fact_check_claims(db, latest_script_obj.id, claims_data)
-                await _update_optimization_ledger(latest_script_obj, claims_data)
+                pending_patch_summary = (job.working_memory or {}).pop("_pending_patch_summary", None)
+                await _update_optimization_ledger(latest_script_obj, claims_data, pending_patch_summary=pending_patch_summary)
                 await _update_epistemic_ledger(job, claims_data)
                 await db.commit()
 
