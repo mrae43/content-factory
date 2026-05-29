@@ -195,3 +195,70 @@ async def test_returns_success_when_uncertain_for_no_evidence_claim(
     uncertain_claims = [c for c in claims if c.get("verdict") == "UNCERTAIN"]
     assert len(supported_claims) == 1
     assert len(uncertain_claims) == 1
+
+
+@pytest.mark.agent
+async def test_copywriter_rationale_in_correction_hint(
+    mock_vector_store,
+    job_id,
+    claim_extraction_single,
+    red_team_verdict_supported,
+    multi_chain_mock,
+):
+    agent = _make_agent()
+    _inject_search_tool(agent, mock_vector_store)
+    context = {
+        "script_content": "BRICS GDP grew 3.2% in 2024.",
+        "job_id": job_id,
+        "copywriter_rationale": {
+            "narrative_intent": "test",
+            "claim_disambiguations": [],
+        },
+    }
+
+    with multi_chain_mock(
+        [claim_extraction_single, red_team_verdict_supported]
+    ) as mock_ainvoke:
+        result = await agent._execute(context)
+
+    assert result.status == AgentActionStatus.SUCCESS
+    eval_call = mock_ainvoke.call_args_list[-1]
+    invoked_input = eval_call[0][0]
+    assert "<copywriter_rationale>" in invoked_input["correction_hint_block"]
+    assert "narrative_intent" in invoked_input["correction_hint_block"]
+
+
+@pytest.mark.agent
+async def test_optimizer_phase_in_correction_hint(
+    mock_vector_store,
+    job_id,
+    claim_extraction_single,
+    red_team_verdict_supported,
+    multi_chain_mock,
+):
+    agent = _make_agent()
+    _inject_search_tool(agent, mock_vector_store)
+    context = {
+        "script_content": "BRICS GDP grew 3.2% in 2024.",
+        "job_id": job_id,
+        "optimizer_phase": {"iteration_1": {"patch_summary": "Fixed claim"}},
+    }
+
+    with multi_chain_mock(
+        [claim_extraction_single, red_team_verdict_supported]
+    ) as mock_ainvoke:
+        result = await agent._execute(context)
+
+    assert result.status == AgentActionStatus.SUCCESS
+    eval_call = mock_ainvoke.call_args_list[-1]
+    invoked_input = eval_call[0][0]
+    assert "<optimizer_phase>" in invoked_input["correction_hint_block"]
+
+
+@pytest.mark.agent
+async def test_evaluation_system_has_fuzzy_matching_note():
+    import inspect
+    import app.workers.agents as agents_mod
+
+    source = inspect.getsource(agents_mod)
+    assert "semantic or fuzzy matching" in source

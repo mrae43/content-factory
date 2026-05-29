@@ -3,6 +3,8 @@ from unittest.mock import MagicMock, AsyncMock, patch
 
 from app.workers.agents import (
     CopywriterSchema,
+    CopywriterRationale,
+    ClaimDisambiguation,
     RedTeamVerdict,
     ClaimItem,
     ClaimExtractionResult,
@@ -18,6 +20,16 @@ def copywriter_schema_output():
         script_content="Did you know BRICS is reshaping global finance?",
         reasoning="Opened with question, built through data-driven narrative.",
         confidence=0.8,
+        copywriter_rationale=CopywriterRationale(
+            narrative_intent="Hook audience with geopolitical shift",
+            claim_disambiguations=[
+                ClaimDisambiguation(
+                    script_excerpt="BRICS is reshaping global finance",
+                    category="factual",
+                    intent="Establish core thesis",
+                ),
+            ],
+        ),
     )
 
 

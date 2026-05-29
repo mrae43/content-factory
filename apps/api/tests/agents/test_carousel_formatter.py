@@ -268,3 +268,35 @@ async def test_carousel_handles_empty_verified_claims(multi_chain_mock):
 
     assert result.status == AgentActionStatus.SUCCESS
     assert result.payload["_format"] == "carousel"
+
+
+@pytest.mark.agent
+async def test_carousel_epistemic_ledger_in_hedge_block(
+    multi_chain_mock,
+):
+    agent = _make_agent()
+    plan = _carousel_plan()
+    output = _carousel_output()
+    context = {
+        "script_content": "Script with uncertain claims.",
+        "refined_context": "Context.",
+        "verified_claims": [],
+        "hedge_index": [
+            {"claim_text": "GDP grew 3.2%", "verdict": "UNCERTAIN"},
+        ],
+        "epistemic_ledger": {
+            "weak_passes": [
+                {
+                    "claim_text": "GDP grew 3.2%",
+                    "verdict": "UNCERTAIN",
+                    "confidence": 0.4,
+                    "weakness_reason": "Limited data available",
+                }
+            ],
+        },
+    }
+
+    with multi_chain_mock([plan, output]):
+        result = await agent._execute(context)
+
+    assert result.status == AgentActionStatus.SUCCESS

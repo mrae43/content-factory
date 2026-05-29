@@ -661,6 +661,158 @@ class TestTransitionScripting:
                 mock_db_session, mock_job.id, JobStatusEnum.HUMAN_REVIEW_NEEDED
             )
 
+    async def test_working_memory_rationale_injected_on_revision(
+        self,
+        mock_db_session,
+        mock_job,
+        mock_vector_store,
+        mock_script,
+        agent_result_success,
+    ):
+        mock_job.status = JobStatusEnum.SCRIPTING
+        mock_job.assembled_context = _canned_assembled_context_dict()
+        mock_job.working_memory = {"copywriter_rationale": {"narrative_intent": "test"}}
+        mock_script.feedback_history = ["Needs revision"]
+        result = agent_result_success(payload={"script_content": "Revised script"})
+        mock_agent_instance = AsyncMock()
+        mock_agent_instance.run = AsyncMock(return_value=result)
+
+        with (
+            patch(
+                "app.workers.orchestrator.CopywriterAgent",
+                return_value=mock_agent_instance,
+            ),
+            patch(
+                "app.workers.orchestrator.ContentFactoryVectorStore",
+                return_value=mock_vector_store,
+            ),
+            patch(
+                "app.workers.orchestrator.get_latest_script", new_callable=AsyncMock
+            ) as mock_get_script,
+            patch("app.workers.orchestrator.save_script", new_callable=AsyncMock),
+            patch("app.workers.orchestrator.update_job_status", new_callable=AsyncMock),
+        ):
+            mock_get_script.return_value = mock_script
+
+            await execute_state_transition(mock_db_session, mock_job)
+
+            call_kwargs = mock_agent_instance.run.call_args.kwargs
+            assert call_kwargs["context"]["copywriter_rationale"] == {
+                "narrative_intent": "test"
+            }
+
+    async def test_rationale_not_injected_on_first_pass(
+        self,
+        mock_db_session,
+        mock_job,
+        mock_vector_store,
+        mock_script,
+        agent_result_success,
+    ):
+        mock_job.status = JobStatusEnum.SCRIPTING
+        mock_job.assembled_context = _canned_assembled_context_dict()
+        mock_job.working_memory = {}
+        result = agent_result_success(payload={"script_content": "New script"})
+        mock_agent_instance = AsyncMock()
+        mock_agent_instance.run = AsyncMock(return_value=result)
+
+        with (
+            patch(
+                "app.workers.orchestrator.CopywriterAgent",
+                return_value=mock_agent_instance,
+            ),
+            patch(
+                "app.workers.orchestrator.ContentFactoryVectorStore",
+                return_value=mock_vector_store,
+            ),
+            patch(
+                "app.workers.orchestrator.get_latest_script", new_callable=AsyncMock
+            ) as mock_get_script,
+            patch("app.workers.orchestrator.save_script", new_callable=AsyncMock),
+            patch("app.workers.orchestrator.update_job_status", new_callable=AsyncMock),
+        ):
+            mock_get_script.return_value = None
+
+            await execute_state_transition(mock_db_session, mock_job)
+
+            call_kwargs = mock_agent_instance.run.call_args.kwargs
+            assert "copywriter_rationale" not in call_kwargs["context"]
+
+    async def test_copywriter_rationale_persisted_after_success(
+        self,
+        mock_db_session,
+        mock_job,
+        mock_vector_store,
+        agent_result_success,
+    ):
+        mock_job.status = JobStatusEnum.SCRIPTING
+        mock_job.assembled_context = _canned_assembled_context_dict()
+        mock_job.working_memory = {}
+        result = agent_result_success(
+            payload={
+                "script_content": "Script with rationale",
+                "copywriter_rationale": {"narrative_intent": "test rationale"},
+            }
+        )
+
+        with (
+            patch(
+                "app.workers.orchestrator.CopywriterAgent",
+                return_value=_mock_agent_class(result).return_value,
+            ),
+            patch(
+                "app.workers.orchestrator.ContentFactoryVectorStore",
+                return_value=mock_vector_store,
+            ),
+            patch(
+                "app.workers.orchestrator.get_latest_script", new_callable=AsyncMock
+            ) as mock_get_script,
+            patch("app.workers.orchestrator.save_script", new_callable=AsyncMock),
+            patch("app.workers.orchestrator.update_job_status", new_callable=AsyncMock),
+        ):
+            mock_get_script.return_value = None
+
+            await execute_state_transition(mock_db_session, mock_job)
+
+            assert mock_job.working_memory["copywriter_rationale"] == {
+                "narrative_intent": "test rationale"
+            }
+
+    async def test_rationale_not_persisted_when_absent(
+        self,
+        mock_db_session,
+        mock_job,
+        mock_vector_store,
+        agent_result_success,
+    ):
+        mock_job.status = JobStatusEnum.SCRIPTING
+        mock_job.assembled_context = _canned_assembled_context_dict()
+        mock_job.working_memory = {}
+        result = agent_result_success(
+            payload={"script_content": "Script without rationale"}
+        )
+
+        with (
+            patch(
+                "app.workers.orchestrator.CopywriterAgent",
+                return_value=_mock_agent_class(result).return_value,
+            ),
+            patch(
+                "app.workers.orchestrator.ContentFactoryVectorStore",
+                return_value=mock_vector_store,
+            ),
+            patch(
+                "app.workers.orchestrator.get_latest_script", new_callable=AsyncMock
+            ) as mock_get_script,
+            patch("app.workers.orchestrator.save_script", new_callable=AsyncMock),
+            patch("app.workers.orchestrator.update_job_status", new_callable=AsyncMock),
+        ):
+            mock_get_script.return_value = None
+
+            await execute_state_transition(mock_db_session, mock_job)
+
+            assert "copywriter_rationale" not in mock_job.working_memory
+
 
 @pytest.mark.integration
 class TestTransitionScriptingFallback:
@@ -913,6 +1065,315 @@ class TestTransitionScriptingEvidence:
             mock_update.assert_awaited_once_with(
                 mock_db_session, mock_job.id, JobStatusEnum.HUMAN_REVIEW_NEEDED
             )
+
+    async def test_optimizer_history_phases_injected_into_optimizer(
+        self,
+        mock_db_session,
+        mock_job,
+        mock_vector_store,
+        mock_script,
+        agent_result_success,
+    ):
+        mock_job.status = JobStatusEnum.SCRIPTING
+        mock_job.assembled_context = {
+            "narrative_summary": "Summary.",
+            "evidence_sections": "## Retrieved Evidence\n\nChunk 1: the evidence.",
+            "raw_chunks": [],
+        }
+        mock_job.working_memory = {
+            "optimizer_phase": {"iteration_1": {"patch_summary": "Fixed claim"}}
+        }
+        mock_script.feedback_history = [
+            {
+                "feedback_type": "structured_claims",
+                "failed_claims": [
+                    {
+                        "claim_text": "GDP grew 15%",
+                        "verdict": "UNSUPPORTED",
+                        "confidence": 0.3,
+                        "evidence_text": "",
+                    }
+                ],
+                "overall_reasoning": "Bad claim",
+                "revision_number": 1,
+            }
+        ]
+        mock_script.optimization_history = {
+            "active_claims": [
+                {
+                    "claim_text": "GDP grew 15%",
+                    "claim_uuid": "uuid-123",
+                    "latest_verdict": "UNSUPPORTED",
+                }
+            ],
+            "historical_iterations": [],
+        }
+        result = agent_result_success(
+            payload={
+                "script_content": "Patched script",
+                "patch_summary": "Fixed claim",
+            }
+        )
+        mock_agent_instance = AsyncMock()
+        mock_agent_instance.run = AsyncMock(return_value=result)
+
+        with (
+            patch(
+                "app.workers.orchestrator.ScriptOptimizerAgent",
+                return_value=mock_agent_instance,
+            ),
+            patch(
+                "app.workers.orchestrator.ContentFactoryVectorStore",
+                return_value=mock_vector_store,
+            ),
+            patch(
+                "app.workers.orchestrator.get_latest_script", new_callable=AsyncMock
+            ) as mock_get_script,
+            patch("app.workers.orchestrator.save_script", new_callable=AsyncMock),
+            patch("app.workers.orchestrator.update_job_status", new_callable=AsyncMock),
+        ):
+            mock_get_script.return_value = mock_script
+
+            await execute_state_transition(mock_db_session, mock_job)
+
+            call_kwargs = mock_agent_instance.run.call_args.kwargs
+            assert "optimizer_history_phases" in call_kwargs["context"]
+
+    async def test_text_to_uuid_translation_and_iteration(
+        self,
+        mock_db_session,
+        mock_job,
+        mock_vector_store,
+        mock_script,
+    ):
+        mock_job.status = JobStatusEnum.SCRIPTING
+        mock_job.assembled_context = {
+            "narrative_summary": "Summary.",
+            "evidence_sections": "## Retrieved Evidence\n\nChunk 1: the evidence.",
+            "raw_chunks": [],
+        }
+        mock_script.feedback_history = [
+            {
+                "feedback_type": "structured_claims",
+                "failed_claims": [
+                    {
+                        "claim_text": "GDP grew 15%",
+                        "verdict": "UNSUPPORTED",
+                        "confidence": 0.3,
+                        "evidence_text": "",
+                    }
+                ],
+                "overall_reasoning": "Bad claim",
+                "revision_number": 1,
+            }
+        ]
+        mock_script.optimization_history = {
+            "active_claims": [
+                {
+                    "claim_text": "GDP grew 15%",
+                    "claim_uuid": "uuid-123",
+                    "latest_verdict": "UNSUPPORTED",
+                }
+            ],
+            "historical_iterations": [],
+        }
+        result = AgentResult(
+            status=AgentActionStatus.SUCCESS,
+            payload={
+                "script_content": "Patched script",
+                "patch_summary": "Replaced GDP claim",
+                "per_claim_patches": [
+                    {
+                        "original_claim_text": "GDP grew 15%",
+                        "patch_intent": "Replaced with verified figure",
+                        "is_completely_resolved": True,
+                    }
+                ],
+            },
+            reasoning="Fixed it",
+            confidence_score=0.9,
+        )
+        mock_agent_instance = AsyncMock()
+        mock_agent_instance.run = AsyncMock(return_value=result)
+
+        with (
+            patch(
+                "app.workers.orchestrator.ScriptOptimizerAgent",
+                return_value=mock_agent_instance,
+            ),
+            patch(
+                "app.workers.orchestrator.ContentFactoryVectorStore",
+                return_value=mock_vector_store,
+            ),
+            patch(
+                "app.workers.orchestrator.get_latest_script", new_callable=AsyncMock
+            ) as mock_get_script,
+            patch("app.workers.orchestrator.save_script", new_callable=AsyncMock),
+            patch("app.workers.orchestrator.update_job_status", new_callable=AsyncMock),
+        ):
+            mock_get_script.return_value = mock_script
+
+            await execute_state_transition(mock_db_session, mock_job)
+
+            assert (
+                mock_job.working_memory["optimizer_phase"]["iteration_1"][
+                    "resolved_claims"
+                ][0]["claim_uuid"]
+                == "uuid-123"
+            )
+
+    async def test_optimizer_iteration_counter_increments(
+        self,
+        mock_db_session,
+        mock_job,
+        mock_vector_store,
+        mock_script,
+    ):
+        mock_job.status = JobStatusEnum.SCRIPTING
+        mock_job.assembled_context = {
+            "narrative_summary": "Summary.",
+            "evidence_sections": "## Retrieved Evidence\n\nChunk 1: the evidence.",
+            "raw_chunks": [],
+        }
+        mock_job.working_memory = {
+            "optimizer_phase": {"iteration_1": {"patch_summary": "First pass"}}
+        }
+        mock_script.feedback_history = [
+            {
+                "feedback_type": "structured_claims",
+                "failed_claims": [
+                    {
+                        "claim_text": "GDP grew 15%",
+                        "verdict": "UNSUPPORTED",
+                        "confidence": 0.3,
+                        "evidence_text": "",
+                    }
+                ],
+                "overall_reasoning": "Bad claim",
+                "revision_number": 2,
+            }
+        ]
+        mock_script.optimization_history = {
+            "active_claims": [
+                {
+                    "claim_text": "GDP grew 15%",
+                    "claim_uuid": "uuid-456",
+                    "latest_verdict": "UNSUPPORTED",
+                }
+            ],
+            "historical_iterations": [],
+        }
+        result = AgentResult(
+            status=AgentActionStatus.SUCCESS,
+            payload={
+                "script_content": "Second patch",
+                "patch_summary": "Fixed again",
+                "per_claim_patches": [
+                    {
+                        "original_claim_text": "GDP grew 15%",
+                        "patch_intent": "Replaced with verified figure",
+                        "is_completely_resolved": True,
+                    }
+                ],
+            },
+            reasoning="Fixed again",
+            confidence_score=0.9,
+        )
+        mock_agent_instance = AsyncMock()
+        mock_agent_instance.run = AsyncMock(return_value=result)
+
+        with (
+            patch(
+                "app.workers.orchestrator.ScriptOptimizerAgent",
+                return_value=mock_agent_instance,
+            ),
+            patch(
+                "app.workers.orchestrator.ContentFactoryVectorStore",
+                return_value=mock_vector_store,
+            ),
+            patch(
+                "app.workers.orchestrator.get_latest_script", new_callable=AsyncMock
+            ) as mock_get_script,
+            patch("app.workers.orchestrator.save_script", new_callable=AsyncMock),
+            patch("app.workers.orchestrator.update_job_status", new_callable=AsyncMock),
+        ):
+            mock_get_script.return_value = mock_script
+
+            await execute_state_transition(mock_db_session, mock_job)
+
+            assert "iteration_2" in mock_job.working_memory["optimizer_phase"]
+
+    async def test_no_working_memory_write_when_no_patches(
+        self,
+        mock_db_session,
+        mock_job,
+        mock_vector_store,
+        mock_script,
+    ):
+        mock_job.status = JobStatusEnum.SCRIPTING
+        mock_job.assembled_context = {
+            "narrative_summary": "Summary.",
+            "evidence_sections": "## Retrieved Evidence\n\nChunk 1: the evidence.",
+            "raw_chunks": [],
+        }
+        mock_job.working_memory = {}
+        mock_script.feedback_history = [
+            {
+                "feedback_type": "structured_claims",
+                "failed_claims": [
+                    {
+                        "claim_text": "GDP grew 15%",
+                        "verdict": "UNSUPPORTED",
+                        "confidence": 0.3,
+                        "evidence_text": "",
+                    }
+                ],
+                "overall_reasoning": "Bad claim",
+                "revision_number": 1,
+            }
+        ]
+        mock_script.optimization_history = {
+            "active_claims": [
+                {
+                    "claim_text": "GDP grew 15%",
+                    "claim_uuid": "uuid-123",
+                    "latest_verdict": "UNSUPPORTED",
+                }
+            ],
+            "historical_iterations": [],
+        }
+        result = AgentResult(
+            status=AgentActionStatus.SUCCESS,
+            payload={
+                "script_content": "Patched script",
+                "patch_summary": "Fixed claim",
+            },
+            reasoning="Fixed it",
+            confidence_score=0.9,
+        )
+        mock_agent_instance = AsyncMock()
+        mock_agent_instance.run = AsyncMock(return_value=result)
+
+        with (
+            patch(
+                "app.workers.orchestrator.ScriptOptimizerAgent",
+                return_value=mock_agent_instance,
+            ),
+            patch(
+                "app.workers.orchestrator.ContentFactoryVectorStore",
+                return_value=mock_vector_store,
+            ),
+            patch(
+                "app.workers.orchestrator.get_latest_script", new_callable=AsyncMock
+            ) as mock_get_script,
+            patch("app.workers.orchestrator.save_script", new_callable=AsyncMock),
+            patch("app.workers.orchestrator.update_job_status", new_callable=AsyncMock),
+        ):
+            mock_get_script.return_value = mock_script
+
+            await execute_state_transition(mock_db_session, mock_job)
+
+            assert "optimizer_phase" not in mock_job.working_memory
 
 
 @pytest.mark.integration
@@ -1444,6 +1905,288 @@ class TestTransitionFactCheckingScript:
 
             mock_vector_store.semantic_search.assert_not_awaited()
             assert claims_data[0]["evidence_references"] == []
+
+    async def test_copywriter_rationale_injected_into_red_team(
+        self,
+        mock_db_session,
+        mock_job,
+        mock_vector_store,
+        mock_script,
+        agent_result_success,
+    ):
+        mock_job.status = JobStatusEnum.FACT_CHECKING_SCRIPT
+        mock_job.story_directives["guardrail_strictness"] = "Medium"
+        mock_job.working_memory = {"copywriter_rationale": {"narrative_intent": "test"}}
+        result = agent_result_success(payload={"claims": [], "verdict": "SUPPORTED"})
+        mock_agent_instance = AsyncMock()
+        mock_agent_instance.run = AsyncMock(return_value=result)
+
+        with (
+            patch(
+                "app.workers.orchestrator.RedTeamAgent",
+                return_value=mock_agent_instance,
+            ),
+            patch(
+                "app.workers.orchestrator.ContentFactoryVectorStore",
+                return_value=mock_vector_store,
+            ),
+            patch(
+                "app.workers.orchestrator.get_latest_script", new_callable=AsyncMock
+            ) as mock_get_script,
+            patch(
+                "app.workers.orchestrator.save_fact_check_claims",
+                new_callable=AsyncMock,
+            ),
+            patch("app.workers.orchestrator.update_job_status", new_callable=AsyncMock),
+        ):
+            mock_get_script.return_value = mock_script
+
+            await execute_state_transition(mock_db_session, mock_job)
+
+            call_kwargs = mock_agent_instance.run.call_args.kwargs
+            assert call_kwargs["context"]["copywriter_rationale"] == {
+                "narrative_intent": "test"
+            }
+
+    async def test_optimizer_phase_injected_into_red_team(
+        self,
+        mock_db_session,
+        mock_job,
+        mock_vector_store,
+        mock_script,
+        agent_result_success,
+    ):
+        mock_job.status = JobStatusEnum.FACT_CHECKING_SCRIPT
+        mock_job.story_directives["guardrail_strictness"] = "Medium"
+        mock_job.working_memory = {
+            "optimizer_phase": {"iteration_1": {"patch_summary": "Fixed claim"}}
+        }
+        result = agent_result_success(payload={"claims": [], "verdict": "SUPPORTED"})
+        mock_agent_instance = AsyncMock()
+        mock_agent_instance.run = AsyncMock(return_value=result)
+
+        with (
+            patch(
+                "app.workers.orchestrator.RedTeamAgent",
+                return_value=mock_agent_instance,
+            ),
+            patch(
+                "app.workers.orchestrator.ContentFactoryVectorStore",
+                return_value=mock_vector_store,
+            ),
+            patch(
+                "app.workers.orchestrator.get_latest_script", new_callable=AsyncMock
+            ) as mock_get_script,
+            patch(
+                "app.workers.orchestrator.save_fact_check_claims",
+                new_callable=AsyncMock,
+            ),
+            patch("app.workers.orchestrator.update_job_status", new_callable=AsyncMock),
+        ):
+            mock_get_script.return_value = mock_script
+
+            await execute_state_transition(mock_db_session, mock_job)
+
+            call_kwargs = mock_agent_instance.run.call_args.kwargs
+            assert "optimizer_phase" in call_kwargs["context"]
+
+    async def test_epistemic_ledger_derived_on_success(
+        self,
+        mock_db_session,
+        mock_job,
+        mock_vector_store,
+        mock_script,
+        agent_result_success,
+    ):
+        mock_job.status = JobStatusEnum.FACT_CHECKING_SCRIPT
+        mock_job.story_directives["guardrail_strictness"] = "Medium"
+        claims_data = [
+            {
+                "claim_text": "GDP grew 3.2%",
+                "verdict": "UNCERTAIN",
+                "confidence": 0.4,
+                "evidence_text": "Limited data available",
+            }
+        ]
+        result = agent_result_success(
+            payload={"claims": claims_data, "verdict": "SUPPORTED"}
+        )
+
+        with (
+            patch(
+                "app.workers.orchestrator.RedTeamAgent",
+                return_value=_mock_agent_class(result).return_value,
+            ),
+            patch(
+                "app.workers.orchestrator.ContentFactoryVectorStore",
+                return_value=mock_vector_store,
+            ),
+            patch(
+                "app.workers.orchestrator.get_latest_script", new_callable=AsyncMock
+            ) as mock_get_script,
+            patch(
+                "app.workers.orchestrator.save_fact_check_claims",
+                new_callable=AsyncMock,
+            ),
+            patch("app.workers.orchestrator.update_job_status", new_callable=AsyncMock),
+        ):
+            mock_get_script.return_value = mock_script
+
+            await execute_state_transition(mock_db_session, mock_job)
+
+            assert (
+                mock_job.working_memory["epistemic_ledger"]["weak_passes"][0][
+                    "claim_text"
+                ]
+                == "GDP grew 3.2%"
+            )
+            assert (
+                mock_job.working_memory["epistemic_ledger"]["weak_passes"][0]["verdict"]
+                == "UNCERTAIN"
+            )
+
+    async def test_epistemic_ledger_derived_on_revision_needed(
+        self,
+        mock_db_session,
+        mock_job,
+        mock_vector_store,
+        mock_script,
+    ):
+        mock_job.status = JobStatusEnum.FACT_CHECKING_SCRIPT
+        mock_job.story_directives["guardrail_strictness"] = "Medium"
+        claims_data = [
+            {
+                "claim_text": "GDP grew 3.2%",
+                "verdict": "CONTESTED",
+                "confidence": 0.5,
+                "evidence_text": "Sources disagree",
+            }
+        ]
+        result = AgentResult(
+            status=AgentActionStatus.REVISION_NEEDED,
+            payload={"claims": claims_data, "verdict": "UNSUPPORTED"},
+            reasoning="Claims contested",
+            confidence_score=0.5,
+        )
+
+        with (
+            patch(
+                "app.workers.orchestrator.RedTeamAgent",
+                return_value=_mock_agent_class(result).return_value,
+            ),
+            patch(
+                "app.workers.orchestrator.ContentFactoryVectorStore",
+                return_value=mock_vector_store,
+            ),
+            patch(
+                "app.workers.orchestrator.get_latest_script", new_callable=AsyncMock
+            ) as mock_get_script,
+            patch(
+                "app.workers.orchestrator.save_fact_check_claims",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "app.workers.orchestrator.append_script_feedback",
+                new_callable=AsyncMock,
+            ),
+            patch("app.workers.orchestrator.update_job_status", new_callable=AsyncMock),
+        ):
+            mock_get_script.return_value = mock_script
+
+            await execute_state_transition(mock_db_session, mock_job)
+
+            assert (
+                mock_job.working_memory["epistemic_ledger"]["weak_passes"][0][
+                    "claim_text"
+                ]
+                == "GDP grew 3.2%"
+            )
+            assert (
+                mock_job.working_memory["epistemic_ledger"]["weak_passes"][0]["verdict"]
+                == "CONTESTED"
+            )
+
+    async def test_epistemic_ledger_not_created_when_all_strong(
+        self,
+        mock_db_session,
+        mock_job,
+        mock_vector_store,
+        mock_script,
+        agent_result_success,
+    ):
+        mock_job.status = JobStatusEnum.FACT_CHECKING_SCRIPT
+        mock_job.story_directives["guardrail_strictness"] = "Medium"
+        claims_data = [
+            {
+                "claim_text": "GDP grew 3.2%",
+                "verdict": "SUPPORTED",
+                "confidence": 0.95,
+                "evidence_text": "IMF confirms",
+            }
+        ]
+        result = agent_result_success(
+            payload={"claims": claims_data, "verdict": "SUPPORTED"}
+        )
+
+        with (
+            patch(
+                "app.workers.orchestrator.RedTeamAgent",
+                return_value=_mock_agent_class(result).return_value,
+            ),
+            patch(
+                "app.workers.orchestrator.ContentFactoryVectorStore",
+                return_value=mock_vector_store,
+            ),
+            patch(
+                "app.workers.orchestrator.get_latest_script", new_callable=AsyncMock
+            ) as mock_get_script,
+            patch(
+                "app.workers.orchestrator.save_fact_check_claims",
+                new_callable=AsyncMock,
+            ),
+            patch("app.workers.orchestrator.update_job_status", new_callable=AsyncMock),
+        ):
+            mock_get_script.return_value = mock_script
+
+            await execute_state_transition(mock_db_session, mock_job)
+
+            assert "epistemic_ledger" not in mock_job.working_memory
+
+    async def test_epistemic_ledger_not_created_when_empty(
+        self,
+        mock_db_session,
+        mock_job,
+        mock_vector_store,
+        mock_script,
+        agent_result_success,
+    ):
+        mock_job.status = JobStatusEnum.FACT_CHECKING_SCRIPT
+        mock_job.story_directives["guardrail_strictness"] = "Medium"
+        result = agent_result_success(payload={"claims": [], "verdict": "SUPPORTED"})
+
+        with (
+            patch(
+                "app.workers.orchestrator.RedTeamAgent",
+                return_value=_mock_agent_class(result).return_value,
+            ),
+            patch(
+                "app.workers.orchestrator.ContentFactoryVectorStore",
+                return_value=mock_vector_store,
+            ),
+            patch(
+                "app.workers.orchestrator.get_latest_script", new_callable=AsyncMock
+            ) as mock_get_script,
+            patch(
+                "app.workers.orchestrator.save_fact_check_claims",
+                new_callable=AsyncMock,
+            ),
+            patch("app.workers.orchestrator.update_job_status", new_callable=AsyncMock),
+        ):
+            mock_get_script.return_value = mock_script
+
+            await execute_state_transition(mock_db_session, mock_job)
+
+            assert "epistemic_ledger" not in (mock_job.working_memory or {})
 
 
 @pytest.mark.integration

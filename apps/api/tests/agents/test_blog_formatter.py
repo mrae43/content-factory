@@ -259,3 +259,35 @@ async def test_blog_formats_claims_text_correctly(multi_chain_mock):
     claims_text = calls[0][0][0]["verified_claims"]
     assert "GDP grew 3.2% [SUPPORTED]" in claims_text
     assert "New payment system [SUPPORTED]" in claims_text
+
+
+@pytest.mark.agent
+async def test_blog_epistemic_ledger_in_hedge_block(
+    multi_chain_mock,
+):
+    agent = _make_agent()
+    plan = _blog_plan()
+    output = _blog_output()
+    context = {
+        "script_content": "Script with uncertain claims.",
+        "refined_context": "Context.",
+        "verified_claims": [],
+        "hedge_index": [
+            {"claim_text": "GDP grew 3.2%", "verdict": "UNCERTAIN"},
+        ],
+        "epistemic_ledger": {
+            "weak_passes": [
+                {
+                    "claim_text": "GDP grew 3.2%",
+                    "verdict": "UNCERTAIN",
+                    "confidence": 0.4,
+                    "weakness_reason": "Limited data available",
+                }
+            ],
+        },
+    }
+
+    with multi_chain_mock([plan, output]):
+        result = await agent._execute(context)
+
+    assert result.status == AgentActionStatus.SUCCESS
