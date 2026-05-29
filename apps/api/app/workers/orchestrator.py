@@ -326,6 +326,8 @@ async def _run_copywriter(
     )
     harness = AgentHarness(agent=copywriter)
     story_directives = job.story_directives or {}
+    working_memory = job.working_memory or {}
+    copywriter_rationale = working_memory.get("copywriter_rationale")
     agent_context = {
         "job_id": job.id,
         "topic": job.title,
@@ -338,9 +340,17 @@ async def _run_copywriter(
         },
         "feedback": feedback,
     }
+    if copywriter_rationale:
+        agent_context["copywriter_rationale"] = copywriter_rationale
     result = await harness.run_with_harness(agent_context)
 
     if result.success:
+        working_memory = dict(job.working_memory or {})
+        if "copywriter_rationale" in result.payload:
+            working_memory["copywriter_rationale"] = result.payload[
+                "copywriter_rationale"
+            ]
+            job.working_memory = working_memory
         latest = await get_latest_script(db, job.id)
         version = (latest.version + 1) if latest else 1
         opt_history = latest.optimization_history if latest else None
@@ -379,6 +389,8 @@ async def _run_optimizer(
         if c.get("latest_verdict") in ("UNSUPPORTED", "CONTESTED")
     ]
     optimization_history = ledger.get("historical_iterations", [])
+    working_memory = job.working_memory or {}
+    optimizer_phase = working_memory.get("optimizer_phase", {})
     agent_context = {
         "job_id": job.id,
         "script_content": latest_script.content,
@@ -392,9 +404,36 @@ async def _run_optimizer(
             "angle": story_directives.get("angle", ""),
         },
     }
+    if optimizer_phase:
+        agent_context["optimizer_history_phases"] = optimizer_phase
     result = await harness.run_with_harness(agent_context)
 
     if result.success:
+        working_memory = dict(job.working_memory or {})
+        per_claim_patches = result.payload.get("per_claim_patches", [])
+        if per_claim_patches:
+            ledger = latest_script.optimization_history or {}
+            active_claims = ledger.get("active_claims", [])
+            text_to_uuid = {c["claim_text"]: c["claim_uuid"] for c in active_claims}
+            resolved_claims = []
+            for patch in per_claim_patches:
+                claim_uuid = text_to_uuid.get(patch["original_claim_text"])
+                resolved_claims.append(
+                    {
+                        "claim_uuid": str(claim_uuid)
+                        if claim_uuid
+                        else patch["original_claim_text"],
+                        "patch_intent": patch["patch_intent"],
+                        "is_completely_resolved": patch["is_completely_resolved"],
+                    }
+                )
+            optimizer_phase = working_memory.setdefault("optimizer_phase", {})
+            iteration = len(optimizer_phase) + 1
+            optimizer_phase[f"iteration_{iteration}"] = {
+                "patch_summary": result.payload.get("patch_summary", ""),
+                "resolved_claims": resolved_claims,
+            }
+            job.working_memory = working_memory
         version = latest_script.version + 1
         opt_history = dict(latest_script.optimization_history or {})
         patch_summary = result.payload.get("patch_summary", "")
@@ -451,6 +490,26 @@ async def _update_optimization_ledger(
     latest_script_obj.optimization_history = updated
 
 
+async def _update_epistemic_ledger(job, claims_data: list) -> None:
+    if not claims_data:
+        return
+    weak_passes = [
+        {
+            "claim_text": c["claim_text"],
+            "verdict": c["verdict"],
+            "confidence": c.get("confidence", 0.0),
+            "weakness_reason": c.get("evidence_text", ""),
+        }
+        for c in claims_data
+        if c.get("verdict") in ("UNCERTAIN", "CONTESTED")
+        or (c.get("verdict") == "SUPPORTED" and c.get("confidence", 1.0) < 0.7)
+    ]
+    if weak_passes:
+        working_memory = dict(job.working_memory or {})
+        working_memory["epistemic_ledger"] = {"weak_passes": weak_passes}
+        job.working_memory = working_memory
+
+
 async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
     red_team = RedTeamAgent(
         model_name=settings.evaluator_model,
@@ -483,6 +542,11 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
         "script_content": latest_script,
         "guardrail_config": guardrail_cfg,
     }
+    working_memory = job.working_memory or {}
+    if "copywriter_rationale" in working_memory:
+        agent_context["copywriter_rationale"] = working_memory["copywriter_rationale"]
+    if "optimizer_phase" in working_memory:
+        agent_context["optimizer_phase"] = working_memory["optimizer_phase"]
     result = await harness.run_with_harness(agent_context)
 
     if result.escalated:
@@ -503,6 +567,7 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
         if claims_data and latest_script_obj:
             await save_fact_check_claims(db, latest_script_obj.id, claims_data)
             await _update_optimization_ledger(latest_script_obj, claims_data)
+            await _update_epistemic_ledger(job, claims_data)
 
         if latest_script_obj:
             if guardrail_cfg.requires_human_review:
@@ -535,6 +600,7 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
             if claims_data and latest_script_obj:
                 await save_fact_check_claims(db, latest_script_obj.id, claims_data)
                 await _update_optimization_ledger(latest_script_obj, claims_data)
+                await _update_epistemic_ledger(job, claims_data)
                 await db.commit()
 
             failed_claims = [
@@ -738,11 +804,15 @@ async def _transition_formatting(db: AsyncSession, job) -> None:
         job.hedge_index = hedge_index
         await db.commit()
 
+    working_memory = job.working_memory or {}
+    epistemic_ledger = working_memory.get("epistemic_ledger", {})
+
     base_context = {
         "script_content": latest_script.content,
         "refined_context": job.refined_context or "",
         "verified_claims": verified_claims,
         "hedge_index": hedge_index,
+        "epistemic_ledger": epistemic_ledger,
         "platform": job.platform or "",
         "story_directives": job.story_directives or {},
     }

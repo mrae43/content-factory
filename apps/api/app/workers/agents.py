@@ -1,3 +1,4 @@
+import json as _json
 from abc import ABC, abstractmethod
 from typing import Any, ClassVar, Dict, List, Literal, Optional, Set, Type
 from uuid import UUID
@@ -296,7 +297,10 @@ class CopywriterAgent(LLMAgent):
                         "8. Do NOT include scene numbers, timestamps, visual cues, audio cues, or storyboard elements.\n"
                         "9. Preserve specific data: numbers, dates, names, statistics, quotes, and attributions.\n"
                         "10. If feedback is provided, address every point in the revised script.\n"
-                        "11. If story_directives specifies a particular angle, use it to focus the narrative perspective."
+                        "11. If story_directives specifies a particular angle, use it to focus the narrative perspective.\n"
+                        "12. CRITICAL: If you include a `copywriter_rationale`, every `script_excerpt` in "
+                        "`copywriter_rationale.claim_disambiguations` must be an exact word-for-word substring "
+                        "of `script_content`. The Red Team uses exact matching to locate passages."
                     ),
                 ),
                 (
@@ -330,6 +334,9 @@ class CopywriterAgent(LLMAgent):
             status=AgentActionStatus.SUCCESS,
             payload={
                 "script_content": result.script_content,
+                "copywriter_rationale": result.copywriter_rationale.model_dump()
+                if result.copywriter_rationale
+                else None,
             },
             reasoning=result.reasoning,
             confidence_score=result.confidence,
@@ -436,6 +443,10 @@ EVALUATION_SYSTEM = (
     "   from the provided evidence chunks.\n"
     "2. If no evidence is available for a claim, assign UNCERTAIN — do not guess.\n"
     "3. Do not misrepresent evidence to fit a preferred verdict.\n"
+    "\nCONTEXT NOTE: The context may include a `copywriter_rationale` section explaining "
+    "narrative intent for specific passages. If a `script_excerpt` from the rationale does "
+    "not match the script exactly, use semantic or fuzzy matching to identify the relevant "
+    "passage. Do not dismiss the rationale solely due to an inexact quote.\n"
 )
 
 EVALUATION_HUMAN = (
@@ -569,6 +580,8 @@ class RedTeamAgent(LLMAgent):
         script_content = context.get("script_content", "")
         job_id = context.get("job_id")
         guardrail_config = context.get("guardrail_config")
+        copywriter_rationale = context.get("copywriter_rationale")
+        optimizer_phase = context.get("optimizer_phase")
 
         if not script_content:
             return AgentResult(
@@ -658,6 +671,21 @@ class RedTeamAgent(LLMAgent):
             logger.warning("Web research enrichment failed, continuing without it.")
 
         correction_hint = context.get("correction_hint", "")
+        working_memory_context = ""
+        if copywriter_rationale:
+            if isinstance(copywriter_rationale, dict):
+                working_memory_context += f"\n<copywriter_rationale>\n{_json.dumps(copywriter_rationale, indent=2)}\n</copywriter_rationale>\n"
+            else:
+                working_memory_context += f"\n<copywriter_rationale>\n{copywriter_rationale}\n</copywriter_rationale>\n"
+        if optimizer_phase:
+            if isinstance(optimizer_phase, dict):
+                working_memory_context += f"\n<optimizer_phase>\n{_json.dumps(optimizer_phase, indent=2)}\n</optimizer_phase>\n"
+            else:
+                working_memory_context += (
+                    f"\n<optimizer_phase>\n{optimizer_phase}\n</optimizer_phase>\n"
+                )
+        if working_memory_context:
+            correction_hint = working_memory_context + correction_hint
 
         try:
             structured = await self._evaluate_claims(
