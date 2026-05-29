@@ -121,6 +121,7 @@ class RenderJob(Base):
     format_type = Column(String, nullable=False, server_default="all")
     platform = Column(String, nullable=True)
     hedge_index = Column(JSONB, nullable=True)
+    working_memory = Column(JSONB, nullable=False, server_default="{}")
 
     created_at = Column(
         DateTime(timezone=True), server_default=text("now()"), nullable=False
