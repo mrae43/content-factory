@@ -334,7 +334,9 @@ class CopywriterAgent(LLMAgent):
             status=AgentActionStatus.SUCCESS,
             payload={
                 "script_content": result.script_content,
-                "copywriter_rationale": result.copywriter_rationale.model_dump() if result.copywriter_rationale else None,
+                "copywriter_rationale": result.copywriter_rationale.model_dump()
+                if result.copywriter_rationale
+                else None,
             },
             reasoning=result.reasoning,
             confidence_score=result.confidence,
@@ -440,11 +442,11 @@ EVALUATION_SYSTEM = (
     "1. Do NOT fabricate evidence. Every verdict must reference specific evidence text\n"
     "   from the provided evidence chunks.\n"
     "2. If no evidence is available for a claim, assign UNCERTAIN — do not guess.\n"
-        "3. Do not misrepresent evidence to fit a preferred verdict.\n"
-        "\nCONTEXT NOTE: The context may include a `copywriter_rationale` section explaining "
-        "narrative intent for specific passages. If a `script_excerpt` from the rationale does "
-        "not match the script exactly, use semantic or fuzzy matching to identify the relevant "
-        "passage. Do not dismiss the rationale solely due to an inexact quote.\n"
+    "3. Do not misrepresent evidence to fit a preferred verdict.\n"
+    "\nCONTEXT NOTE: The context may include a `copywriter_rationale` section explaining "
+    "narrative intent for specific passages. If a `script_excerpt` from the rationale does "
+    "not match the script exactly, use semantic or fuzzy matching to identify the relevant "
+    "passage. Do not dismiss the rationale solely due to an inexact quote.\n"
 )
 
 EVALUATION_HUMAN = (
@@ -679,7 +681,9 @@ class RedTeamAgent(LLMAgent):
             if isinstance(optimizer_phase, dict):
                 working_memory_context += f"\n<optimizer_phase>\n{_json.dumps(optimizer_phase, indent=2)}\n</optimizer_phase>\n"
             else:
-                working_memory_context += f"\n<optimizer_phase>\n{optimizer_phase}\n</optimizer_phase>\n"
+                working_memory_context += (
+                    f"\n<optimizer_phase>\n{optimizer_phase}\n</optimizer_phase>\n"
+                )
         if working_memory_context:
             correction_hint = working_memory_context + correction_hint
 

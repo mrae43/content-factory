@@ -347,7 +347,9 @@ async def _run_copywriter(
     if result.success:
         working_memory = dict(job.working_memory or {})
         if "copywriter_rationale" in result.payload:
-            working_memory["copywriter_rationale"] = result.payload["copywriter_rationale"]
+            working_memory["copywriter_rationale"] = result.payload[
+                "copywriter_rationale"
+            ]
             job.working_memory = working_memory
         latest = await get_latest_script(db, job.id)
         version = (latest.version + 1) if latest else 1
@@ -416,11 +418,15 @@ async def _run_optimizer(
             resolved_claims = []
             for patch in per_claim_patches:
                 claim_uuid = text_to_uuid.get(patch["original_claim_text"])
-                resolved_claims.append({
-                    "claim_uuid": str(claim_uuid) if claim_uuid else patch["original_claim_text"],
-                    "patch_intent": patch["patch_intent"],
-                    "is_completely_resolved": patch["is_completely_resolved"],
-                })
+                resolved_claims.append(
+                    {
+                        "claim_uuid": str(claim_uuid)
+                        if claim_uuid
+                        else patch["original_claim_text"],
+                        "patch_intent": patch["patch_intent"],
+                        "is_completely_resolved": patch["is_completely_resolved"],
+                    }
+                )
             optimizer_phase = working_memory.setdefault("optimizer_phase", {})
             iteration = len(optimizer_phase) + 1
             optimizer_phase[f"iteration_{iteration}"] = {
@@ -496,7 +502,7 @@ async def _update_epistemic_ledger(job, claims_data: list) -> None:
         }
         for c in claims_data
         if c.get("verdict") in ("UNCERTAIN", "CONTESTED")
-           or (c.get("verdict") == "SUPPORTED" and c.get("confidence", 1.0) < 0.7)
+        or (c.get("verdict") == "SUPPORTED" and c.get("confidence", 1.0) < 0.7)
     ]
     if weak_passes:
         working_memory = dict(job.working_memory or {})
