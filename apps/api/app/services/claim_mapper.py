@@ -19,8 +19,8 @@ async def map_claims(
     embedder,
     threshold: float = 0.75,
 ) -> Dict[int, str]:
-    prev_texts = [c["text"] for c in prev_active]
-    new_texts = [c["claim_text"] for c in new_claims]
+    prev_texts = [c.get("text", "") for c in prev_active]
+    new_texts = [c.get("claim_text", "") for c in new_claims]
 
     prev_vecs = await embedder.aembed_documents(prev_texts)
     new_vecs = await embedder.aembed_documents(new_texts)

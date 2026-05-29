@@ -190,6 +190,7 @@ class ScriptOptimizerAgent(LLMAgent):
             payload={
                 "script_content": result.patched_script_content,
                 "patch_summary": result.patch_summary,
+                "per_claim_patches": [p.model_dump() for p in result.per_claim_patches],
             },
             reasoning=result.reasoning,
             confidence_score=result.confidence,
