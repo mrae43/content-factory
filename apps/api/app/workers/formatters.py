@@ -10,14 +10,14 @@ from app.schemas.formats import BlogSection, SeoMeta, CarouselSlide, VideoScene
 logger = logging.getLogger(__name__)
 
 
-def _build_hedge_block(hedge_index: list) -> str:
+def _build_hedge_block(hedge_index: list, epistemic_ledger: dict | None = None) -> str:
     if not hedge_index:
         return ""
     hedge_lines = "\n".join(
         f'  - "{c.get("claim_text", "")}" [{c.get("verdict", "UNCERTAIN")}]'
         for c in hedge_index
     )
-    return (
+    block = (
         "UNCERTAIN CLAIMS — apply hedged language to each of these:\n"
         f"{hedge_lines}\n\n"
         "Hedging rules:\n"
@@ -26,6 +26,13 @@ def _build_hedge_block(hedge_index: list) -> str:
         '  - Causal:        "research suggests a link between..." / "may contribute to..."\n'
         '  - Never: "studies prove", "it is a fact that", "definitively"\n'
     )
+    if epistemic_ledger and epistemic_ledger.get("weak_passes"):
+        reasons = "\n".join(
+            f"  - '{w['claim_text']}' ({w['verdict']}, confidence={w['confidence']}): {w['weakness_reason']}"
+            for w in epistemic_ledger["weak_passes"]
+        )
+        block += f"\nWeakness details:\n{reasons}"
+    return block
 
 
 class BlogOutlineSection(BaseModel):
@@ -313,6 +320,7 @@ class BlogFormatterAgent(LLMAgent):
         refined_context = context.get("refined_context", "")
         verified_claims = context.get("verified_claims", [])
         hedge_index = context.get("hedge_index", [])
+        epistemic_ledger = context.get("epistemic_ledger", {})
         correction_hint = context.get("correction_hint", "")
 
         if not script_content:
@@ -336,7 +344,7 @@ class BlogFormatterAgent(LLMAgent):
             for c in verified_claims
         )
 
-        hedge_block = _build_hedge_block(hedge_index)
+        hedge_block = _build_hedge_block(hedge_index, epistemic_ledger)
         blog_plan_system = (
             f"{hedge_block}{BLOG_PLAN_SYSTEM}" if hedge_block else BLOG_PLAN_SYSTEM
         )
@@ -410,6 +418,7 @@ class CarouselFormatterAgent(LLMAgent):
         refined_context = context.get("refined_context", "")
         verified_claims = context.get("verified_claims", [])
         hedge_index = context.get("hedge_index", [])
+        epistemic_ledger = context.get("epistemic_ledger", {})
         platform = context.get("platform", "")
         correction_hint = context.get("correction_hint", "")
 
@@ -434,7 +443,7 @@ class CarouselFormatterAgent(LLMAgent):
             for c in verified_claims
         )
 
-        hedge_block = _build_hedge_block(hedge_index)
+        hedge_block = _build_hedge_block(hedge_index, epistemic_ledger)
         carousel_plan_system = (
             f"{hedge_block}{CAROUSEL_PLAN_SYSTEM}"
             if hedge_block
@@ -515,6 +524,7 @@ class VideoFormatterAgent(LLMAgent):
         refined_context = context.get("refined_context", "")
         verified_claims = context.get("verified_claims", [])
         hedge_index = context.get("hedge_index", [])
+        epistemic_ledger = context.get("epistemic_ledger", {})
         correction_hint = context.get("correction_hint", "")
 
         if not script_content:
@@ -538,7 +548,7 @@ class VideoFormatterAgent(LLMAgent):
             for c in verified_claims
         )
 
-        hedge_block = _build_hedge_block(hedge_index)
+        hedge_block = _build_hedge_block(hedge_index, epistemic_ledger)
         video_plan_system = (
             f"{hedge_block}{VIDEO_PLAN_SYSTEM}" if hedge_block else VIDEO_PLAN_SYSTEM
         )
