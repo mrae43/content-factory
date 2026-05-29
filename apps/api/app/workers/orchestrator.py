@@ -566,8 +566,14 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
 
         if claims_data and latest_script_obj:
             await save_fact_check_claims(db, latest_script_obj.id, claims_data)
-            pending_patch_summary = (job.working_memory or {}).get("_pending_patch_summary")
-            await _update_optimization_ledger(latest_script_obj, claims_data, pending_patch_summary=pending_patch_summary)
+            pending_patch_summary = (job.working_memory or {}).get(
+                "_pending_patch_summary"
+            )
+            await _update_optimization_ledger(
+                latest_script_obj,
+                claims_data,
+                pending_patch_summary=pending_patch_summary,
+            )
             await _update_epistemic_ledger(job, claims_data)
 
         if latest_script_obj:
@@ -600,8 +606,14 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
 
             if claims_data and latest_script_obj:
                 await save_fact_check_claims(db, latest_script_obj.id, claims_data)
-                pending_patch_summary = (job.working_memory or {}).get("_pending_patch_summary")
-                await _update_optimization_ledger(latest_script_obj, claims_data, pending_patch_summary=pending_patch_summary)
+                pending_patch_summary = (job.working_memory or {}).get(
+                    "_pending_patch_summary"
+                )
+                await _update_optimization_ledger(
+                    latest_script_obj,
+                    claims_data,
+                    pending_patch_summary=pending_patch_summary,
+                )
                 await _update_epistemic_ledger(job, claims_data)
                 await db.commit()
 
