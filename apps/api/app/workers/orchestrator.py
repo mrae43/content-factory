@@ -346,10 +346,9 @@ async def _run_copywriter(
 
     if result.success:
         working_memory = dict(job.working_memory or {})
-        if "copywriter_rationale" in result.payload:
-            working_memory["copywriter_rationale"] = result.payload[
-                "copywriter_rationale"
-            ]
+        rationale = result.payload.get("copywriter_rationale")
+        if rationale:
+            working_memory["copywriter_rationale"] = rationale
             job.working_memory = working_memory
         latest = await get_latest_script(db, job.id)
         version = (latest.version + 1) if latest else 1
@@ -567,7 +566,7 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
 
         if claims_data and latest_script_obj:
             await save_fact_check_claims(db, latest_script_obj.id, claims_data)
-            pending_patch_summary = (job.working_memory or {}).pop("_pending_patch_summary", None)
+            pending_patch_summary = (job.working_memory or {}).get("_pending_patch_summary")
             await _update_optimization_ledger(latest_script_obj, claims_data, pending_patch_summary=pending_patch_summary)
             await _update_epistemic_ledger(job, claims_data)
 
@@ -601,7 +600,7 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
 
             if claims_data and latest_script_obj:
                 await save_fact_check_claims(db, latest_script_obj.id, claims_data)
-                pending_patch_summary = (job.working_memory or {}).pop("_pending_patch_summary", None)
+                pending_patch_summary = (job.working_memory or {}).get("_pending_patch_summary")
                 await _update_optimization_ledger(latest_script_obj, claims_data, pending_patch_summary=pending_patch_summary)
                 await _update_epistemic_ledger(job, claims_data)
                 await db.commit()
