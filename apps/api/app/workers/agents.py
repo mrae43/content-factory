@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, ClassVar, Dict, List, Optional, Set, Type
+from typing import Any, ClassVar, Dict, List, Literal, Optional, Set, Type
 from uuid import UUID
 
 from pydantic import BaseModel, Field, ValidationError
@@ -195,6 +195,18 @@ class ServiceAgent(BaseAgent):
     pass
 
 
+class ClaimDisambiguation(BaseModel):
+    script_excerpt: str
+    category: Literal["factual", "stylistic", "rhetorical", "interpretive"]
+    intent: str
+    source_reference: str | None = None
+
+
+class CopywriterRationale(BaseModel):
+    narrative_intent: str
+    claim_disambiguations: list[ClaimDisambiguation] = []
+
+
 class CopywriterSchema(BaseModel):
     script_content: str = Field(description="The final narrated script text.")
     reasoning: str = Field(
@@ -203,6 +215,7 @@ class CopywriterSchema(BaseModel):
     confidence: float = Field(
         description="Self-assessment of hook strength and factual adherence."
     )
+    copywriter_rationale: CopywriterRationale | None = None
 
 
 class CopywriterAgent(LLMAgent):
