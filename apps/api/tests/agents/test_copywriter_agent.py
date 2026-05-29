@@ -1,7 +1,11 @@
 import pytest
 from unittest.mock import MagicMock
 
-from app.workers.agents import CopywriterAgent, AgentActionStatus
+from app.workers.agents import (
+    CopywriterAgent,
+    CopywriterSchema,
+    AgentActionStatus,
+)
 
 
 def _make_agent():
@@ -145,3 +149,64 @@ async def test_handles_empty_evidence_sections(
     call_args = mock_ainvoke.call_args
     invoked_input = call_args[0][0]
     assert "No additional evidence was retrieved" in invoked_input["evidence_sections"]
+
+
+@pytest.mark.agent
+async def test_copywriter_rationale_included_in_payload(
+    copywriter_schema_output,
+    chain_mock,
+):
+    agent = _make_agent()
+    context = {
+        "topic": "BRICS De-dollarization 2025",
+        "feedback": "",
+        "refined_context": "BRICS collective GDP grew 3.2% in 2024.",
+        "evidence_sections": "## Retrieved Evidence\n\nChunk 1: IMF confirms 3.2% growth.",
+        "story_directives": {
+            "target_audience": "General",
+            "tone": "neutral",
+            "angle": "",
+        },
+    }
+
+    with chain_mock(copywriter_schema_output):
+        result = await agent._execute(context)
+
+    assert result.payload["copywriter_rationale"] is not None
+    assert isinstance(result.payload["copywriter_rationale"], dict)
+    assert "narrative_intent" in result.payload["copywriter_rationale"]
+    assert "claim_disambiguations" in result.payload["copywriter_rationale"]
+
+
+@pytest.mark.agent
+async def test_copywriter_rationale_is_none_when_model_returns_none(
+    chain_mock,
+):
+    agent = _make_agent()
+    context = {
+        "topic": "Test topic",
+        "feedback": "",
+        "refined_context": "Some context.",
+        "evidence_sections": "",
+        "story_directives": {"target_audience": "General", "tone": "", "angle": ""},
+    }
+    schema_no_rationale = CopywriterSchema(
+        script_content="Test script",
+        reasoning="No rationale provided",
+        confidence=0.5,
+        copywriter_rationale=None,
+    )
+
+    with chain_mock(schema_no_rationale):
+        result = await agent._execute(context)
+
+    assert result.payload["copywriter_rationale"] is None
+
+
+@pytest.mark.agent
+async def test_rule_12_present_in_system_prompt():
+    import inspect
+    from app.workers.agents import CopywriterAgent
+
+    source = inspect.getsource(CopywriterAgent._execute)
+    assert "exact word-for-word substring" in source
