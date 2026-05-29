@@ -38,7 +38,7 @@ Multi-agent AI pipeline generating short/reel scripts, blog articles, and social
 |-------|---------------|--------------|
 | `PENDING` | Assignment Queue | Chunk raw text → ingest to vector store (scope `RAW-CONTEXT`) |
 | `RESEARCHING` | Research Desk | Tavily web search → ingest to vector store (scope `LOCAL`) |
-| `RETRIEVAL` | Deep Research | `ResearchAgent` → `refined_context` + `citation_index` → `context_builder` → `AssembledContext` |
+| `RETRIEVAL` | Deep Research | `ContextBuilder` → `AssembledContext` (narrative_summary, evidence_sections, raw_chunks) from `user_reference` + `story_directives` + vector store |
 | `FACT_CHECKING_RESEARCH` | Source Verification | Legacy state, auto-forwarded to `SCRIPTING` |
 | `SCRIPTING` | Writer's Desk | `CopywriterAgent` drafts script (or `ScriptOptimizerAgent` for revisions) |
 | `FACT_CHECKING_SCRIPT` | Fact-Check Desk | `RedTeamAgent` extracts atomic claims → per-claim evidence search → structured verdict |
@@ -78,31 +78,32 @@ All production agents default via Together AI. Two tiers:
 | `eval_optimizer_model` | `openai/gpt-oss-20b` | 0.3 |
 | `eval_judge_model` | `Qwen/Qwen3-235B-A22B-Instruct-2507-tput` | 0.0 |
 
-**Other settings:** `max_red_team_revisions=3`, `similarity_threshold=0.75`, `retrieval_retry_max=3`, `context_builder_top_k=10`, `synthid_watermark_enabled=True`.
+**Other settings:** `max_red_team_revisions=3`, `similarity_threshold=0.75`, `retrieval_retry_max=3`, `context_builder_top_k=10`, `synthid_watermark_enabled=True`, `claim_mapper_threshold=0.75`.
 
 ## Agents
 
 | Agent | File | Role |
 |-------|------|------|
-| `ResearchAgent` | `app/services/agents.py` | Deep research → structured context + citation index |
-| `CopywriterAgent` | `app/services/agents.py` | Draft narrative script with hook/body/closer |
-| `RedTeamAgent` | `app/services/agents.py` | 3-pass: claim extraction → evidence retrieval → structured verdict |
-| `ScriptOptimizerAgent` | `app/services/optimizer.py` | Surgical patching of unsupported/contested claims |
-| `BlogFormatterAgent` | `app/services/formatters.py` | Plan→Execute blog layout |
-| `CarouselFormatterAgent` | `app/services/formatters.py` | Plan→Execute carousel with platform char limits |
-| `VideoFormatterAgent` | `app/services/formatters.py` | Plan→Execute with scene structure |
-| `AssetStudioAgent` | `app/services/agents.py` | Veo video prompts + Lyria audio prompts |
-| `CarouselImageAgent` | `app/workers/carousel_image_agent.py` | Generate carousel images via FLUX + Together AI (ServiceAgent) |
-| `AgentHarness` | `app/workers/harness.py` | Retry wrapper with validation, doom-loop detection, and ServiceAgent path |
+| `CopywriterAgent` | `app/workers/agents.py` | Draft narrative script with hook/body/closer (LLMAgent) |
+| `RedTeamAgent` | `app/workers/agents.py` | 3-pass: claim extraction → evidence retrieval → structured verdict (LLMAgent) |
+| `ScriptOptimizerAgent` | `app/workers/optimizer.py` | Surgical patching with optimization history ledger input (LLMAgent) |
+| `AssetStudioAgent` | `app/workers/agents.py` | Veo video prompts + Lyria audio prompts (LLMAgent) |
+| `BlogFormatterAgent` | `app/workers/formatters.py` | Plan→Execute blog layout (LLMAgent) |
+| `CarouselFormatterAgent` | `app/workers/formatters.py` | Plan→Execute carousel with platform char limits (LLMAgent) |
+| `VideoFormatterAgent` | `app/workers/formatters.py` | Plan→Execute with scene structure (LLMAgent) |
+| `CarouselImageAgent` | `app/workers/carousel_image_agent.py` | Generate carousel images via FLUX + Together AI (ServiceAgent — no LLM, DI tools) |
+| `ClaimMapper` | `app/services/claim_mapper.py` | Embedding-based claim identity tracking for Optimization History Ledger |
+| `AgentHarness` | `app/workers/harness.py` | Retry wrapper with tool injection, doom-loop detection, validator integration, dual ServiceAgent/LLMAgent paths |
 
-**Agents** extend `BaseAgent` (ABC). `LLMAgent` subclasses get `self.llm` + tenacity retry; `ServiceAgent` subclasses use injected DI tools deterministically.
+**Agents** extend `BaseAgent` (ABC). `LLMAgent` subclasses get `self.llm` + tenacity retry; `ServiceAgent` subclasses use injected DI tools deterministically. All agents declare `_required_di_tools` and `_required_llm_tools` class variables for symmetric permission enforcement via the `ToolRegistry`. `AgentHarness._inject_tools()` queries the registry and injects permitted tools at composition time.
 
 ## Evaluator-Optimizer Pattern
 
 1. **RedTeamAgent** (3-pass): extract atomic claims → per-claim `semantic_search` → structured `RedTeamVerdict` per claim
 2. Verdicts persisted to `fact_check_claims` table (versioned per script)
-3. On `REVISION_NEEDED` → feedback saved → `ScriptOptimizerAgent` patches only failed claims (preserves supported ones)
-4. Max `max_red_team_revisions` loops → `HUMAN_REVIEW_NEEDED`
+3. **ClaimMapper** (`app/services/claim_mapper.py`) updates the **Optimization History Ledger** — embeds previous and new claims via Gemini, computes cosine similarity matrix with greedy 1-to-1 assignment (threshold 0.75), resolves claim verdict delta (resolved/regressed/unchanged), and persists to `Script.optimization_history`
+4. On `REVISION_NEEDED` → feedback + ledger active failures saved → `ScriptOptimizerAgent` patches only failed claims (preserves supported ones, never reverts previously-successful patches)
+5. Max `max_red_team_revisions` loops → `HUMAN_REVIEW_NEEDED`
 
 ## Guardrails
 
