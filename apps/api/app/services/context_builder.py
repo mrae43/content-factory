@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from app.services.vector_store import ContentFactoryVectorStore
@@ -37,9 +37,12 @@ def _compose_diversified_queries(
 def _dedup_and_cap(
     results: List[Dict[str, Any]], max_chunks: int = 12
 ) -> List[Dict[str, Any]]:
-    seen: Dict[str, Dict[str, Any]] = {}
+    seen: Dict[Optional[str], Dict[str, Any]] = {}
     for r in results:
         cid = r.get("id")
+        if cid is None:
+            logger.debug("Skipping chunk without 'id' field in _dedup_and_cap")
+            continue
         score = r.get("similarity_score", 0)
         if cid not in seen or score > seen[cid].get("similarity_score", 0):
             seen[cid] = r
