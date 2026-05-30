@@ -20,38 +20,95 @@ def _derive_topic_relevance(score: float) -> str:
     return "LOW"
 
 
-def _compose_query(title: str, story_directives: dict, user_reference: str = "") -> str:
+def _compose_diversified_queries(
+    title: str, story_directives: dict, user_reference: str = ""
+) -> tuple[str, str]:
+    query1 = title
     parts = [title]
-    for key in ("tone", "angle", "target_audience"):
-        val = story_directives.get(key, "")
-        if val:
-            parts.append(str(val))
+    angle = story_directives.get("angle", "")
+    if angle:
+        parts.append(str(angle))
     if user_reference:
         parts.append(user_reference[:500])
-    return " ".join(parts)
+    query2 = " ".join(parts)
+    return query1, query2
 
 
-def _format_evidence_sections(chunks: List[Dict[str, Any]]) -> str:
-    if not chunks:
-        return ""
-
-    sorted_chunks = sorted(
-        chunks, key=lambda c: c.get("similarity_score", 0), reverse=True
+def _dedup_and_cap(
+    results: List[Dict[str, Any]], max_chunks: int = 12
+) -> List[Dict[str, Any]]:
+    seen: Dict[str, Dict[str, Any]] = {}
+    for r in results:
+        cid = r.get("id")
+        score = r.get("similarity_score", 0)
+        if cid not in seen or score > seen[cid].get("similarity_score", 0):
+            seen[cid] = r
+    sorted_results = sorted(
+        seen.values(), key=lambda x: x.get("similarity_score", 0), reverse=True
     )
+    return sorted_results[:max_chunks]
 
-    lines = ["## Retrieved Evidence", ""]
-    for i, chunk in enumerate(sorted_chunks, 1):
+
+def _enrich_chunks(
+    chunks: List[Dict[str, Any]], default_source: str
+) -> List[Dict[str, Any]]:
+    enriched: List[Dict[str, Any]] = []
+    for chunk in chunks:
         score = chunk.get("similarity_score", 0)
-        source_type = chunk.get("source_type", "UNKNOWN")
-        relevance = chunk.get("topic_relevance", "UNKNOWN")
-        content = chunk.get("content", "")
-        lines.append(
-            f"Chunk {i} (similarity: {score:.2f}, source: {source_type}, relevance: {relevance}):"
+        meta = chunk.get("meta", {})
+        enriched.append(
+            {
+                "id": chunk.get("id"),
+                "content": chunk.get("content", ""),
+                "similarity_score": score,
+                "topic_relevance": _derive_topic_relevance(score),
+                "source_type": meta.get("source_type", default_source),
+                "meta": meta,
+            }
         )
-        lines.append(content)
-        lines.append("")
+    return enriched
 
-    return "\n".join(lines)
+
+def _format_evidence_sections(
+    local_chunks: List[Dict[str, Any]],
+    global_chunks: List[Dict[str, Any]],
+) -> str:
+    parts: List[str] = []
+    chunk_num = 0
+
+    if local_chunks:
+        parts.append("=== CURRENT RUN RESEARCH ===")
+        parts.append("")
+        for chunk in local_chunks:
+            chunk_num += 1
+            score = chunk.get("similarity_score", 0)
+            source_type = chunk.get("source_type", "UNKNOWN")
+            relevance = chunk.get("topic_relevance", "UNKNOWN")
+            content = chunk.get("content", "")
+            parts.append(
+                f"#### [Chunk {chunk_num:02d}] | Source: {source_type} "
+                f"| Relevance: {relevance} (Match: {score:.2f})"
+            )
+            for line in content.split("\n"):
+                parts.append(f"> {line}")
+            parts.append("")
+
+    if global_chunks:
+        parts.append("=== SYSTEM INTEL ===")
+        parts.append("")
+        for chunk in global_chunks:
+            chunk_num += 1
+            score = chunk.get("similarity_score", 0)
+            relevance = chunk.get("topic_relevance", "UNKNOWN")
+            content = chunk.get("content", "")
+            parts.append(
+                f"#### [Chunk {chunk_num:02d}] | Relevance: {relevance} (Match: {score:.2f})"
+            )
+            for line in content.split("\n"):
+                parts.append(f"> {line}")
+            parts.append("")
+
+    return "\n".join(parts)
 
 
 async def build(
@@ -63,71 +120,57 @@ async def build(
     top_k: int = 10,
     user_reference: str = "",
 ) -> AssembledContext:
-    query = _compose_query(title, story_directives, user_reference)
-    logger.info(f"ContextBuilder query for job {job_id}: {query!r} (top_k={top_k})")
-
-    local_retrieved = await vector_store.semantic_search(
-        query=query,
-        job_id=job_id,
-        scopes=["RAW-CONTEXT", "LOCAL"],
-        top_k=top_k,
+    query1, query2 = _compose_diversified_queries(
+        title, story_directives, user_reference
+    )
+    logger.info(
+        f"ContextBuilder diversified queries for job {job_id}: "
+        f"q1={query1!r}, q2={query2!r}"
     )
 
-    global_retrieved = await vector_store.semantic_search(
-        query=query,
-        job_id=None,
-        scopes=["GLOBAL"],
-        top_k=top_k,
-    )
-
-    enriched: List[Dict[str, Any]] = []
-    for chunk in local_retrieved:
-        score = chunk.get("similarity_score", 0)
-        meta = chunk.get("meta", {})
-        enriched.append(
-            {
-                "id": chunk.get("id"),
-                "content": chunk.get("content", ""),
-                "similarity_score": score,
-                "topic_relevance": _derive_topic_relevance(score),
-                "source_type": meta.get("source_type", "INFERRED"),
-                "meta": meta,
-            }
+    local_raw: List[Dict[str, Any]] = []
+    for q in (query1, query2):
+        results = await vector_store.semantic_search(
+            query=q,
+            job_id=job_id,
+            scopes=["RAW-CONTEXT", "LOCAL"],
+            top_k=7,
         )
+        local_raw.extend(results)
+    local_deduped = _dedup_and_cap(local_raw, top_k)
 
-    for chunk in global_retrieved:
-        score = chunk.get("similarity_score", 0)
-        meta = chunk.get("meta", {})
-        enriched.append(
-            {
-                "id": chunk.get("id"),
-                "content": chunk.get("content", ""),
-                "similarity_score": score,
-                "topic_relevance": _derive_topic_relevance(score),
-                "source_type": meta.get("source_type", "SYSTEM_INTEL"),
-                "meta": meta,
-            }
+    global_raw: List[Dict[str, Any]] = []
+    for q in (query1, query2):
+        results = await vector_store.semantic_search(
+            query=q,
+            job_id=None,
+            scopes=["GLOBAL"],
+            top_k=7,
         )
+        global_raw.extend(results)
+    global_deduped = _dedup_and_cap(global_raw, top_k)
 
-    enriched.sort(key=lambda c: c.get("similarity_score", 0), reverse=True)
+    enriched_local = _enrich_chunks(local_deduped, "INFERRED")
+    enriched_global = _enrich_chunks(global_deduped, "SYSTEM_INTEL")
 
-    evidence_sections = _format_evidence_sections(enriched)
+    evidence_sections = _format_evidence_sections(enriched_local, enriched_global)
 
-    log_count = len(enriched)
+    all_enriched = enriched_local + enriched_global
+    log_count = len(all_enriched)
     if log_count == 0:
         logger.warning(
             f"ContextBuilder retrieved 0 chunks for job {job_id} — evidence_sections will be empty"
         )
     else:
-        top_score = enriched[0]["similarity_score"]
+        top_score = all_enriched[0]["similarity_score"]
         logger.info(
             f"ContextBuilder assembled {log_count} chunks for job {job_id} "
             f"(top score: {top_score:.3f}, "
-            f"{sum(1 for c in enriched if c['source_type'] == 'SYSTEM_INTEL')} GLOBAL)"
+            f"{len(enriched_global)} GLOBAL)"
         )
 
     return AssembledContext(
         narrative_summary=refined_context,
         evidence_sections=evidence_sections,
-        raw_chunks=enriched,
+        raw_chunks=all_enriched,
     )

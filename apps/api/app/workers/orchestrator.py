@@ -62,6 +62,7 @@ from app.schemas.shorts import (
     PlatformEnum,
 )
 from app.services.context_builder import build as _build_context_from_service
+from app.services.optimizer_tools import make_gated_search_tool
 from app.core.config import settings
 from app.core.guardrails import get_guardrail_config, GuardrailStrictness
 
@@ -296,11 +297,23 @@ async def _transition_scripting(db: AsyncSession, job) -> None:
             isinstance(last_feedback, dict)
             and last_feedback.get("feedback_type") == "structured_claims"
         ):
+            all_claims = await get_script_claims(db, latest_script.id)
+            red_team_evidence = {
+                c["claim_text"]: {
+                    "evidence_text": c["evidence_text"],
+                    "evidence_references": c["evidence_references"],
+                    "confidence": c["confidence"],
+                    "verdict": c["verdict"],
+                }
+                for c in all_claims
+                if c["verdict"] in ("UNSUPPORTED", "CONTESTED", "UNCERTAIN")
+            }
             await _run_optimizer(
                 db,
                 job,
                 latest_script,
                 evidence_sections=evidence_sections,
+                red_team_evidence=red_team_evidence,
             )
             return
         else:
@@ -380,22 +393,35 @@ async def _run_optimizer(
     job,
     latest_script,
     evidence_sections: str = "",
+    red_team_evidence: dict | None = None,
 ) -> None:
     optimizer = ScriptOptimizerAgent(
         model_name=settings.optimizer_model,
         temperature=settings.optimizer_temperature,
     )
-    harness = AgentHarness(agent=optimizer)
     story_directives = job.story_directives or {}
     ledger = latest_script.optimization_history or {}
     active_failures = [
         c
         for c in ledger.get("active_claims", [])
-        if c.get("latest_verdict") in ("UNSUPPORTED", "CONTESTED")
+        if c.get("latest_verdict") in ("UNSUPPORTED", "CONTESTED", "UNCERTAIN")
     ]
     optimization_history = ledger.get("historical_iterations", [])
     working_memory = job.working_memory or {}
     optimizer_phase = working_memory.get("optimizer_phase", {})
+
+    red_team_evidence = red_team_evidence or {}
+    vector_store = _get_vector_store(db)
+    gated_tool = make_gated_search_tool(
+        vector_store=vector_store,
+        red_team_evidence=red_team_evidence,
+        job_id=job.id,
+        top_k=3,
+    )
+    registry = ToolRegistry()
+    registry.register(gated_tool, replace=True)
+    harness = AgentHarness(agent=optimizer)
+
     agent_context = {
         "job_id": job.id,
         "script_content": latest_script.content,
@@ -403,6 +429,7 @@ async def _run_optimizer(
         "optimization_history": optimization_history,
         "refined_context": job.refined_context or "",
         "evidence_sections": evidence_sections,
+        "red_team_evidence": red_team_evidence,
         "story_directives": {
             "target_audience": story_directives.get("target_audience", "General"),
             "tone": story_directives.get("tone", ""),
@@ -413,9 +440,19 @@ async def _run_optimizer(
         agent_context["optimizer_history_phases"] = optimizer_phase
     result = await harness.run_with_harness(agent_context)
 
+    fallback_count = getattr(gated_tool.callable, "fallback_count", [0])[0]
+    total_failed = len(active_failures) if active_failures else 1
+    fallback_rate = fallback_count / total_failed
+    logger.info(
+        f"Optimizer fallback rate for Job {job.id}: "
+        f"{fallback_count}/{total_failed} = {fallback_rate:.2%}"
+    )
+
     if result.success:
         working_memory = dict(job.working_memory or {})
         per_claim_patches = result.payload.get("per_claim_patches", [])
+        optimizer_phase = working_memory.setdefault("optimizer_phase", {})
+        iteration = len(optimizer_phase) + 1
         if per_claim_patches:
             ledger = latest_script.optimization_history or {}
             active_claims = ledger.get("active_claims", [])
@@ -432,11 +469,17 @@ async def _run_optimizer(
                         "is_completely_resolved": patch["is_completely_resolved"],
                     }
                 )
-            optimizer_phase = working_memory.setdefault("optimizer_phase", {})
-            iteration = len(optimizer_phase) + 1
             optimizer_phase[f"iteration_{iteration}"] = {
                 "patch_summary": result.payload.get("patch_summary", ""),
                 "resolved_claims": resolved_claims,
+                "fallback_rate": fallback_rate,
+            }
+            job.working_memory = working_memory
+        else:
+            optimizer_phase[f"iteration_{iteration}"] = {
+                "patch_summary": result.payload.get("patch_summary", ""),
+                "resolved_claims": [],
+                "fallback_rate": fallback_rate,
             }
             job.working_memory = working_memory
         version = latest_script.version + 1
@@ -445,6 +488,16 @@ async def _run_optimizer(
         if patch_summary:
             working_memory["_pending_patch_summary"] = patch_summary
             job.working_memory = working_memory
+
+        if fallback_rate > 0.2:
+            logger.warning(
+                f"High optimizer fallback rate ({fallback_rate:.2%}) for Job {job.id}"
+            )
+        elif fallback_rate < 0.05:
+            logger.info(
+                f"Low optimizer fallback rate ({fallback_rate:.2%}) for Job {job.id}"
+            )
+
         await save_script(
             db,
             job.id,

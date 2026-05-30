@@ -2,8 +2,10 @@ import pytest
 from uuid import uuid4
 
 from app.services.context_builder import (
-    _compose_query,
+    _compose_diversified_queries,
+    _dedup_and_cap,
     _derive_topic_relevance,
+    _enrich_chunks,
     _format_evidence_sections,
     build,
 )
@@ -12,51 +14,86 @@ from app.schemas.shorts import AssembledContext
 
 @pytest.mark.unit
 class TestQueryComposition:
-    def test_all_fields_present(self):
+    def test_first_query_is_title_only(self):
+        directives = {
+            "angle": "de-dollarization mechanics",
+        }
+        q1, q2 = _compose_diversified_queries("BRICS 2025", directives)
+        assert q1 == "BRICS 2025"
+
+    def test_second_query_includes_angle_and_user_ref(self):
+        directives = {
+            "angle": "de-dollarization mechanics",
+        }
+        q1, q2 = _compose_diversified_queries(
+            "BRICS 2025", directives, user_reference="Some context"
+        )
+        assert q1 == "BRICS 2025"
+        assert "de-dollarization mechanics" in q2
+        assert "Some context" in q2
+
+    def test_no_tone_or_target_audience_in_queries(self):
         directives = {
             "tone": "analytical",
             "angle": "de-dollarization mechanics",
             "target_audience": "Investors",
         }
-        result = _compose_query("BRICS 2025", directives)
-        assert result == "BRICS 2025 analytical de-dollarization mechanics Investors"
-
-    def test_partial_fields(self):
-        directives = {
-            "tone": "urgent",
-            "angle": "",
-            "target_audience": "General",
-        }
-        result = _compose_query("Oil prices", directives)
-        assert result == "Oil prices urgent General"
+        q1, q2 = _compose_diversified_queries("BRICS 2025", directives)
+        assert "analytical" not in q2
+        assert "Investors" not in q2
+        assert "de-dollarization mechanics" in q2
 
     def test_all_empty_directives(self):
-        directives = {"tone": "", "angle": "", "target_audience": ""}
-        result = _compose_query("Quantum computing", directives)
-        assert result == "Quantum computing"
+        directives = {"angle": ""}
+        q1, q2 = _compose_diversified_queries("Quantum computing", directives)
+        assert q1 == "Quantum computing"
+        assert q2 == "Quantum computing"
 
     def test_fallback_to_title_only(self):
         directives = {}
-        result = _compose_query("AI regulation", directives)
-        assert result == "AI regulation"
-
-    def test_user_reference_included_in_query(self):
-        directives = {"tone": "urgent"}
-        result = _compose_query("BRICS", directives, user_reference="Some context")
-        assert "Some context" in result
+        q1, q2 = _compose_diversified_queries("AI regulation", directives)
+        assert q1 == "AI regulation"
+        assert q2 == "AI regulation"
 
     def test_user_reference_truncated_to_500_chars(self):
         long_ref = "x" * 1000
         directives = {}
-        result = _compose_query("Title", directives, user_reference=long_ref)
-        assert len(result) <= len("Title") + 1 + 500
+        q1, q2 = _compose_diversified_queries(
+            "Title", directives, user_reference=long_ref
+        )
+        assert q1 == "Title"
+        assert len(q2) <= len("Title") + 1 + 500
 
-    def test_user_reference_partial_inclusion(self):
-        directives = {"tone": "analytical", "angle": "de-dollarization"}
-        long_ref = "a" * 600
-        result = _compose_query("BRICS", directives, user_reference=long_ref)
-        assert "a" * 500 in result
-        assert "a" * 600 not in result
+
+@pytest.mark.unit
+class TestDedupAndCap:
+    def test_dedup_by_id_keeps_max_score(self):
+        chunk_id = str(uuid4())
+        results = [
+            {"id": chunk_id, "content": "lower", "similarity_score": 0.5},
+            {"id": chunk_id, "content": "higher", "similarity_score": 0.9},
+        ]
+        deduped = _dedup_and_cap(results, 10)
+        assert len(deduped) == 1
+        assert deduped[0]["similarity_score"] == 0.9
+
+    def test_caps_at_max_chunks(self):
+        results = [
+            {"id": str(uuid4()), "content": f"chunk {i}", "similarity_score": float(i)}
+            for i in range(20)
+        ]
+        deduped = _dedup_and_cap(results, 5)
+        assert len(deduped) == 5
+
+    def test_returns_sorted_by_score_desc(self):
+        results = [
+            {"id": "a", "content": "low", "similarity_score": 0.3},
+            {"id": "b", "content": "high", "similarity_score": 0.9},
+            {"id": "c", "content": "mid", "similarity_score": 0.6},
+        ]
+        deduped = _dedup_and_cap(results, 10)
+        scores = [r["similarity_score"] for r in deduped]
+        assert scores == [0.9, 0.6, 0.3]
 
 
 @pytest.mark.unit
@@ -82,8 +119,8 @@ class Relevance:
 
 @pytest.mark.unit
 class TestEvidenceFormatting:
-    def test_single_chunk(self):
-        chunks = [
+    def test_single_local_chunk(self):
+        local_chunks = [
             {
                 "similarity_score": 0.89,
                 "source_type": "WEB_SEARCH",
@@ -91,68 +128,124 @@ class TestEvidenceFormatting:
                 "content": "BRICS GDP grew 3.2% in 2024.",
             }
         ]
-        result = _format_evidence_sections(chunks)
-        assert "## Retrieved Evidence" in result
-        assert "Chunk 1" in result
-        assert "similarity: 0.89" in result
+        result = _format_evidence_sections(local_chunks, [])
+        assert "=== CURRENT RUN RESEARCH ===" in result
+        assert "[Chunk 01]" in result
+        assert "Match: 0.89" in result
         assert "WEB_SEARCH" in result
         assert "HIGH" in result
         assert "BRICS GDP grew 3.2% in 2024." in result
+        assert "=== SYSTEM INTEL ===" not in result
 
-    def test_multiple_chunks_sorted_desc(self):
-        chunks = [
+    def test_global_chunks_have_no_source_field(self):
+        global_chunks = [
             {
-                "similarity_score": 0.5,
-                "source_type": "INFERRED",
-                "topic_relevance": "MEDIUM",
-                "content": "Low relevance chunk.",
-            },
-            {
-                "similarity_score": 0.92,
-                "source_type": "WEB_SEARCH",
+                "similarity_score": 0.85,
+                "source_type": "SYSTEM_INTEL",
                 "topic_relevance": "HIGH",
-                "content": "High relevance chunk.",
-            },
-        ]
-        result = _format_evidence_sections(chunks)
-        high_idx = result.index("High relevance chunk.")
-        low_idx = result.index("Low relevance chunk.")
-        assert high_idx < low_idx
-
-    def test_zero_chunks(self):
-        result = _format_evidence_sections([])
-        assert result == ""
-
-    def test_sort_stability(self):
-        chunks = [
-            {
-                "similarity_score": 0.7,
-                "source_type": "WEB_SEARCH",
-                "topic_relevance": "MEDIUM",
-                "content": "Second",
-            },
-            {
-                "similarity_score": 0.9,
-                "source_type": "USER_PROVIDED",
-                "topic_relevance": "HIGH",
-                "content": "First",
-            },
-        ]
-        result = _format_evidence_sections(chunks)
-        first_idx = result.index("First")
-        second_idx = result.index("Second")
-        assert first_idx < second_idx
-
-    def test_missing_score_uses_default(self):
-        chunks = [
-            {
-                "source_type": "WEB_SEARCH",
-                "topic_relevance": "HIGH",
-                "content": "No score.",
+                "content": "Standard compliance rule.",
             }
         ]
-        result = _format_evidence_sections(chunks)
-        assert "similarity: 0.00" in result
+        result = _format_evidence_sections([], global_chunks)
+        assert "=== SYSTEM INTEL ===" in result
+        assert "Source:" not in result
+        assert "Match: 0.85" in result
+
+    def test_sequential_numbering_across_sections(self):
+        local_chunks = [
+            {
+                "similarity_score": 0.9,
+                "source_type": "WEB_SEARCH",
+                "topic_relevance": "HIGH",
+                "content": "Local.",
+            }
+        ]
+        global_chunks = [
+            {
+                "similarity_score": 0.8,
+                "source_type": "SYSTEM_INTEL",
+                "topic_relevance": "HIGH",
+                "content": "Global.",
+            }
+        ]
+        result = _format_evidence_sections(local_chunks, global_chunks)
+        assert "[Chunk 01]" in result
+        assert "[Chunk 02]" in result
+        assert result.index("[Chunk 01]") < result.index("[Chunk 02]")
+
+    def test_zero_chunks_omits_both_sections(self):
+        result = _format_evidence_sections([], [])
+        assert result == ""
+
+    def test_zero_chunks_for_one_section(self):
+        local_chunks = [
+            {
+                "similarity_score": 0.7,
+                "source_type": "USER_PROVIDED",
+                "topic_relevance": "MEDIUM",
+                "content": "Only local.",
+            }
+        ]
+        result = _format_evidence_sections(local_chunks, [])
+        assert "=== CURRENT RUN RESEARCH ===" in result
+        assert "=== SYSTEM INTEL ===" not in result
+
+    def test_content_wrapped_in_blockquote(self):
+        chunks = [
+            {
+                "similarity_score": 0.9,
+                "source_type": "WEB_SEARCH",
+                "topic_relevance": "HIGH",
+                "content": "First line.\nSecond line.",
+            }
+        ]
+        result = _format_evidence_sections(chunks, [])
+        assert "> First line." in result
+        assert "> Second line." in result
+
+    def test_blockquote_adjacent_to_header(self):
+        chunks = [
+            {
+                "similarity_score": 0.9,
+                "source_type": "WEB_SEARCH",
+                "topic_relevance": "HIGH",
+                "content": "Content.",
+            }
+        ]
+        result = _format_evidence_sections(chunks, [])
+        header_idx = result.index("####")
+        gt_idx = result.index(">", header_idx)
+        between = result[header_idx:gt_idx]
+        assert "\n" in between
+        assert "\n\n" not in between
+
+
+@pytest.mark.unit
+class TestEnrichChunks:
+    def test_enrich_adds_topic_relevance_and_source_type(self):
+        chunks = [
+            {
+                "id": str(uuid4()),
+                "content": "Test content.",
+                "meta": {"source_type": "WEB_SEARCH"},
+                "similarity_score": 0.85,
+            }
+        ]
+        enriched = _enrich_chunks(chunks, "INFERRED")
+        assert enriched[0]["topic_relevance"] == "HIGH"
+        assert enriched[0]["source_type"] == "WEB_SEARCH"
+
+    def test_enrich_default_source_type(self):
+        chunks = [
+            {
+                "id": str(uuid4()),
+                "content": "Test.",
+                "meta": {},
+                "similarity_score": 0.5,
+            }
+        ]
+        enriched = _enrich_chunks(chunks, "FALLBACK")
+        assert enriched[0]["source_type"] == "FALLBACK"
 
 
 @pytest.mark.unit
@@ -191,7 +284,7 @@ class TestBuildEdgeCases:
         )
         assert result.narrative_summary == ""
 
-    async def test_passes_top_k_to_vector_store(self, mock_vector_store):
+    async def test_four_queries_with_diversified_pre_search(self, mock_vector_store):
         job_id = uuid4()
         mock_vector_store.semantic_search.return_value = []
         await build(
@@ -202,12 +295,16 @@ class TestBuildEdgeCases:
             job_id=job_id,
             top_k=5,
         )
-        assert mock_vector_store.semantic_search.await_count == 2
-        local_call = mock_vector_store.semantic_search.await_args_list[0]
-        assert local_call.kwargs["query"] == "Test"
-        assert local_call.kwargs["job_id"] == job_id
-        assert local_call.kwargs["scopes"] == ["RAW-CONTEXT", "LOCAL"]
-        assert local_call.kwargs["top_k"] == 5
+        assert mock_vector_store.semantic_search.await_count == 4
+        args = mock_vector_store.semantic_search.await_args_list
+        for call in args[:2]:
+            assert call.kwargs["scopes"] == ["RAW-CONTEXT", "LOCAL"]
+            assert call.kwargs["job_id"] == job_id
+            assert call.kwargs["top_k"] == 7
+        for call in args[2:]:
+            assert call.kwargs["scopes"] == ["GLOBAL"]
+            assert call.kwargs["job_id"] is None
+            assert call.kwargs["top_k"] == 7
 
     async def test_enriches_with_title_relevance(self, mock_vector_store):
         result = await build(
@@ -221,29 +318,13 @@ class TestBuildEdgeCases:
             assert "topic_relevance" in chunk
             assert "source_type" in chunk
 
-    async def test_passes_correct_scopes(self, mock_vector_store):
-        job_id = uuid4()
-        mock_vector_store.semantic_search.return_value = []
-        await build(
-            title="Test",
-            story_directives={},
-            refined_context="Narrative.",
-            vector_store=mock_vector_store,
-            job_id=job_id,
-        )
-        assert mock_vector_store.semantic_search.await_count == 2
-        local_call = mock_vector_store.semantic_search.await_args_list[0]
-        global_call = mock_vector_store.semantic_search.await_args_list[1]
-        assert local_call.kwargs["scopes"] == ["RAW-CONTEXT", "LOCAL"]
-        assert local_call.kwargs["job_id"] == job_id
-        assert global_call.kwargs["scopes"] == ["GLOBAL"]
-        assert global_call.kwargs["job_id"] is None
-
     async def test_merges_global_and_local_chunks(self, mock_vector_store):
         job_id = uuid4()
+        local_id = str(uuid4())
+        global_id = str(uuid4())
         local_chunks = [
             {
-                "id": str(uuid4()),
+                "id": local_id,
                 "content": "Local chunk about BRICS.",
                 "meta": {"scope": "LOCAL", "version": "1.0"},
                 "job_id": str(job_id),
@@ -252,14 +333,19 @@ class TestBuildEdgeCases:
         ]
         global_chunks = [
             {
-                "id": str(uuid4()),
+                "id": global_id,
                 "content": "Global intel about de-dollarization.",
                 "meta": {"scope": "GLOBAL", "version": "1.0"},
                 "job_id": None,
                 "similarity_score": 0.85,
             }
         ]
-        mock_vector_store.semantic_search.side_effect = [local_chunks, global_chunks]
+        mock_vector_store.semantic_search.side_effect = [
+            local_chunks,
+            [],
+            global_chunks,
+            [],
+        ]
 
         result = await build(
             title="BRICS",
