@@ -523,8 +523,7 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
     )
     vector_store = _get_vector_store(db)
     registry = ToolRegistry()
-    if "semantic_search" not in registry:
-        registry.register(make_semantic_search_tool(vector_store))
+    registry.register(make_semantic_search_tool(vector_store), replace=True)
     harness = AgentHarness(agent=red_team)
 
     latest_script_obj = await get_latest_script(db, job.id)
@@ -753,57 +752,55 @@ async def _promote_to_global(db: AsyncSession, job) -> None:
             logger.info(f"No SUPPORTED claims to promote for Job {job.id}")
             return
 
-        parts = [
-            f"Script:\n{script.content}",
-            "SUPPORTED claims:\n"
-            + "\n".join(f"- {c['claim_text']}" for c in supported_claims),
-        ]
-        combined = "\n\n".join(parts)
-        if len(combined) > 8000:
-            combined = combined[:8000]
-
         llm = get_llm(
             model_name=settings.promotion_model,
             temperature=settings.promotion_temperature,
         )
-        prompt = (
-            "You are a knowledge compression specialist. Below is a script and its "
-            "verified claims from a content pipeline run. Extract the key "
-            "factual statements — numbers, events, causal relationships, attributions, "
-            "and timelines — that are broadly useful as long-term context. Omit "
-            "editorial framing, speculative content, and run-specific details. Output "
-            "the compressed facts as a single text, each fact on a new line prefixed "
-            "with '- '.\n\n"
-            f"Content:\n{combined}"
-        )
-        response = await llm.ainvoke(prompt)
-        compressed = response.content if hasattr(response, "content") else str(response)
-
-        facts = [
-            f.strip().lstrip("- ").strip()
-            for f in compressed.split("\n")
-            if f.strip().startswith("- ")
-        ]
-        if not facts:
-            logger.warning(f"GLOBAL promotion produced 0 facts for Job {job.id}")
-            return
-
         vs = _get_vector_store(db)
-        await vs.ingest_chunks(
-            job_id=None,
-            chunks=facts,
-            scope="GLOBAL",
-            meta={
-                "source_job_id": str(job.id),
-                "source_title": job.title,
-                "source_type": "COMPRESSED_FACT",
-                "ingested_at": datetime.now(timezone.utc).isoformat(),
-            },
-        )
-        logger.info(
-            f"Promoted {len(facts)} GLOBAL facts for Job {job.id} "
-            f"(from {len(supported_claims)} SUPPORTED claims)"
-        )
+        now_iso = datetime.now(timezone.utc).isoformat()
+        total_facts = 0
+
+        for claim in supported_claims:
+            prompt = (
+                "You are a knowledge compression specialist. Below is a script excerpt "
+                "and a verified fact-check claim from a content pipeline run. Extract the "
+                "key factual statement — numbers, events, causal relationships, attributions, "
+                "and timelines — that is broadly useful as long-term context. Omit "
+                "editorial framing, speculative content, and run-specific details. Output "
+                "the compressed fact as a single-line text.\n\n"
+                f"Script context:\n{script.content[:2000]}\n\n"
+                f"Verified claim:\n{claim['claim_text']}"
+            )
+            response = await llm.ainvoke(prompt)
+            compressed = (
+                response.content if hasattr(response, "content") else str(response)
+            )
+            fact = compressed.strip().lstrip("- ").strip()
+            if not fact:
+                continue
+
+            await vs.ingest_chunks(
+                job_id=None,
+                chunks=[fact],
+                scope="GLOBAL",
+                meta={
+                    "source_job_id": str(job.id),
+                    "source_title": job.title,
+                    "source_type": "COMPRESSED_FACT",
+                    "claim_verdict": claim["verdict"],
+                    "confidence": claim.get("confidence"),
+                    "ingested_at": now_iso,
+                },
+            )
+            total_facts += 1
+
+        if total_facts:
+            logger.info(
+                f"Promoted {total_facts} GLOBAL facts for Job {job.id} "
+                f"(from {len(supported_claims)} SUPPORTED claims)"
+            )
+        else:
+            logger.warning(f"GLOBAL promotion produced 0 facts for Job {job.id}")
     except Exception:
         logger.exception(f"GLOBAL promotion failed for Job {job.id} — continuing")
 
