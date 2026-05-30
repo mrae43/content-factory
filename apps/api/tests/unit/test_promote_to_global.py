@@ -2,8 +2,6 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
-from app.db.models import ResearchChunk
-
 
 def _make_mock_job(job_id=None):
     job = MagicMock()
@@ -13,24 +11,53 @@ def _make_mock_job(job_id=None):
     return job
 
 
-def _make_mock_chunk(content="Test fact.", scope="LOCAL"):
-    chunk = MagicMock(spec=ResearchChunk)
-    chunk.content = content
-    chunk.meta = {"scope": scope, "version": "1.0"}
-    return chunk
+def _make_mock_script(content="Test script content.", script_id=None):
+    script = MagicMock()
+    script.id = script_id or uuid4()
+    script.content = content
+    script.version = 1
+    return script
+
+
+def _make_mock_claim(claim_text, verdict="SUPPORTED"):
+    return {
+        "claim_text": claim_text,
+        "verdict": verdict,
+        "evidence_text": "Source: test",
+        "evidence_references": [],
+        "hedge_required": False,
+    }
 
 
 @pytest.mark.unit
-async def test_promote_to_global_skips_when_no_local_chunks():
+async def test_promote_to_global_skips_when_no_script():
     from app.workers.orchestrator import _promote_to_global
 
     db = AsyncMock()
     job = _make_mock_job()
-    mock_result = MagicMock()
-    mock_result.scalars.return_value.all.return_value = []
-    db.execute.return_value = mock_result
 
-    with patch("app.workers.orchestrator.get_llm") as mock_get_llm:
+    with (
+        patch("app.workers.orchestrator.get_latest_script", return_value=None),
+        patch("app.workers.orchestrator.get_llm") as mock_get_llm,
+    ):
+        await _promote_to_global(db, job)
+
+    mock_get_llm.assert_not_called()
+
+
+@pytest.mark.unit
+async def test_promote_to_global_skips_when_no_supported_claims():
+    from app.workers.orchestrator import _promote_to_global
+
+    db = AsyncMock()
+    job = _make_mock_job()
+    script = _make_mock_script()
+
+    with (
+        patch("app.workers.orchestrator.get_latest_script", return_value=script),
+        patch("app.workers.orchestrator.get_script_claims", return_value=[]),
+        patch("app.workers.orchestrator.get_llm") as mock_get_llm,
+    ):
         await _promote_to_global(db, job)
 
     mock_get_llm.assert_not_called()
@@ -42,12 +69,11 @@ async def test_promote_to_global_ingests_compressed_facts():
 
     job = _make_mock_job()
     db = AsyncMock()
-    mock_result = MagicMock()
-    mock_result.scalars.return_value.all.return_value = [
-        _make_mock_chunk("BRICS GDP grew 3.2% in 2024."),
-        _make_mock_chunk("China GDP 5.2% in Q3 2024."),
+    script = _make_mock_script(content="BRICS economic outlook.")
+    claims = [
+        _make_mock_claim("BRICS GDP grew 3.2% in 2024."),
+        _make_mock_claim("China GDP 5.2% in Q3 2024."),
     ]
-    db.execute.return_value = mock_result
 
     mock_llm = AsyncMock()
     mock_response = MagicMock()
@@ -57,6 +83,8 @@ async def test_promote_to_global_ingests_compressed_facts():
     mock_llm.ainvoke.return_value = mock_response
 
     with (
+        patch("app.workers.orchestrator.get_latest_script", return_value=script),
+        patch("app.workers.orchestrator.get_script_claims", return_value=claims),
         patch("app.workers.orchestrator.get_llm", return_value=mock_llm),
         patch("app.workers.orchestrator._get_vector_store") as mock_get_vs,
     ):
@@ -67,12 +95,17 @@ async def test_promote_to_global_ingests_compressed_facts():
         await _promote_to_global(db, job)
 
     mock_llm.ainvoke.assert_awaited_once()
-    mock_vs.ingest_chunks.assert_awaited_once_with(
-        job_id=None,
-        chunks=["BRICS GDP grew 3.2% in 2024.", "China GDP was 5.2% in Q3 2024."],
-        scope="GLOBAL",
-        meta={"source_job_id": str(job.id), "source_title": job.title},
-    )
+    args, kwargs = mock_vs.ingest_chunks.call_args
+    assert kwargs["job_id"] is None
+    assert kwargs["chunks"] == [
+        "BRICS GDP grew 3.2% in 2024.",
+        "China GDP was 5.2% in Q3 2024.",
+    ]
+    assert kwargs["scope"] == "GLOBAL"
+    assert kwargs["meta"]["source_job_id"] == str(job.id)
+    assert kwargs["meta"]["source_title"] == job.title
+    assert kwargs["meta"]["source_type"] == "COMPRESSED_FACT"
+    assert "ingested_at" in kwargs["meta"]
 
 
 @pytest.mark.unit
@@ -81,13 +114,12 @@ async def test_promote_to_global_logs_and_continues_on_error():
 
     job = _make_mock_job()
     db = AsyncMock()
-    mock_result = MagicMock()
-    mock_result.scalars.return_value.all.return_value = [
-        _make_mock_chunk("Test fact."),
-    ]
-    db.execute.return_value = mock_result
+    script = _make_mock_script(content="Test script.")
+    claims = [_make_mock_claim("Test supported claim.")]
 
     with (
+        patch("app.workers.orchestrator.get_latest_script", return_value=script),
+        patch("app.workers.orchestrator.get_script_claims", return_value=claims),
         patch("app.workers.orchestrator.get_llm", side_effect=Exception("LLM failed")),
         patch("app.workers.orchestrator.logger") as mock_logger,
     ):
