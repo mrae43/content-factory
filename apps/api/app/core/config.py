@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     asset_temperature: float = 0.5
     formatter_model: str = "openai/gpt-oss-20b"
     formatter_temperature: float = 0.3
+    promotion_model: str = "openai/gpt-oss-20b"
+    promotion_temperature: float = 0.3
 
     # Image Generation
     image_model: str = "black-forest-labs/FLUX.1-schnell"

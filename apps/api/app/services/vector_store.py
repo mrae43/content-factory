@@ -26,14 +26,15 @@ class ContentFactoryVectorStore:
 
     async def ingest_chunks(
         self,
-        job_id: UUID,
-        chunks: List[str],
+        job_id: Optional[UUID] = None,
+        chunks: List[str] = [],
         scope: str = "LOCAL",
         meta: Optional[Dict[str, Any]] = None,
     ) -> int:
         """
         Embeds text chunks via Gemini and inserts them into the pgvector table.
         Scope defaults to LOCAL (ephemeral for this specific render job).
+        job_id can be None for GLOBAL-scoped chunks (long-term memory).
         Optional meta dict is merged into the default metadata.
         """
         if not chunks:
@@ -146,8 +147,8 @@ def make_ingest_chunks_tool(
     """
 
     async def _ingest(
-        job_id: UUID,
-        chunks: List[str],
+        job_id: Optional[UUID] = None,
+        chunks: List[str] = [],
         scope: str = "LOCAL",
         meta: Optional[Dict[str, Any]] = None,
     ) -> int:

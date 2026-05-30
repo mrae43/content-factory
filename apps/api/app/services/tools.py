@@ -43,8 +43,8 @@ class ToolRegistry:
             cls._instance._tools: Dict[str, Tool] = {}
         return cls._instance
 
-    def register(self, tool: Tool) -> None:
-        if tool.name in self._tools:
+    def register(self, tool: Tool, replace: bool = False) -> None:
+        if tool.name in self._tools and not replace:
             raise ValueError(f"Tool '{tool.name}' is already registered.")
         self._tools[tool.name] = tool
 

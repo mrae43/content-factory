@@ -174,6 +174,8 @@ async def test_returns_success_when_uncertain_for_no_evidence_claim(
     mock_vector_store.semantic_search.side_effect = [
         [{"content": "IMF data confirms BRICS GDP grew 3.2% in 2024."}],
         [],
+        [],
+        [],
     ]
     agent = _make_agent()
     _inject_search_tool(agent, mock_vector_store)
@@ -253,6 +255,43 @@ async def test_optimizer_phase_in_correction_hint(
     eval_call = mock_ainvoke.call_args_list[-1]
     invoked_input = eval_call[0][0]
     assert "<optimizer_phase>" in invoked_input["correction_hint_block"]
+
+
+@pytest.mark.agent
+async def test_retrieve_evidence_falls_back_to_global_when_local_insufficient(
+    job_id,
+):
+    mock_vs = AsyncMock()
+    mock_vs.semantic_search.side_effect = [
+        [],
+        [{"content": "Global fact about BRICS GDP."}],
+    ]
+    agent = _make_agent()
+    _inject_search_tool(agent, mock_vs)
+    from app.workers.agents import ExtractedClaim
+    from unittest.mock import MagicMock
+
+    guardrail = MagicMock()
+    guardrail.top_k_per_claim = 5
+    guardrail.similarity_threshold = None
+
+    claims = [
+        ExtractedClaim(
+            claim_text="BRICS GDP grew 3.2%.",
+            claim_category="statistic",
+            search_query="BRICS GDP growth 2024",
+        )
+    ]
+
+    result = await agent._retrieve_evidence(claims, job_id, guardrail)
+
+    assert len(result) == 1
+    assert len(result[0].evidence_chunks) == 1
+    assert result[0].evidence_chunks[0] == "Global fact about BRICS GDP."
+    assert mock_vs.semantic_search.await_count == 2
+    global_call = mock_vs.semantic_search.await_args_list[1]
+    assert global_call.kwargs["scopes"] == ["GLOBAL"]
+    assert global_call.kwargs["job_id"] is None
 
 
 @pytest.mark.agent

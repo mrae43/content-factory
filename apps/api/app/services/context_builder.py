@@ -66,15 +66,22 @@ async def build(
     query = _compose_query(title, story_directives, user_reference)
     logger.info(f"ContextBuilder query for job {job_id}: {query!r} (top_k={top_k})")
 
-    retrieved = await vector_store.semantic_search(
+    local_retrieved = await vector_store.semantic_search(
         query=query,
         job_id=job_id,
         scopes=["RAW-CONTEXT", "LOCAL"],
         top_k=top_k,
     )
 
+    global_retrieved = await vector_store.semantic_search(
+        query=query,
+        job_id=None,
+        scopes=["GLOBAL"],
+        top_k=top_k,
+    )
+
     enriched: List[Dict[str, Any]] = []
-    for chunk in retrieved:
+    for chunk in local_retrieved:
         score = chunk.get("similarity_score", 0)
         meta = chunk.get("meta", {})
         enriched.append(
@@ -88,6 +95,22 @@ async def build(
             }
         )
 
+    for chunk in global_retrieved:
+        score = chunk.get("similarity_score", 0)
+        meta = chunk.get("meta", {})
+        enriched.append(
+            {
+                "id": chunk.get("id"),
+                "content": chunk.get("content", ""),
+                "similarity_score": score,
+                "topic_relevance": _derive_topic_relevance(score),
+                "source_type": meta.get("source_type", "SYSTEM_INTEL"),
+                "meta": meta,
+            }
+        )
+
+    enriched.sort(key=lambda c: c.get("similarity_score", 0), reverse=True)
+
     evidence_sections = _format_evidence_sections(enriched)
 
     log_count = len(enriched)
@@ -99,7 +122,8 @@ async def build(
         top_score = enriched[0]["similarity_score"]
         logger.info(
             f"ContextBuilder assembled {log_count} chunks for job {job_id} "
-            f"(top score: {top_score:.3f})"
+            f"(top score: {top_score:.3f}, "
+            f"{sum(1 for c in enriched if c['source_type'] == 'SYSTEM_INTEL')} GLOBAL)"
         )
 
     return AssembledContext(

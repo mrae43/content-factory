@@ -156,14 +156,19 @@ class ResearchChunk(Base):
             postgresql_with={"m": 16, "ef_construction": 64},
             postgresql_ops={"embedding": "vector_cosine_ops"},
         ),
+        Index(
+            "ix_research_chunks_global",
+            "id",
+            postgresql_where=text("meta->>'scope' = 'GLOBAL'"),
+        ),
         {"schema": "factory"},
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     job_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("factory.render_jobs.id", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("factory.render_jobs.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
     )
 

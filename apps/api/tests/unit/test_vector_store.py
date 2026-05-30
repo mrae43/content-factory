@@ -115,6 +115,22 @@ class TestIngestChunks:
             "source": "tavily",
         }
 
+    async def test_should_accept_none_job_id_for_global_scope(self, mock_db_session):
+        store = _create_store(mock_db_session)
+
+        result = await store.ingest_chunks(
+            job_id=None,
+            chunks=["Global fact 1", "Global fact 2"],
+            scope="GLOBAL",
+        )
+
+        assert result == 2
+        added = mock_db_session.add_all.call_args[0][0]
+        assert len(added) == 2
+        assert added[0].job_id is None
+        assert added[1].job_id is None
+        assert added[0].meta["scope"] == "GLOBAL"
+
 
 @pytest.mark.unit
 class TestSemanticSearch:

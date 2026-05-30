@@ -1,12 +1,12 @@
 import asyncio
 import logging
 import traceback
+from datetime import datetime, timezone
 from typing import Any, Dict
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
-
 from app.db.crud import (
     update_job_status,
     log_error,
@@ -18,7 +18,12 @@ from app.db.crud import (
     append_script_feedback,
     save_fact_check_claims,
 )
-from app.services.vector_store import ContentFactoryVectorStore, make_ingest_chunks_tool
+from app.services.vector_store import (
+    ContentFactoryVectorStore,
+    make_ingest_chunks_tool,
+    make_semantic_search_tool,
+)
+from app.services.tools import ToolRegistry
 from app.services.web_search import get_tavily_service
 from app.services.chunking import process_extraction_job
 from app.services.claim_mapper import (
@@ -27,7 +32,7 @@ from app.services.claim_mapper import (
     compute_verdict_delta,
     update_ledger,
 )
-from app.services.llm import get_embeddings
+from app.services.llm import get_embeddings, get_llm
 from app.services.format_validator import (
     BlogValidator,
     CarouselValidator,
@@ -112,6 +117,7 @@ async def execute_state_transition(db: AsyncSession, job) -> None:
 
         elif job.status == JobStatusEnum.COMPLETED:
             logger.info(f"Pipeline finished successfully for Job {job.id}")
+            await _promote_to_global(db, job)
             await cleanup_local_research_chunks(job.id, db)
 
         elif job.status in [
@@ -515,8 +521,10 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
         model_name=settings.evaluator_model,
         temperature=settings.evaluator_temperature,
     )
-    harness = AgentHarness(agent=red_team)
     vector_store = _get_vector_store(db)
+    registry = ToolRegistry()
+    registry.register(make_semantic_search_tool(vector_store), replace=True)
+    harness = AgentHarness(agent=red_team)
 
     latest_script_obj = await get_latest_script(db, job.id)
     latest_script = latest_script_obj.content if latest_script_obj else ""
@@ -728,6 +736,73 @@ async def _transition_asset_generation(db: AsyncSession, job) -> None:
     else:
         await db.commit()
         await update_job_status(db, job.id, JobStatusEnum.FAILED)
+
+
+async def _promote_to_global(db: AsyncSession, job) -> None:
+    try:
+        script = await get_latest_script(db, job.id)
+        if not script:
+            logger.info(f"No script to promote for Job {job.id}")
+            return
+
+        claims = await get_script_claims(db, script.id)
+        supported_claims = [c for c in claims if c["verdict"] == "SUPPORTED"]
+
+        if not supported_claims:
+            logger.info(f"No SUPPORTED claims to promote for Job {job.id}")
+            return
+
+        llm = get_llm(
+            model_name=settings.promotion_model,
+            temperature=settings.promotion_temperature,
+        )
+        vs = _get_vector_store(db)
+        now_iso = datetime.now(timezone.utc).isoformat()
+        total_facts = 0
+
+        for claim in supported_claims:
+            prompt = (
+                "You are a knowledge compression specialist. Below is a script excerpt "
+                "and a verified fact-check claim from a content pipeline run. Extract the "
+                "key factual statement — numbers, events, causal relationships, attributions, "
+                "and timelines — that is broadly useful as long-term context. Omit "
+                "editorial framing, speculative content, and run-specific details. Output "
+                "the compressed fact as a single-line text.\n\n"
+                f"Script context:\n{script.content[:2000]}\n\n"
+                f"Verified claim:\n{claim['claim_text']}"
+            )
+            response = await llm.ainvoke(prompt)
+            compressed = (
+                response.content if hasattr(response, "content") else str(response)
+            )
+            fact = compressed.strip().lstrip("- ").strip()
+            if not fact:
+                continue
+
+            await vs.ingest_chunks(
+                job_id=None,
+                chunks=[fact],
+                scope="GLOBAL",
+                meta={
+                    "source_job_id": str(job.id),
+                    "source_title": job.title,
+                    "source_type": "COMPRESSED_FACT",
+                    "claim_verdict": claim["verdict"],
+                    "confidence": claim.get("confidence"),
+                    "ingested_at": now_iso,
+                },
+            )
+            total_facts += 1
+
+        if total_facts:
+            logger.info(
+                f"Promoted {total_facts} GLOBAL facts for Job {job.id} "
+                f"(from {len(supported_claims)} SUPPORTED claims)"
+            )
+        else:
+            logger.warning(f"GLOBAL promotion produced 0 facts for Job {job.id}")
+    except Exception:
+        logger.exception(f"GLOBAL promotion failed for Job {job.id} — continuing")
 
 
 async def _resolve_evidence_refs(

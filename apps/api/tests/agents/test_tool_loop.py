@@ -262,7 +262,11 @@ async def test_red_team_uses_di_tools_for_pass2(
         result = await agent._execute(context)
 
     assert result.status == AgentActionStatus.SUCCESS
-    mock_vector_store.semantic_search.assert_awaited_once()
+    assert mock_vector_store.semantic_search.await_count == 2
+    first_call = mock_vector_store.semantic_search.await_args_list[0]
+    assert first_call.kwargs["scopes"] == ["RAW-CONTEXT", "LOCAL"]
+    second_call = mock_vector_store.semantic_search.await_args_list[1]
+    assert second_call.kwargs["scopes"] == ["GLOBAL"]
 
 
 @pytest.mark.agent

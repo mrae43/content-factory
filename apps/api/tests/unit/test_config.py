@@ -30,6 +30,8 @@ _ENV_KEYS = [
     "ASSET_TEMPERATURE",
     "FORMATTER_MODEL",
     "FORMATTER_TEMPERATURE",
+    "PROMOTION_MODEL",
+    "PROMOTION_TEMPERATURE",
     "EVAL_COPYWRITER_MODEL",
     "EVAL_COPYWRITER_TEMPERATURE",
     "EVAL_RED_TEAM_MODEL",
@@ -123,6 +125,15 @@ class TestSettings:
             storage_backend="s3",
         )
         assert s.storage_backend == "s3"
+
+    def test_promotion_defaults(self):
+        s = Settings(
+            gemini_api_key="g",
+            tavily_api_key="t",
+            database_url="postgresql://custom",
+        )
+        assert s.promotion_model == "openai/gpt-oss-20b"
+        assert s.promotion_temperature == 0.3
 
 
 @pytest.mark.unit

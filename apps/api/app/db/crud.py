@@ -161,6 +161,7 @@ async def get_script_claims(db: AsyncSession, script_id: UUID) -> list[dict]:
         {
             "claim_text": c.claim_text,
             "verdict": c.verdict,
+            "confidence": c.confidence,
             "evidence_text": c.evidence_text or "",
             "evidence_references": c.evidence_references,
             "hedge_required": c.hedge_required,
