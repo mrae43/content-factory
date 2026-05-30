@@ -2,7 +2,7 @@ import asyncio
 import logging
 import traceback
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any, Dict, List
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -421,6 +421,7 @@ async def _run_optimizer(
     registry = ToolRegistry()
     registry.register(gated_tool, replace=True)
     harness = AgentHarness(agent=optimizer)
+    registry.unregister("retrieve_evidence_for_claim")
 
     agent_context = {
         "job_id": job.id,
@@ -441,8 +442,8 @@ async def _run_optimizer(
     result = await harness.run_with_harness(agent_context)
 
     fallback_count = getattr(gated_tool.callable, "fallback_count", [0])[0]
-    total_failed = len(active_failures) if active_failures else 1
-    fallback_rate = fallback_count / total_failed
+    total_failed = len(active_failures) if active_failures else 0
+    fallback_rate = fallback_count / total_failed if total_failed > 0 else 0.0
     logger.info(
         f"Optimizer fallback rate for Job {job.id}: "
         f"{fallback_count}/{total_failed} = {fallback_rate:.2%}"
@@ -451,13 +452,15 @@ async def _run_optimizer(
     if result.success:
         working_memory = dict(job.working_memory or {})
         per_claim_patches = result.payload.get("per_claim_patches", [])
-        optimizer_phase = working_memory.setdefault("optimizer_phase", {})
-        iteration = len(optimizer_phase) + 1
+
         if per_claim_patches:
+            optimizer_phase = working_memory.setdefault("optimizer_phase", {})
+            iteration = len(optimizer_phase) + 1
+
+            resolved_claims: List[dict] = []
             ledger = latest_script.optimization_history or {}
             active_claims = ledger.get("active_claims", [])
             text_to_uuid = {c["claim_text"]: c["claim_uuid"] for c in active_claims}
-            resolved_claims = []
             for patch in per_claim_patches:
                 claim_uuid = text_to_uuid.get(patch["original_claim_text"])
                 resolved_claims.append(
@@ -469,16 +472,10 @@ async def _run_optimizer(
                         "is_completely_resolved": patch["is_completely_resolved"],
                     }
                 )
+
             optimizer_phase[f"iteration_{iteration}"] = {
                 "patch_summary": result.payload.get("patch_summary", ""),
                 "resolved_claims": resolved_claims,
-                "fallback_rate": fallback_rate,
-            }
-            job.working_memory = working_memory
-        else:
-            optimizer_phase[f"iteration_{iteration}"] = {
-                "patch_summary": result.payload.get("patch_summary", ""),
-                "resolved_claims": [],
                 "fallback_rate": fallback_rate,
             }
             job.working_memory = working_memory

@@ -48,6 +48,9 @@ class ToolRegistry:
             raise ValueError(f"Tool '{tool.name}' is already registered.")
         self._tools[tool.name] = tool
 
+    def unregister(self, name: str) -> None:
+        self._tools.pop(name, None)
+
     def get(self, name: str) -> Tool:
         if name not in self._tools:
             raise KeyError(f"Tool '{name}' is not registered.")
