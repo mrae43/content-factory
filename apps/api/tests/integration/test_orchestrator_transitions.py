@@ -519,7 +519,7 @@ class TestTransitionScripting:
         mock_job.status = JobStatusEnum.SCRIPTING
         mock_job.assembled_context = _canned_assembled_context_dict()
         mock_script.feedback_history = ["Needs more data", "Add sources"]
-        mock_agent_instance = AsyncMock()
+        mock_agent_instance = MagicMock()
         mock_agent_instance.run = AsyncMock(
             return_value=agent_result_success(
                 payload={"script_content": "Fixed script"}
@@ -564,7 +564,7 @@ class TestTransitionScripting:
         mock_script.feedback_history = [
             {"source": "human_editor", "feedback": "Tone too aggressive"}
         ]
-        mock_agent_instance = AsyncMock()
+        mock_agent_instance = MagicMock()
         mock_agent_instance.run = AsyncMock(
             return_value=agent_result_success(payload={"script_content": "Toned down"})
         )
@@ -674,7 +674,7 @@ class TestTransitionScripting:
         mock_job.working_memory = {"copywriter_rationale": {"narrative_intent": "test"}}
         mock_script.feedback_history = ["Needs revision"]
         result = agent_result_success(payload={"script_content": "Revised script"})
-        mock_agent_instance = AsyncMock()
+        mock_agent_instance = MagicMock()
         mock_agent_instance.run = AsyncMock(return_value=result)
 
         with (
@@ -713,7 +713,7 @@ class TestTransitionScripting:
         mock_job.assembled_context = _canned_assembled_context_dict()
         mock_job.working_memory = {}
         result = agent_result_success(payload={"script_content": "New script"})
-        mock_agent_instance = AsyncMock()
+        mock_agent_instance = MagicMock()
         mock_agent_instance.run = AsyncMock(return_value=result)
 
         with (
@@ -877,7 +877,7 @@ class TestTransitionScriptingEvidence:
         result = agent_result_success(
             payload={"script_content": "Evidence-driven script"}
         )
-        mock_agent_instance = AsyncMock()
+        mock_agent_instance = MagicMock()
         mock_agent_instance.run = AsyncMock(return_value=result)
 
         with (
@@ -918,7 +918,7 @@ class TestTransitionScriptingEvidence:
             "raw_chunks": [],
         }
         result = agent_result_success(payload={"script_content": "Fallback script"})
-        mock_agent_instance = AsyncMock()
+        mock_agent_instance = MagicMock()
         mock_agent_instance.run = AsyncMock(return_value=result)
 
         with (
@@ -979,7 +979,7 @@ class TestTransitionScriptingEvidence:
                 "patch_summary": "Fixed claim",
             }
         )
-        mock_agent_instance = AsyncMock()
+        mock_agent_instance = MagicMock()
         mock_agent_instance.run = AsyncMock(return_value=result)
 
         with (
@@ -1039,7 +1039,7 @@ class TestTransitionScriptingEvidence:
             reasoning="Cannot fix claim 'GDP grew 15%' — no supporting evidence available",
             confidence_score=0.0,
         )
-        mock_agent_instance = AsyncMock()
+        mock_agent_instance = MagicMock()
         mock_agent_instance.run = AsyncMock(return_value=escalate_result)
 
         with (
@@ -1114,7 +1114,7 @@ class TestTransitionScriptingEvidence:
                 "patch_summary": "Fixed claim",
             }
         )
-        mock_agent_instance = AsyncMock()
+        mock_agent_instance = MagicMock()
         mock_agent_instance.run = AsyncMock(return_value=result)
 
         with (
@@ -1193,7 +1193,7 @@ class TestTransitionScriptingEvidence:
             reasoning="Fixed it",
             confidence_score=0.9,
         )
-        mock_agent_instance = AsyncMock()
+        mock_agent_instance = MagicMock()
         mock_agent_instance.run = AsyncMock(return_value=result)
 
         with (
@@ -1279,7 +1279,7 @@ class TestTransitionScriptingEvidence:
             reasoning="Fixed again",
             confidence_score=0.9,
         )
-        mock_agent_instance = AsyncMock()
+        mock_agent_instance = MagicMock()
         mock_agent_instance.run = AsyncMock(return_value=result)
 
         with (
@@ -1351,7 +1351,7 @@ class TestTransitionScriptingEvidence:
             reasoning="Fixed it",
             confidence_score=0.9,
         )
-        mock_agent_instance = AsyncMock()
+        mock_agent_instance = MagicMock()
         mock_agent_instance.run = AsyncMock(return_value=result)
 
         with (
@@ -1918,7 +1918,7 @@ class TestTransitionFactCheckingScript:
         mock_job.story_directives["guardrail_strictness"] = "Medium"
         mock_job.working_memory = {"copywriter_rationale": {"narrative_intent": "test"}}
         result = agent_result_success(payload={"claims": [], "verdict": "SUPPORTED"})
-        mock_agent_instance = AsyncMock()
+        mock_agent_instance = MagicMock()
         mock_agent_instance.run = AsyncMock(return_value=result)
 
         with (
@@ -1962,7 +1962,7 @@ class TestTransitionFactCheckingScript:
             "optimizer_phase": {"iteration_1": {"patch_summary": "Fixed claim"}}
         }
         result = agent_result_success(payload={"claims": [], "verdict": "SUPPORTED"})
-        mock_agent_instance = AsyncMock()
+        mock_agent_instance = MagicMock()
         mock_agent_instance.run = AsyncMock(return_value=result)
 
         with (
@@ -2640,9 +2640,9 @@ class TestOrchestratorMultiStep:
         ):
             mock_settings.max_red_team_revisions = 3
             mock_settings.retrieval_retry_max = 3
-            mock_red_team_instance_reject = AsyncMock()
+            mock_red_team_instance_reject = MagicMock()
             mock_red_team_instance_reject.run = AsyncMock(return_value=revision_result)
-            mock_red_team_instance_approve = AsyncMock()
+            mock_red_team_instance_approve = MagicMock()
             mock_red_team_instance_approve.run = AsyncMock(return_value=approved_result)
             mock_red_team_cls.side_effect = [
                 mock_red_team_instance_reject,

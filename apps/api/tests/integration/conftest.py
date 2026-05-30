@@ -79,7 +79,7 @@ def mock_script():
 
 
 def _mock_agent_class(agent_result):
-    mock_instance = AsyncMock()
+    mock_instance = MagicMock()
     mock_instance.run = AsyncMock(return_value=agent_result)
     mock_cls = MagicMock(return_value=mock_instance)
     return mock_cls

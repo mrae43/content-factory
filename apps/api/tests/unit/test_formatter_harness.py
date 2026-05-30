@@ -62,7 +62,7 @@ def _clear_registry():
 @pytest.mark.unit
 class TestAgentHarnessSuccess:
     async def test_should_succeed_on_first_attempt(self):
-        mock_agent = AsyncMock(spec=LLMAgent)
+        mock_agent = MagicMock(spec=LLMAgent)
         mock_agent.run = AsyncMock(return_value=_success_result({"title": "Blog Post"}))
         validator = _always_valid_validator()
         harness = AgentHarness(agent=mock_agent, validator=validator, max_retries=2)
@@ -78,7 +78,7 @@ class TestAgentHarnessSuccess:
         mock_agent.run.assert_awaited_once()
 
     async def test_should_set_format_type_from_context(self):
-        mock_agent = AsyncMock(spec=LLMAgent)
+        mock_agent = MagicMock(spec=LLMAgent)
         mock_agent.run = AsyncMock(return_value=_success_result({"title": "Blog"}))
         validator = _always_valid_validator()
         harness = AgentHarness(agent=mock_agent, validator=validator, max_retries=2)
@@ -88,7 +88,7 @@ class TestAgentHarnessSuccess:
         assert result.format_type == "carousel"
 
     async def test_should_default_format_type_to_unknown(self):
-        mock_agent = AsyncMock(spec=LLMAgent)
+        mock_agent = MagicMock(spec=LLMAgent)
         mock_agent.run = AsyncMock(return_value=_success_result({"title": "Blog"}))
         validator = _always_valid_validator()
         harness = AgentHarness(agent=mock_agent, validator=validator, max_retries=2)
@@ -101,7 +101,7 @@ class TestAgentHarnessSuccess:
 @pytest.mark.unit
 class TestAgentHarnessRetry:
     async def test_should_retry_on_validation_failure_and_succeed(self):
-        mock_agent = AsyncMock(spec=LLMAgent)
+        mock_agent = MagicMock(spec=LLMAgent)
         first_payload = {"title": "Bad"}
         second_payload = {"title": "Good"}
         mock_agent.run = AsyncMock(
@@ -130,7 +130,7 @@ class TestAgentHarnessRetry:
         assert context["correction_hint"] == "Missing sections"
 
     async def test_should_retry_on_agent_error_and_succeed(self):
-        mock_agent = AsyncMock(spec=LLMAgent)
+        mock_agent = MagicMock(spec=LLMAgent)
         mock_agent.run = AsyncMock(
             side_effect=[
                 _error_result("API timeout"),
@@ -149,7 +149,7 @@ class TestAgentHarnessRetry:
         assert context["correction_hint"] == "Agent failed: API timeout"
 
     async def test_should_fail_after_exhausting_all_retries(self):
-        mock_agent = AsyncMock(spec=LLMAgent)
+        mock_agent = MagicMock(spec=LLMAgent)
         mock_agent.run = AsyncMock(
             side_effect=[
                 _success_result({"title": "Bad", "attempt": 1}),
@@ -167,7 +167,7 @@ class TestAgentHarnessRetry:
         assert len(result.error_log) == 3
 
     async def test_should_fail_when_agent_always_errors(self):
-        mock_agent = AsyncMock(spec=LLMAgent)
+        mock_agent = MagicMock(spec=LLMAgent)
         mock_agent.run = AsyncMock(return_value=_error_result("Boom"))
         validator = _always_valid_validator()
         harness = AgentHarness(agent=mock_agent, validator=validator, max_retries=2)
@@ -185,7 +185,7 @@ class TestAgentHarnessRetry:
 class TestAgentHarnessDoomLoop:
     async def test_should_break_on_identical_payload_hash(self):
         identical_payload = {"title": "Same", "sections": []}
-        mock_agent = AsyncMock(spec=LLMAgent)
+        mock_agent = MagicMock(spec=LLMAgent)
         mock_agent.run = AsyncMock(
             side_effect=[
                 _success_result(identical_payload),
@@ -208,7 +208,7 @@ class TestAgentHarnessDoomLoop:
         assert any("Doom loop" in e for e in result.error_log)
 
     async def test_should_not_break_when_payloads_differ(self):
-        mock_agent = AsyncMock(spec=LLMAgent)
+        mock_agent = MagicMock(spec=LLMAgent)
         mock_agent.run = AsyncMock(
             side_effect=[
                 _success_result({"title": "First", "sections": []}),
@@ -235,7 +235,7 @@ class TestAgentHarnessDoomLoop:
 @pytest.mark.unit
 class TestAgentHarnessCorrectiveContext:
     async def test_should_inject_correction_hint_on_agent_error(self):
-        mock_agent = AsyncMock(spec=LLMAgent)
+        mock_agent = MagicMock(spec=LLMAgent)
         mock_agent.run = AsyncMock(
             side_effect=[
                 _error_result("Model returned empty"),
@@ -252,7 +252,7 @@ class TestAgentHarnessCorrectiveContext:
         assert "Agent failed" in context["correction_hint"]
 
     async def test_should_inject_correction_hint_on_validation_failure(self):
-        mock_agent = AsyncMock(spec=LLMAgent)
+        mock_agent = MagicMock(spec=LLMAgent)
         mock_agent.run = AsyncMock(
             side_effect=[
                 _success_result({"title": "Bad"}),
@@ -276,7 +276,7 @@ class TestAgentHarnessCorrectiveContext:
         assert context["correction_hint"] == "Missing required field: seo_meta"
 
     async def test_should_update_correction_hint_per_attempt(self):
-        mock_agent = AsyncMock(spec=LLMAgent)
+        mock_agent = MagicMock(spec=LLMAgent)
         mock_agent.run = AsyncMock(
             side_effect=[
                 _success_result({"title": "A"}),
@@ -307,7 +307,7 @@ class TestAgentHarnessMaxRetries:
     async def test_should_respect_max_retries_setting(
         self, max_retries, expected_attempts
     ):
-        mock_agent = AsyncMock(spec=LLMAgent)
+        mock_agent = MagicMock(spec=LLMAgent)
         mock_agent.run = AsyncMock(return_value=_error_result("Fail"))
         validator = _always_valid_validator()
         harness = AgentHarness(
@@ -431,7 +431,7 @@ class TestServiceAgentPath:
         assert agent.di_tools == {}
 
     async def test_llm_agent_without_validator_skips_validation(self):
-        mock_agent = AsyncMock(spec=LLMAgent)
+        mock_agent = MagicMock(spec=LLMAgent)
         mock_agent.run = AsyncMock(return_value=_success_result({"title": "Direct"}))
         harness = AgentHarness(agent=mock_agent, validator=None)
 
