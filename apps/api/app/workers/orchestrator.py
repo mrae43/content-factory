@@ -1,14 +1,12 @@
 import asyncio
 import logging
 import traceback
+from datetime import datetime, timezone
 from typing import Any, Dict
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
-
-from sqlalchemy import select
-from app.db.models import ResearchChunk
 from app.db.crud import (
     update_job_status,
     log_error,
@@ -743,23 +741,24 @@ async def _transition_asset_generation(db: AsyncSession, job) -> None:
 
 async def _promote_to_global(db: AsyncSession, job) -> None:
     try:
-        stmt = (
-            select(ResearchChunk)
-            .where(
-                ResearchChunk.job_id == job.id,
-                ResearchChunk.meta["scope"].astext == "LOCAL",
-            )
-            .limit(20)
-        )
-        result = await db.execute(stmt)
-        chunks = result.scalars().all()
-
-        if not chunks:
-            logger.info(f"No LOCAL chunks to promote for Job {job.id}")
+        script = await get_latest_script(db, job.id)
+        if not script:
+            logger.info(f"No script to promote for Job {job.id}")
             return
 
-        texts = [c.content for c in chunks]
-        combined = "\n\n".join(texts)
+        claims = await get_script_claims(db, script.id)
+        supported_claims = [c for c in claims if c["verdict"] == "SUPPORTED"]
+
+        if not supported_claims:
+            logger.info(f"No SUPPORTED claims to promote for Job {job.id}")
+            return
+
+        parts = [
+            f"Script:\n{script.content}",
+            "SUPPORTED claims:\n"
+            + "\n".join(f"- {c['claim_text']}" for c in supported_claims),
+        ]
+        combined = "\n\n".join(parts)
         if len(combined) > 8000:
             combined = combined[:8000]
 
@@ -768,14 +767,14 @@ async def _promote_to_global(db: AsyncSession, job) -> None:
             temperature=settings.promotion_temperature,
         )
         prompt = (
-            "You are a knowledge compression specialist. Below is a set of research "
-            "chunks retrieved for a specific content pipeline run. Extract the key "
+            "You are a knowledge compression specialist. Below is a script and its "
+            "verified claims from a content pipeline run. Extract the key "
             "factual statements — numbers, events, causal relationships, attributions, "
             "and timelines — that are broadly useful as long-term context. Omit "
             "editorial framing, speculative content, and run-specific details. Output "
             "the compressed facts as a single text, each fact on a new line prefixed "
             "with '- '.\n\n"
-            f"Research chunks:\n{combined}"
+            f"Content:\n{combined}"
         )
         response = await llm.ainvoke(prompt)
         compressed = response.content if hasattr(response, "content") else str(response)
@@ -794,11 +793,16 @@ async def _promote_to_global(db: AsyncSession, job) -> None:
             job_id=None,
             chunks=facts,
             scope="GLOBAL",
-            meta={"source_job_id": str(job.id), "source_title": job.title},
+            meta={
+                "source_job_id": str(job.id),
+                "source_title": job.title,
+                "source_type": "COMPRESSED_FACT",
+                "ingested_at": datetime.now(timezone.utc).isoformat(),
+            },
         )
         logger.info(
             f"Promoted {len(facts)} GLOBAL facts for Job {job.id} "
-            f"(from {len(chunks)} LOCAL chunks)"
+            f"(from {len(supported_claims)} SUPPORTED claims)"
         )
     except Exception:
         logger.exception(f"GLOBAL promotion failed for Job {job.id} — continuing")
