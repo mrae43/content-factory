@@ -19,10 +19,11 @@ def _make_mock_script(content="Test script content.", script_id=None):
     return script
 
 
-def _make_mock_claim(claim_text, verdict="SUPPORTED"):
+def _make_mock_claim(claim_text, verdict="SUPPORTED", confidence=0.92):
     return {
         "claim_text": claim_text,
         "verdict": verdict,
+        "confidence": confidence,
         "evidence_text": "Source: test",
         "evidence_references": [],
         "hedge_required": False,
@@ -76,11 +77,11 @@ async def test_promote_to_global_ingests_compressed_facts():
     ]
 
     mock_llm = AsyncMock()
-    mock_response = MagicMock()
-    mock_response.content = (
-        "- BRICS GDP grew 3.2% in 2024.\n- China GDP was 5.2% in Q3 2024."
-    )
-    mock_llm.ainvoke.return_value = mock_response
+    mock_llm.ainvoke = AsyncMock()
+    mock_llm.ainvoke.side_effect = [
+        MagicMock(content="BRICS GDP grew 3.2% in 2024."),
+        MagicMock(content="China GDP was 5.2% in Q3 2024."),
+    ]
 
     with (
         patch("app.workers.orchestrator.get_latest_script", return_value=script),
@@ -89,23 +90,24 @@ async def test_promote_to_global_ingests_compressed_facts():
         patch("app.workers.orchestrator._get_vector_store") as mock_get_vs,
     ):
         mock_vs = AsyncMock()
-        mock_vs.ingest_chunks = AsyncMock(return_value=2)
+        mock_vs.ingest_chunks = AsyncMock(return_value=1)
         mock_get_vs.return_value = mock_vs
 
         await _promote_to_global(db, job)
 
-    mock_llm.ainvoke.assert_awaited_once()
-    args, kwargs = mock_vs.ingest_chunks.call_args
-    assert kwargs["job_id"] is None
-    assert kwargs["chunks"] == [
-        "BRICS GDP grew 3.2% in 2024.",
-        "China GDP was 5.2% in Q3 2024.",
-    ]
-    assert kwargs["scope"] == "GLOBAL"
-    assert kwargs["meta"]["source_job_id"] == str(job.id)
-    assert kwargs["meta"]["source_title"] == job.title
-    assert kwargs["meta"]["source_type"] == "COMPRESSED_FACT"
-    assert "ingested_at" in kwargs["meta"]
+    assert mock_llm.ainvoke.call_count == 2
+    assert mock_vs.ingest_chunks.call_count == 2
+
+    for call_args, call_kwargs in mock_vs.ingest_chunks.call_args_list:
+        assert call_kwargs["job_id"] is None
+        assert len(call_kwargs["chunks"]) == 1
+        assert call_kwargs["scope"] == "GLOBAL"
+        assert call_kwargs["meta"]["source_job_id"] == str(job.id)
+        assert call_kwargs["meta"]["source_title"] == job.title
+        assert call_kwargs["meta"]["source_type"] == "COMPRESSED_FACT"
+        assert call_kwargs["meta"]["claim_verdict"] == "SUPPORTED"
+        assert call_kwargs["meta"]["confidence"] == 0.92
+        assert "ingested_at" in call_kwargs["meta"]
 
 
 @pytest.mark.unit
