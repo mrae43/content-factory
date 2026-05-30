@@ -193,6 +193,7 @@ class TestBuildEdgeCases:
 
     async def test_passes_top_k_to_vector_store(self, mock_vector_store):
         job_id = uuid4()
+        mock_vector_store.semantic_search.return_value = []
         await build(
             title="Test",
             story_directives={},
@@ -201,12 +202,12 @@ class TestBuildEdgeCases:
             job_id=job_id,
             top_k=5,
         )
-        mock_vector_store.semantic_search.assert_awaited_once_with(
-            query="Test",
-            job_id=job_id,
-            scopes=["RAW-CONTEXT", "LOCAL"],
-            top_k=5,
-        )
+        assert mock_vector_store.semantic_search.await_count == 2
+        local_call = mock_vector_store.semantic_search.await_args_list[0]
+        assert local_call.kwargs["query"] == "Test"
+        assert local_call.kwargs["job_id"] == job_id
+        assert local_call.kwargs["scopes"] == ["RAW-CONTEXT", "LOCAL"]
+        assert local_call.kwargs["top_k"] == 5
 
     async def test_enriches_with_title_relevance(self, mock_vector_store):
         result = await build(
@@ -222,6 +223,7 @@ class TestBuildEdgeCases:
 
     async def test_passes_correct_scopes(self, mock_vector_store):
         job_id = uuid4()
+        mock_vector_store.semantic_search.return_value = []
         await build(
             title="Test",
             story_directives={},
@@ -229,6 +231,47 @@ class TestBuildEdgeCases:
             vector_store=mock_vector_store,
             job_id=job_id,
         )
-        mock_vector_store.semantic_search.assert_awaited_once()
-        call_kwargs = mock_vector_store.semantic_search.call_args.kwargs
-        assert call_kwargs["scopes"] == ["RAW-CONTEXT", "LOCAL"]
+        assert mock_vector_store.semantic_search.await_count == 2
+        local_call = mock_vector_store.semantic_search.await_args_list[0]
+        global_call = mock_vector_store.semantic_search.await_args_list[1]
+        assert local_call.kwargs["scopes"] == ["RAW-CONTEXT", "LOCAL"]
+        assert local_call.kwargs["job_id"] == job_id
+        assert global_call.kwargs["scopes"] == ["GLOBAL"]
+        assert global_call.kwargs["job_id"] is None
+
+    async def test_merges_global_and_local_chunks(self, mock_vector_store):
+        job_id = uuid4()
+        local_chunks = [
+            {
+                "id": str(uuid4()),
+                "content": "Local chunk about BRICS.",
+                "meta": {"scope": "LOCAL", "version": "1.0"},
+                "job_id": str(job_id),
+                "similarity_score": 0.92,
+            }
+        ]
+        global_chunks = [
+            {
+                "id": str(uuid4()),
+                "content": "Global intel about de-dollarization.",
+                "meta": {"scope": "GLOBAL", "version": "1.0"},
+                "job_id": None,
+                "similarity_score": 0.85,
+            }
+        ]
+        mock_vector_store.semantic_search.side_effect = [local_chunks, global_chunks]
+
+        result = await build(
+            title="BRICS",
+            story_directives={},
+            refined_context="Narrative.",
+            vector_store=mock_vector_store,
+            job_id=job_id,
+        )
+
+        assert len(result.raw_chunks) == 2
+        source_types = [c["source_type"] for c in result.raw_chunks]
+        assert "INFERRED" in source_types
+        assert "SYSTEM_INTEL" in source_types
+        assert result.raw_chunks[0]["similarity_score"] == 0.92
+        assert result.raw_chunks[1]["similarity_score"] == 0.85
