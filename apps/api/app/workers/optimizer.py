@@ -91,7 +91,7 @@ OPTIMIZER_HUMAN_TEMPLATE = (
     "<red_team_evidence>\n{red_team_evidence}\n</red_team_evidence>\n\n"
     "<optimization_history>\n{optimization_history}\n</optimization_history>\n\n"
     "<refined_context>\n{refined_context}\n</refined_context>\n\n"
-    "<retrieved_evidence>\n{evidence_sections}\n</retrieved_evidence>\n\n"
+    "<retrieved_evidence>\n{retrieved_evidence}\n</retrieved_evidence>\n\n"
     "<story_directives>\n{story_directives}\n</story_directives>\n\n"
     "For each failed claim, check red_team_evidence FIRST for correction data. "
     "Use retrieved_evidence only as fallback. "
@@ -171,6 +171,22 @@ class ScriptOptimizerAgent(LLMAgent):
             else "No additional evidence was retrieved. Rely solely on the refined_context."
         )
 
+        gated_tool = self.di_tools.get("retrieve_evidence_for_claim")
+        if gated_tool and active_failures:
+            per_claim_results = []
+            for claim in active_failures:
+                claim_text = claim.get("text") or claim.get("claim_text", "")
+                if claim_text:
+                    evidence = await gated_tool.callable(claim_text)
+                    per_claim_results.append(
+                        f"Claim: {claim_text}\nEvidence: {evidence}"
+                    )
+            if per_claim_results:
+                evidence_prompt += (
+                    "\n\n=== PER-CLAIM EVIDENCE ===\n\n"
+                    + "\n\n---\n\n".join(per_claim_results)
+                )
+
         red_team_evidence_formatted = (
             _format_red_team_evidence(red_team_evidence)
             if red_team_evidence
@@ -202,7 +218,7 @@ class ScriptOptimizerAgent(LLMAgent):
                     optimization_history
                 ),
                 "refined_context": refined_context,
-                "evidence_sections": evidence_prompt,
+                "retrieved_evidence": evidence_prompt,
                 "story_directives": story_directives_text,
             }
         )
