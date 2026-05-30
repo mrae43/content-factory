@@ -40,6 +40,7 @@ def _make_agent():
     agent.model_name = "gemini-2.5-flash"
     agent.temperature = 0.3
     agent.llm = MagicMock()
+    agent.di_tools = {}
     return agent
 
 
@@ -75,7 +76,7 @@ async def test_returns_success_with_patched_script(
     assert "Target Audience: Investors" in invoked_input["story_directives"]
     assert "Tone: analytical" in invoked_input["story_directives"]
     assert "Angle: economic risks" in invoked_input["story_directives"]
-    assert "BRICS GDP grew 3.2%" in invoked_input["evidence_sections"]
+    assert "BRICS GDP grew 3.2%" in invoked_input["retrieved_evidence"]
 
 
 @pytest.mark.agent
@@ -135,7 +136,7 @@ async def test_chain_receives_formatted_claims(
     assert "Replaced 15%" in invoked_input["optimization_history"]
     assert invoked_input["original_script"] == "BRICS GDP grew 15% last year."
     assert invoked_input["refined_context"] == SAMPLE_REFINED_CONTEXT
-    assert "Chunk 1 (similarity: 0.92): IMF data." in invoked_input["evidence_sections"]
+    assert "Chunk 1 (similarity: 0.92): IMF data." in invoked_input["retrieved_evidence"]
 
 
 @pytest.mark.agent
@@ -163,7 +164,7 @@ async def test_handles_empty_evidence_sections(
     assert result.status == AgentActionStatus.SUCCESS
     call_args = mock_ainvoke.call_args
     invoked_input = call_args[0][0]
-    assert "No additional evidence was retrieved" in invoked_input["evidence_sections"]
+    assert "No additional evidence was retrieved" in invoked_input["retrieved_evidence"]
 
 
 def test_format_active_failures_single():
