@@ -136,7 +136,9 @@ async def test_chain_receives_formatted_claims(
     assert "Replaced 15%" in invoked_input["optimization_history"]
     assert invoked_input["original_script"] == "BRICS GDP grew 15% last year."
     assert invoked_input["refined_context"] == SAMPLE_REFINED_CONTEXT
-    assert "Chunk 1 (similarity: 0.92): IMF data." in invoked_input["retrieved_evidence"]
+    assert (
+        "Chunk 1 (similarity: 0.92): IMF data." in invoked_input["retrieved_evidence"]
+    )
 
 
 @pytest.mark.agent
