@@ -509,6 +509,15 @@ class RedTeamAgent(LLMAgent):
                     similarity_threshold=threshold,
                 )
                 evidence_chunks = [r["content"] for r in evidence_results]
+                if len(evidence_chunks) < top_k:
+                    global_results = await search_tool.callable(
+                        query=claim.search_query,
+                        job_id=None,
+                        scopes=["GLOBAL"],
+                        top_k=top_k - len(evidence_chunks),
+                        similarity_threshold=threshold,
+                    )
+                    evidence_chunks.extend(r["content"] for r in global_results)
                 enriched_claims.append(
                     ClaimEvidence(
                         claim_text=claim.claim_text,
