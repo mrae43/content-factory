@@ -97,6 +97,7 @@ class VideoFormatterOutput(BaseModel):
     total_duration_seconds: float
     visual_style: str
     audio_direction: str
+    unified_visual_prompt: str = Field(min_length=20)
 
 
 BLOG_PLAN_SYSTEM = (
