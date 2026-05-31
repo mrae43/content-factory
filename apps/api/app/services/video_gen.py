@@ -28,9 +28,9 @@ class VideoGenProvider(ABC):
 
 class TogetherVideoGen(VideoGenProvider):
     def __init__(self, api_key: str):
-        from together import Together
+        from together import AsyncTogether
 
-        self.client = Together(api_key=api_key)
+        self.client = AsyncTogether(api_key=api_key)
 
     async def generate_video(
         self,
@@ -83,10 +83,16 @@ def _resolve_video_provider(provider_name: str = "") -> tuple[str, dict]:
     return provider_name, config
 
 
+_video_gen_provider_cache: Dict[str, VideoGenProvider] = {}
+
+
 def get_video_gen_provider(provider_name: str = "") -> VideoGenProvider:
-    key, config = _resolve_video_provider(provider_name)
-    api_key = getattr(settings, config["api_key_attr"], None)
-    return config["class"](api_key=api_key)
+    key = provider_name or _DEFAULT_VIDEO_PROVIDER
+    if key not in _video_gen_provider_cache:
+        _, config = _resolve_video_provider(key)
+        api_key = getattr(settings, config["api_key_attr"], None)
+        _video_gen_provider_cache[key] = config["class"](api_key=api_key)
+    return _video_gen_provider_cache[key]
 
 
 def make_generate_video_tool() -> Tool:

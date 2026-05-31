@@ -91,8 +91,6 @@ class VideoGeneratorAgent(ServiceAgent):
         max_retries = settings.video_gen_max_poll_retries
 
         for attempt in range(max_retries):
-            await asyncio.sleep(poll_interval)
-
             try:
                 poll_result = await poll_tool.callable(job_id=video_job_id)
             except Exception as exc:
@@ -124,6 +122,8 @@ class VideoGeneratorAgent(ServiceAgent):
                     reasoning=f"Video generation failed: {failure_reason}",
                     confidence_score=0.0,
                 )
+
+            await asyncio.sleep(poll_interval)
 
         if not download_url:
             return AgentResult(

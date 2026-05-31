@@ -1,19 +1,25 @@
+from typing import Any, Dict
+
 from app.core.config import settings
 from app.services.tools import Tool
 
+_storage_cache: Dict[str, Any] = {}
+
 
 def get_storage():
-    if settings.storage_backend == "local":
-        from app.storage.local import LocalStorage
+    backend = settings.storage_backend
+    if backend not in _storage_cache:
+        if backend == "local":
+            from app.storage.local import LocalStorage
 
-        return LocalStorage()
+            _storage_cache[backend] = LocalStorage()
+        elif backend == "s3":
+            from app.storage.s3 import S3Storage
 
-    if settings.storage_backend == "s3":
-        from app.storage.s3 import S3Storage
-
-        return S3Storage()
-
-    raise ValueError(f"Unknown storage backend: {settings.storage_backend}")
+            _storage_cache[backend] = S3Storage()
+        else:
+            raise ValueError(f"Unknown storage backend: {settings.storage_backend}")
+    return _storage_cache[backend]
 
 
 def make_upload_image_tool() -> Tool:

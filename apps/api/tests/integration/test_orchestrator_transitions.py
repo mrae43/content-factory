@@ -2212,7 +2212,7 @@ class TestTransitionAssetGeneration:
                 new_callable=AsyncMock,
             ) as mock_get_format_script,
             patch(
-                "app.workers.orchestrator.AssetStudioAgent",
+                "app.workers.orchestrator.VideoGeneratorAgent",
                 return_value=_mock_agent_class(result).return_value,
             ),
             patch(
@@ -2251,7 +2251,7 @@ class TestTransitionAssetGeneration:
                 new_callable=AsyncMock,
             ) as mock_get_format_script,
             patch(
-                "app.workers.orchestrator.AssetStudioAgent",
+                "app.workers.orchestrator.VideoGeneratorAgent",
                 return_value=_mock_agent_class(error_result).return_value,
             ),
             patch(
@@ -2455,7 +2455,7 @@ class TestOrchestratorMultiStep:
                 return_value=_mock_agent_class(red_team_result).return_value,
             ),
             patch(
-                "app.workers.orchestrator.AssetStudioAgent",
+                "app.workers.orchestrator.VideoGeneratorAgent",
                 return_value=_mock_agent_class(asset_result).return_value,
             ),
             patch(
@@ -2475,6 +2475,7 @@ class TestOrchestratorMultiStep:
                                 "_format": "video",
                                 "format_payload": {"slides": []},
                                 "visual_style": "Cinematic",
+                                "video_url": "s3://factory/renders/final.mp4",
                             },
                             attempts=1,
                         )
@@ -2614,7 +2615,7 @@ class TestOrchestratorMultiStep:
                 return_value=_mock_agent_class(copy_result).return_value,
             ),
             patch(
-                "app.workers.orchestrator.AssetStudioAgent",
+                "app.workers.orchestrator.VideoGeneratorAgent",
                 return_value=_mock_agent_class(asset_result).return_value,
             ),
             patch(

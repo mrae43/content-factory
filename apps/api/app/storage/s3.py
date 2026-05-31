@@ -1,5 +1,6 @@
 import boto3
 from botocore.config import Config as BotoConfig
+from botocore.exceptions import ClientError
 from app.core.config import settings
 
 
@@ -23,8 +24,11 @@ class S3Storage:
             return
         try:
             self.client.head_bucket(Bucket=self.bucket)
-        except Exception:
-            self.client.create_bucket(Bucket=self.bucket)
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "404":
+                self.client.create_bucket(Bucket=self.bucket)
+            else:
+                raise
         self._bucket_checked = True
 
     def _ensure_video_bucket(self) -> None:
@@ -32,8 +36,11 @@ class S3Storage:
             return
         try:
             self.client.head_bucket(Bucket=self.bucket_videos)
-        except Exception:
-            self.client.create_bucket(Bucket=self.bucket_videos)
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "404":
+                self.client.create_bucket(Bucket=self.bucket_videos)
+            else:
+                raise
         self._video_bucket_checked = True
 
     def upload_image(
