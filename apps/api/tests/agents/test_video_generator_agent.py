@@ -225,14 +225,16 @@ async def test_returns_error_when_polls_exhausted():
     gen_tool = _make_gen_tool()
     max_retries = 3
     poll_tool = _make_poll_tool(
-        side_effect=[_make_poll_result(status="processing", download_url=None)] * max_retries
+        side_effect=[_make_poll_result(status="processing", download_url=None)]
+        * max_retries
     )
     upload_tool = _make_upload_tool()
 
     agent = _make_agent(gen_tool=gen_tool, poll_tool=poll_tool, upload_tool=upload_tool)
 
     with patch(
-        "app.workers.video_generator_agent.settings.video_gen_max_poll_retries", max_retries
+        "app.workers.video_generator_agent.settings.video_gen_max_poll_retries",
+        max_retries,
     ):
         with patch(
             "app.workers.video_generator_agent.settings.video_gen_poll_interval_seconds",
