@@ -55,6 +55,13 @@ class Settings(BaseSettings):
     image_gen_timeout_seconds: int = 30
     image_storage_path: str = "static/carousel_images"
     image_gen_slide_delay: float = 1.5
+
+    # Video Generation
+    video_gen_provider: str = "together"
+    video_gen_model: str = ""
+    video_gen_poll_interval_seconds: int = 5
+    video_gen_max_poll_retries: int = 60
+
     storage_backend: str = "s3"
 
     # S3 / SeaweedFS
