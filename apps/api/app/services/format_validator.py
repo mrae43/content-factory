@@ -141,6 +141,31 @@ class VideoValidator(FormatValidator):
                 ),
             )
 
+        unified = validated.unified_visual_prompt.strip()
+        if not unified:
+            return FormatValidationResult(
+                valid=False,
+                error_message="unified_visual_prompt must not be empty.",
+            )
+
+        if len(unified) < 20:
+            return FormatValidationResult(
+                valid=False,
+                error_message=(
+                    f"unified_visual_prompt is too short ({len(unified)} chars). "
+                    "Minimum length is 20 characters."
+                ),
+            )
+
+        if unified == validated.visual_style.strip():
+            return FormatValidationResult(
+                valid=False,
+                error_message=(
+                    "unified_visual_prompt must be more than just the visual_style. "
+                    "Include scene-by-scene visual direction."
+                ),
+            )
+
         return FormatValidationResult(
             valid=True,
             validated_payload=validated.model_dump(by_alias=True, mode="json"),
