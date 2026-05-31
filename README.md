@@ -1,22 +1,25 @@
 # Content Factory
 
-Multi-agent system that generates multi-format content (Shorts/Reels/TikToks, blog articles, social carousels) for high-stakes domains — politics, macro-economics, historical analysis. Treats **Truth and Guardrails as first-class citizens** via a rigorous Red Team agentic loop that verifies claims against a vector database before any rendering occurs.
+Multi-agent system that generates multi-format content (Shorts/Reels/TikToks, blog articles, social carousels, **and now full video assets**) for high-stakes domains — politics, macro-economics, historical analysis. Treats **Truth and Guardrails as first-class citizens** via a rigorous Red Team agentic loop that verifies claims against a vector database before any rendering occurs.
 
 **Nx monorepo** with a Python FastAPI backend, Next.js 16 frontend (App Router, React 19), and shared TypeScript types. Ships with an editorial design system (Stone & Copper palette, Playfair Display + Inter + JetBrains Mono typography, dark mode).
 
 ## Core Differentiators
 
 - **Agentic Over Atomic** — Copywriter and Red Team agents debate and correct each other through structured revision loops (Evaluator-Optimizer pattern).
-- **Prompt Chaining with Narrative + Evidence Injection** — The orchestrator builds a condensed `refined_context` narrative directly from `user_reference` + `story_directives`, persisted to the `render_jobs` table. A `ContextBuilder` service then performs structured RAG retrieval using `title` + `story_directives` + `user_reference`, producing `evidence_sections` — a formatted text block of similarity-scored, relevance-tagged chunks. The CopywriterAgent works from both `refined_context` and `evidence_sections` instead of calling the vector store directly — eliminating context-window bloat, enabling auditable research summaries with grounded evidence, and ensuring consistent behavior across revision loops.
-- **Structured Evidence Retrieval** — A dedicated `ContextBuilder` service queries the vector store before script writing, enriching the copywriter prompt with similarity-scored, relevance-tagged evidence chunks (`story_directives` guide the query composition). Evidence sections are injected directly into agent prompts for grounded generation.
+- **Prompt Chaining with Narrative + Evidence Injection** — The orchestrator builds a condensed `refined_context` narrative directly from `user_reference` + `story_directives`, persisted to the `render_jobs` table. A `ContextBuilder` service then performs structured RAG retrieval using `title` + `story_directives` + `user_reference`, producing `evidence_sections` — a formatted text block of similarity-scored, relevance-tagged chunks that spans **both run-local and long-term (GLOBAL) memory**. The CopywriterAgent works from both `refined_context` and `evidence_sections` instead of calling the vector store directly — eliminating context-window bloat, enabling auditable research summaries with grounded evidence, and ensuring consistent behavior across revision loops.
+- **Structured Evidence Retrieval** — A dedicated `ContextBuilder` service queries the vector store before script writing, enriching the copywriter prompt with similarity-scored, relevance-tagged evidence chunks (`story_directives` guide the query composition). Dual diversified queries (title-only + title+angle+reference) retrieve from three scopes: `RAW-CONTEXT` (user-provided), `LOCAL` (web search), and `GLOBAL` (long-term compressed facts from prior completed jobs). Evidence sections are injected directly into agent prompts for grounded generation.
+- **Long-Term Memory (GLOBAL Scope)** — At pipeline completion, SUPPORTED claims are compressed into factual statements via a dedicated LLM (`promotion_model`) and ingested as `GLOBAL`-scope chunks (`job_id=None`). These survive job deletion and are queried by the ContextBuilder on all subsequent runs — creating a persistent organizational knowledge base that grows with every completed job.
+- **Working Memory Across Pipeline** — A tripartite `working_memory` JSONB column on `RenderJob` persists context across pipeline transitions: `copywriter_rationale` (narrative intent and claim disambiguations), `optimizer_phase` (per-iteration patch summaries, resolved claims, fallback rate), and `epistemic_ledger` (weak passes — claims with UNCERTAIN/CONTESTED/SUPPORTED-low-confidence). Agents remain stateless; the orchestrator reads and writes working memory, injecting relevant sections into agent prompts. Formatters consume the epistemic ledger for automatic hedging of uncertain content.
 - **Zero-Hallucination Guardrails** — Red Team breaks scripts into atomic claims, cross-references each against the vector store directly, and persists verdicts to Postgres. Claims that fail are sent back for revision (max 3 attempts before human escalation). Configurable `GuardrailStrictness` profiles (`Low`, `Medium`, `High`) control similarity thresholds, `claim_categories` (claim types checked), and whether `UNCERTAIN` verdicts trigger revision (`uncertain_is_soft_fail`) or require human review (`requires_human_review`). An `uncertain_pass_through` escape hatch on `StoryDirectives` waives only the UNCERTAIN revision trigger under High profile.
 - **Governance-as-Code** — Full audit trail via `fact_check_claims` table with evidence references linked to source chunks. API returns the complete fact-check report alongside scripts and assets.
 - **Web-Enriched RAG** — Tavily search enriches user-provided context with live web results, ingested as vector chunks for semantic retrieval by downstream agents.
 - **Evaluator-Optimizer with Short-Term Memory** — On revision, a dedicated `ScriptOptimizerAgent` surgically patches failed claims instead of re-drafting the entire script, preserving quality sections and reducing hallucination drift. An **Optimization History Ledger** (ADR 0006) tracks claim identity across evaluator-optimizer iterations via Gemini embedding anchoring — a `ClaimMapper` service (`app/services/claim_mapper.py`) computes cosine similarity matrices with greedy 1-to-1 assignment to resolve which claims were fixed, regressed, or unchanged, preventing the optimizer from reverting previously-successful patches.
-- **Multi-Format Output** — Pipeline branches by `format_type` after Red Team approval: `video` (asset generation), `blog` (structured articles with SEO metadata), `carousel` (platform-specific slide decks), or `all` (blog + carousel in parallel, then assets). `FormatterHarness` wraps each formatter with generate-validate-retry loops and doom loop detection.
+- **Live Video Generation** — The `VideoGeneratorAgent` (`ServiceAgent`) generates real videos via Together AI's video API — submits a generation job, polls for completion (up to 300s), downloads the result, and uploads to S3/SeaweedFS. Replaces the legacy mocked-URL `AssetStudioAgent`. The `VideoFormatterAgent` produces a single-shot `unified_visual_prompt` with scene structure, duration, and visual style. A provider-agnostic `VideoGenProvider` ABC mirrors the LLM provider registry pattern for future backend swaps.
+- **Multi-Format Output** — Pipeline branches by `format_type` after Red Team approval: `video` → formatting (video storyboard) → asset generation (render), `blog` → formatting → complete, `carousel` → formatting → asset generation (images) → complete, or `all` → blog + carousel formatting in parallel → asset generation → complete. `AgentHarness` wraps each formatter with generate-validate-retry loops and doom loop detection.
 - **S3/SeaweedFS Object Storage** — `StorageAdapter` abstracts between `S3Storage` (boto3, auto-creates buckets, `device_id/job_id` key prefixing) and `LocalStorage` (static files). SeaweedFS runs as a first-class Docker service. Default backend: `s3`.
 - **Platform-Aware Validation** — `BlogValidator` and `CarouselValidator` enforce schema constraints and platform-specific character limits (Twitter 280, LinkedIn 700, Instagram 2200) before accepting output.
-- **Declarative Tool Registry** — All pipeline capabilities (image generation/upload, web search, semantic search, chunk ingestion, format validation) are registered as first-class `Tool` objects in a singleton `ToolRegistry` (`app/services/tools.py`). Symmetric permissions enforce that both the tool and the agent must consent to binding, caught at composition time. Agents declare dependencies via `_required_di_tools` and `_required_llm_tools` class variables; `AgentHarness` injects permitted tools automatically.
+- **Declarative Tool Registry** — All pipeline capabilities (image generation/upload, video gen/poll/upload, web search, semantic search, chunk ingestion, format validation) are registered as first-class `Tool` objects in a singleton `ToolRegistry` (`app/services/tools.py`). **9 standard tools** registered at startup. Symmetric permissions enforce that both the tool and the agent must consent to binding, caught at composition time. Agents declare dependencies via `_required_di_tools` and `_required_llm_tools` class variables; `AgentHarness` injects permitted tools automatically.
 - **Context Checkpointing for Retries** — The RedTeamAgent checkpoints intermediate state (claim extraction + evidence retrieval) across both tenacity and harness retry layers, preventing token waste. Two-tier retry policies (`agent_api_retry` inner 3 attempts, `agent_parent_retry` outer 3 attempts) with self-healing on checkpoint corruption.
 - **Two-Class Agent Hierarchy** — `LLMAgent` (provider-agnostic `self.llm`, tool-calling via `_run_tool_loop`) and `ServiceAgent` (deterministic, no LLM) both extend `BaseAgent`. All agents share declarative tool declarations, permission enforcement, and the `run(context)` → `_execute(context)` contract.
 
@@ -24,13 +27,13 @@ Multi-agent system that generates multi-format content (Shorts/Reels/TikToks, bl
 
 ## The 9-Step Pipeline
 
-A `RenderJob` flows through these state transitions asynchronously. A **Context Retrieval** phase (Step 4) replaces the legacy `FACT_CHECKING_RESEARCH` passthrough — the `refined_context` is built directly from `user_reference` + `story_directives`, and a `ContextBuilder` assembles retrieved evidence chunks into an `AssembledContext` for the copywriter.
+A `RenderJob` flows through these state transitions asynchronously. A **Context Retrieval** phase (Step 4) replaces the legacy `FACT_CHECKING_RESEARCH` passthrough — the `refined_context` is built directly from `user_reference` + `story_directives`, and a `ContextBuilder` assembles retrieved evidence chunks (from RAW-CONTEXT, LOCAL, and GLOBAL scopes) into an `AssembledContext` for the copywriter.
 
 After Red Team approval (Step 6), the pipeline branches by `format_type`:
 
-- **`video`** → skips FORMATTING, goes straight to ASSET_GENERATION
-- **`blog`** or **`carousel`** → FORMATTING → COMPLETED
-- **`all`** (default) → FORMATTING (blog + carousel in parallel) → ASSET_GENERATION → COMPLETED
+- **`video`** → FORMATTING (VideoFormatterAgent produces storyboard) → ASSET_GENERATION (VideoGeneratorAgent renders) → COMPLETED
+- **`blog`** or **`carousel`** → FORMATTING → ASSET_GENERATION (carousel images only) → COMPLETED
+- **`all`** (default) → FORMATTING (blog + carousel in parallel) → ASSET_GENERATION (video + carousel images) → COMPLETED
 
 ### 1. Ingestion (`PENDING`)
 User submits a `title` (e.g., *"BRICS De-dollarization 2025"*) along with `user_reference` (narrative foundation text), `research_inputs.source_urls` (URLs for Tavily extraction), `story_directives` (target_audience, tone, angle, guardrail_strictness), `format_type`, `platform`, and optional `device_id` (for S3 key prefixing) via `POST /api/v1/jobs/`.
@@ -44,16 +47,24 @@ Tavily web search enriches the title with live results (ingested as `LOCAL`-scop
 ### 4. Context Retrieval & Synthesis (`RETRIEVAL`)
 The orchestrator builds the `refined_context` narrative directly from `user_reference` + `story_directives` (no LLM Research Agent call) — a condensed, self-contained research brief persisted to the `render_jobs` table.
 
-The **ContextBuilder** (`app/services/context_builder.py`) then performs a structured RAG query combining the `title`, `story_directives` (target_audience, tone, angle), and `user_reference` against both `RAW-CONTEXT` and `LOCAL` scopes. Results are enriched with `topic_relevance` labels (HIGH ≥ 0.75, MEDIUM ≥ 0.5, LOW) and `source_type` metadata, then formatted into `evidence_sections` — a text block injected into the Copywriter/Optimizer agent prompts. The full `AssembledContext` (narrative_summary, evidence_sections, raw_chunks) is persisted as a JSONB column on `render_jobs`.
+The **ContextBuilder** (`app/services/context_builder.py`) then performs a **dual diversified RAG query** (q1: title, q2: title + angle + user_reference) against three vector scopes:
+
+| Scope | Source | Lifespan |
+|-------|--------|----------|
+| `RAW-CONTEXT` | User-provided text chunks | Survives until job deletion |
+| `LOCAL` | Tavily web search + URL extractions | **Cleaned up after COMPLETED** |
+| `GLOBAL` | Compressed facts from prior completed jobs | **Persistent** — `job_id=None`, never cleaned up |
+
+Results are enriched with `topic_relevance` labels (HIGH ≥ 0.75, MEDIUM ≥ 0.5, LOW), `source_type` metadata, and `similarity_score`. They are formatted into two evidence sections — `=== CURRENT RUN RESEARCH ===` (local) and `=== SYSTEM INTEL ===` (global) — then injected into agent prompts as `evidence_sections`. The full `AssembledContext` (narrative_summary, evidence_sections, raw_chunks) is persisted as a JSONB column on `render_jobs`.
 
 A retry mechanism (`retrieval_retry_count`, max `retrieval_retry_max` = 3) ensures that if `assembled_context` is missing when SCRIPTING begins, the job loops back to RETRIEVAL instead of failing.
 
 ### 5. Script & Storyboard (`SCRIPTING`)
-The **Copywriter Agent** (`meta-llama/Llama-3.3-70B-Instruct-Turbo`, temp=0.7, configurable) receives the **`refined_context`** + **`evidence_sections`** (from the AssembledContext) + **`story_directives`** (target_audience, tone, angle) from the orchestrator (not the raw vector store). This curated, evidence-rich context ensures a bounded, consistent input regardless of chunk count or embedding noise, and grounds the script in verifiable source material. The agent drafts a retention-optimized script.
+The **Copywriter Agent** (`meta-llama/Llama-3.3-70B-Instruct-Turbo`, temp=0.7, configurable) receives the **`refined_context`** + **`evidence_sections`** (from the AssembledContext) + **`story_directives`** (target_audience, tone, angle) + **`working_memory.copywriter_rationale`** from the orchestrator. This curated, evidence-rich context ensures a bounded, consistent input regardless of chunk count or embedding noise, and grounds the script in verifiable source material. The agent drafts a retention-optimized script and populates `working_memory.copywriter_rationale` with narrative intent and claim disambiguations.
 
 When `evidence_sections` is empty (e.g., ContextBuilder retrieved zero chunks), the agent receives a fallback message `"No additional evidence was retrieved"` and proceeds with `refined_context` alone.
 
-On revision (when Red Team rejects claims), the **Script Optimizer Agent** (`openai/gpt-oss-20b`, temp=0.3, configurable) receives the same `evidence_sections` and `story_directives` alongside the **active failures** and **optimization history** from the ledger (see Step 6) and patches only the failed claims surgically — preserving the rest of the script and never reverting previously-successful patches.
+On revision (when Red Team rejects claims), the **Script Optimizer Agent** (`openai/gpt-oss-20b`, temp=0.3, configurable) receives the same `evidence_sections` and `story_directives` alongside the **active failures**, **optimization history** from the ledger, and **`working_memory.optimizer_phase`** — then patches only the failed claims surgically, preserving the rest of the script and never reverting previously-successful patches. A `retrieve_evidence_for_claim` tool (two-tier: pre-existing Red Team evidence first, semantic search fallback) enables the optimizer to verify its own patches.
 
 ### 6. Red Team Evaluation (`FACT_CHECKING_SCRIPT`)
 The critical step. The **Red Team Agent** (`meta-llama/Llama-3.3-70B-Instruct-Turbo`, temp=0.0, configurable) uses a three-pass evaluation with `.with_structured_output()`:
@@ -64,26 +75,53 @@ The critical step. The **Red Team Agent** (`meta-llama/Llama-3.3-70B-Instruct-Tu
 
 After each Red Team pass, the **ClaimMapper** (`app/services/claim_mapper.py`) updates the **Optimization History Ledger** — a structured JSONB column on the `Script` model that tracks claim identity across iterations via Gemini embedding anchoring. It computes a cosine similarity matrix between previous and new claims, runs greedy 1-to-1 assignment (threshold 0.75), and resolves which claims were fixed, regressed, or unchanged. The ledger feeds into the `ScriptOptimizerAgent` prompt on the next revision so the optimizer never reverts a previously-successful patch.
 
+The orchestrator then updates the **epistemic ledger** (`working_memory.epistemic_ledger`) — tracking `weak_passes`: claims with UNCERTAIN, CONTESTED, or SUPPORTED-low-confidence verdicts. This ledger is consumed by formatters to automatically hedge uncertain content.
+
 Results:
 - **SUPPORTED** → Script passes, claims persisted to `fact_check_claims` table with evidence references (`evidence_text_inline` snapshot of raw chunk content, `hedge_required` flag for uncertain claims). A `hedge_index` JSONB is derived on the `RenderJob` for formatters to apply hedged language. Pipeline branches based on `format_type`.
-- **UNSUPPORTED/CONTESTED** → Script sent back to Step 5 with structured feedback and active failures from the ledger. After `max_red_team_revisions` failures → `HUMAN_REVIEW_NEEDED`
+- **UNSUPPORTED/CONTESTED** → Script sent back to Step 5 with structured feedback, active failures from the ledger, and the optimizer phase from working memory. After `max_red_team_revisions` failures → `HUMAN_REVIEW_NEEDED`
 - Human override available via `POST /api/v1/jobs/{id}/approve-script`
 
 ### 7. Format Output (`FORMATTING`)
-**Skipped for `video` format.** For `blog`, `carousel`, or `all` formats, structured output agents run:
+Format-specific agents produce structured output depending on `format_type`:
 
 - **BlogFormatterAgent** (LLMAgent) — Two-phase LLM calls (plan outline → execute full output) producing structured blog sections with SEO metadata
 - **CarouselFormatterAgent** (LLMAgent) — Two-phase LLM calls producing platform-specific slide decks with character-limit enforcement
+- **VideoFormatterAgent** (LLMAgent) — Two-phase LLM calls producing a `VideoFormatPayload` with `unified_visual_prompt`, scene breakdown, `total_duration_seconds`, `visual_style`, and `audio_direction`
 
-Each formatter is wrapped in an **`AgentHarness`** — a generate-validate-retry loop with tool injection, doom loop detection (SHA-256 payload hashing), LLM-callable tool binding (`_inject_llm_tools`), and validator integration. `BlogValidator` and `CarouselValidator` enforce schema constraints and platform rules. Max 2 retries (3 total attempts).
+Each formatter is wrapped in an **`AgentHarness`** — a generate-validate-retry loop with tool injection, doom loop detection (SHA-256 payload hashing), LLM-callable tool binding (`_inject_llm_tools`), and validator integration. `BlogValidator` and `CarouselValidator` enforce schema constraints and platform rules. Max 2 retries (3 total attempts). Formatters receive the **epistemic ledger** from working memory to apply hedging on weak claims.
 
-When `format_type = "all"`, both formatters run concurrently via `asyncio.gather()`.
+When `format_type = "all"`, blog and carousel formatters run concurrently via `asyncio.gather()`. Video format always routes through FORMATTING first (to produce the storyboard), then to ASSET_GENERATION for rendering.
+
+After formatting, `_next_status_after_formatting()` routes to:
+- **COMPLETED** — blog-only or carousel-only jobs (no visual assets needed)
+- **ASSET_GENERATION** — video jobs, carousel jobs, or `all` jobs (assets needed)
 
 ### 8. Asset Generation (`ASSET_GENERATION`)
-The orchestrator branches by format: **video** jobs use the **Asset Studio Agent** (`openai/gpt-oss-20b`, configurable — generates production prompts, returns mocked `s3://` URL); **carousel** jobs use the **CarouselImageAgent** which generates real images via Together AI `FLUX.1-schnell` with platform-specific dimensions (Instagram/LinkedIn 1088×1344, Twitter 1088×1616, TikTok 1088×1920, YouTube 1920×1088), editorial brand styling (copper and stone tones, flat vector illustration, no text/typography). Images are uploaded via `StorageAdapter` (default: **S3** via SeaweedFS using boto3 with auto-created buckets, fallback: **local** → `static/carousel_images/`) with a `device_id/job_id` folder prefix for multi-device isolation. Image generation includes retry logic (3 attempts with exponential backoff) **and a global rate-limit coordinator** (asyncio `Lock`, 3s minimum gap between calls, exponential backoff on HTTP 429). A `POST /api/v1/jobs/{id}/regenerate-assets` endpoint allows re-running carousel image generation post-completion. **SeaweedFS** (S3-compatible object store) runs as a Docker service alongside the stack.
+The orchestrator branches by format:
+
+- **Video** — Runs the **VideoGeneratorAgent** (`ServiceAgent`), a deterministic 4-step pipeline:
+  1. Submit via `generate_video` tool (Together AI `videos.create`)
+  2. Poll for completion via `poll_video` tool (up to `video_gen_max_poll_retries`=60 attempts at 5s intervals = 300s timeout)
+  3. Download video bytes via `aiohttp`
+  4. Upload to S3/SeaweedFS via `upload_video` tool (fallback: return download URL with `confidence_score=0.7` if upload fails)
+  - Uses `VideoGenProvider` ABC (`app/services/video_gen.py`) with `TogetherVideoGen` implementation. Provider registry pattern mirrors the LLM provider system.
+
+- **Carousel** — Runs the **CarouselImageAgent** which generates real images via Together AI `FLUX.1-schnell` with platform-specific dimensions (Instagram/LinkedIn 1088×1344, Twitter 1088×1616, TikTok 1088×1920, YouTube 1920×1088), editorial brand styling (copper and stone tones, flat vector illustration, no text/typography). Images are uploaded via `StorageAdapter` (default: **S3** via SeaweedFS using boto3 with auto-created buckets, fallback: **local** → `static/carousel_images/`) with a `device_id/job_id` folder prefix for multi-device isolation. Includes retry logic (3 attempts with exponential backoff) and a global rate-limit coordinator (asyncio `Lock`, 3s minimum gap between calls, exponential backoff on HTTP 429).
+
+- **`all`** — Runs both video and carousel generation for their respective formats.
+
+A `POST /api/v1/jobs/{id}/regenerate-assets` endpoint allows re-running carousel image generation post-completion. **SeaweedFS** (S3-compatible object store) runs as a Docker service alongside the stack.
+
+The legacy `AssetStudioAgent` (mocked `s3://` URLs) is deprecated and no longer used in the orchestrator path.
 
 ### 9. Completion (`COMPLETED`)
-LOCAL-scope vector chunks are cleaned up. The final job state, scripts, audit trail, and asset metadata are available via the API.
+Two-phase teardown:
+
+1. **GLOBAL Promotion** — The orchestrator retrieves the latest SUPPORTED claims from the current job, uses a dedicated LLM (`promotion_model`, default `openai/gpt-oss-20b`) to compress each into a factual statement, and ingests them as `GLOBAL`-scope chunks (`job_id=None`, `source_type="COMPRESSED_FACT"`) — creating persistent long-term memory for future jobs.
+2. **LOCAL Cleanup** — `LOCAL`-scope vector chunks (Tavily web search results and URL extractions) are garbage-collected. `RAW-CONTEXT` and `GLOBAL` chunks survive.
+
+The final job state, scripts, audit trail, asset metadata, and S3 URLs are available via the API.
 
 ---
 
@@ -106,16 +144,18 @@ LOCAL-scope vector chunks are cleaned up. The final job state, scripts, audit tr
 | Monorepo | Nx workspace, pnpm 11 (with `allowBuilds` in `pnpm-workspace.yaml`) |
 | Frontend | Next.js 16 (App Router), React Query, Zustand, shadcn, Tailwind CSS v4 |
 | API | FastAPI (async, Pydantic V2), Python 3.11, uv |
-| Database | PostgreSQL 16 + pgvector (HNSW index, `factory` schema) |
+| Database | PostgreSQL 16 + pgvector (HNSW index, `factory` schema, indexes on GLOBAL scope) |
 | ORM | SQLAlchemy 2 async (`asyncpg`) |
 | Migrations | Alembic (sync via `psycopg2`) |
 | AI Orchestration | LangChain + Google GenAI + Together AI (OpenAI-compatible). Claim embedding mapping via numpy. |
+| Video Generation | Together AI `videos.create` / `videos.retrieve` via `AsyncTogether`. Provider-agnostic `VideoGenProvider` ABC with registry pattern (`TogetherVideoGen`). Poll-and-download pattern with S3 upload. |
 | Image Generation | Together AI `v1/images/generations` with `FLUX.1-schnell` (configurable via `image_model` env var). Global rate-limit coordinator with exponential backoff. |
 | Storage | `StorageAdapter` dispatcher — default **S3** (`app/storage/s3.py`, via `boto3`, auto-creates buckets, targets SeaweedFS, `device_id/job_id` key prefixing), fallback **local** (`app/storage/local.py` → `static/carousel_images/`). Configured via `STORAGE_BACKEND` env var. |
-| Models | Two tiers via Together AI: **Premium** (`meta-llama/Llama-3.3-70B-Instruct-Turbo` for CopywriterAgent, RedTeamAgent), **Standard** (`openai/gpt-oss-20b` for ScriptOptimizerAgent, AssetStudioAgent, formatters). Each agent stage configurable via `{copywriter,evaluator,optimizer,asset,formatter}_{model,temperature}` env vars. Image model: `black-forest-labs/FLUX.1-schnell`. Eval suite uses separate `eval_*` models. Embeddings: `models/gemini-embedding-001` (Gemini). |
+| Models | Two tiers via Together AI: **Premium** (`meta-llama/Llama-3.3-70B-Instruct-Turbo` for CopywriterAgent, RedTeamAgent), **Standard** (`openai/gpt-oss-20b` for ScriptOptimizerAgent, formatters, promotion). Video gen: Together AI (provider default model). Image model: `black-forest-labs/FLUX.1-schnell`. Eval suite uses separate `eval_*` models. Embeddings: `models/gemini-embedding-001` (Gemini). |
 | Embeddings | `models/gemini-embedding-001` (768-dim, pgvector HNSW with cosine) |
 | Web Search | Tavily (`langchain-tavily`) |
 | Background Queue | `asyncio.create_task` + `FOR UPDATE SKIP LOCKED` (no Celery/Redis). Two-tier tenacity retry policies (`agent_api_retry` + `agent_parent_retry`) |
+| Working Memory | Tripartite JSONB on `RenderJob` (`copywriter_rationale`, `optimizer_phase`, `epistemic_ledger`) — orchestrator-owned, agents stay stateless |
 | Testing | pytest + pytest-asyncio + httpx + deepeval + LLM-as-Judge (Together AI) |
 | CI/CD | GitHub Actions (lint → unit/agent tests → eval/integration/docker) |
 | Containerization | Docker Compose (pgvector:pg16, pgAdmin4, SeaweedFS, API, Web) |
@@ -187,8 +227,8 @@ uv run pytest tests/ -v          # Run all tests
 docker compose exec api pytest tests/ -v
 
 # Run by marker
-uv run pytest -m unit            # Unit tests only (10 files)
-uv run pytest -m agent           # Agent tests only (9 files)
+uv run pytest -m unit            # Unit tests only (14 files)
+uv run pytest -m agent           # Agent tests only (11 files)
 uv run pytest -m eval            # Eval benchmarks
 uv run pytest -m golden          # Golden dataset validation
 uv run pytest -m integration     # Integration tests (format branching, CI-only)
@@ -252,8 +292,8 @@ Optional `.env` overrides — two model tiers via Together AI (unless `gemini-` 
 |----------|---------|-------------|
 | `OPTIMIZER_MODEL` | `openai/gpt-oss-20b` | Script Optimizer agent model (surgical patching) |
 | `OPTIMIZER_TEMPERATURE` | `0.3` | Script Optimizer agent temperature |
-| `ASSET_MODEL` | `openai/gpt-oss-20b` | Asset Studio agent model (prompt generation) |
-| `ASSET_TEMPERATURE` | `0.5` | Asset Studio agent temperature |
+| `ASSET_MODEL` | `openai/gpt-oss-20b` | (Legacy) Asset Studio agent model (deprecated — video now uses VideoGeneratorAgent) |
+| `ASSET_TEMPERATURE` | `0.5` | (Legacy) Asset Studio agent temperature |
 | `FORMATTER_MODEL` | `openai/gpt-oss-20b` | Blog/Carousel/Video formatter model |
 | `FORMATTER_TEMPERATURE` | `0.3` | Blog/Carousel/Video formatter temperature |
 | `MAX_RED_TEAM_REVISIONS` | `3` | Max revision loops before human escalation |
@@ -277,6 +317,12 @@ Optional `.env` overrides — two model tiers via Together AI (unless `gemini-` 
 | `SYNTHID_WATERMARK_ENABLED` | `True` | SynthID flag (no implementation yet) |
 | `WORKER_POLL_INTERVAL_SECONDS` | `5` | QueueWorker poll interval |
 | `WORKER_LOCK_TIMEOUT_MINUTES` | `15` | Stuck job recovery timeout |
+| `PROMOTION_MODEL` | `openai/gpt-oss-20b` | LLM for GLOBAL scope fact compression |
+| `PROMOTION_TEMPERATURE` | `0.3` | Temperature for GLOBAL promotion LLM |
+| `VIDEO_GEN_PROVIDER` | `together` | Video generation provider |
+| `VIDEO_GEN_MODEL` | `""` | Video generation model (empty = provider default) |
+| `VIDEO_GEN_POLL_INTERVAL_SECONDS` | `5` | Polling interval between video gen status checks |
+| `VIDEO_GEN_MAX_POLL_RETRIES` | `60` | Max poll attempts before timeout (5s × 60 = 300s) |
 | `EVAL_COPYWRITER_MODEL` | `MiniMaxAI/MiniMax-M2.7` | Eval copywriter agent (Together AI) |
 | `EVAL_COPYWRITER_TEMPERATURE` | `0.7` | Eval copywriter temperature |
 | `EVAL_RED_TEAM_MODEL` | `openai/gpt-oss-120b` | Eval Red Team agent (Together AI) |
@@ -295,51 +341,56 @@ Optional `.env` overrides — two model tiers via Together AI (unless `gemini-` 
 ```
 content-factory/                  # Nx workspace root
 ├── DESIGN.md                     # UI design source of truth — editorial theme, visual language, migration plan
+├── CONTEXT.md                    # Domain glossary — pipeline concepts, working memory, tools, model tiers
 ├── apps/
 │   ├── api/                      # Python FastAPI backend
 │   │   ├── app/
 │   │   │   main.py               # FastAPI app + lifespan (starts/stops QueueWorker), /images and /static mounts, redirect_slashes=False
 │   │   │   core/
-│   │   │     config.py            # pydantic-settings, reads .env (database_url — required, eval model configs)
+│   │   │     config.py            # pydantic-settings, reads .env (database_url — required, promotion_model, video_gen_*, eval model configs)
 │   │   │     guardrails.py        # GuardrailStrictness enum, GUARDRAIL_PROFILES, get_guardrail_config()
 │   │   │   api/routes.py         # /api/v1/jobs/ endpoints + health check + /regenerate-assets
 │   │   │   db/
-│   │   │     models.py           # SQLAlchemy models (factory schema) — RenderJob with title, device_id (S3 key prefix), user_reference, source_urls (JSONB), story_directives (JSONB), refined_context, assembled_context (JSONB), retrieval_retry_count. Script.format_payload uses TrackedJSONB (MutableDict) for in-place mutation support.
+│   │   │     models.py           # SQLAlchemy models (factory schema) — RenderJob with title, device_id (S3 key prefix), user_reference, source_urls (JSONB), story_directives (JSONB), refined_context, assembled_context (JSONB), working_memory (JSONB), retrieval_retry_count. Script.format_payload uses TrackedJSONB (MutableDict) for in-place mutation support.
 │   │   │     session.py          # async engine + session factory (settings.database_url)
 │   │   │     crud.py             # query helpers + queue operations
 │   │   │   schemas/
-│   │   │     shorts.py           # Pydantic request/response models + FormatTypeEnum, PlatformEnum, device_id for S3 key prefixing
-│   │   │     formats.py          # Structured format schemas (BlogSection, CarouselSlide, SeoMeta)
+│   │   │     shorts.py           # Pydantic request/response models + FormatTypeEnum, PlatformEnum, device_id for S3 key prefixing, AssembledContext
+│   │   │     formats.py          # Structured format schemas (BlogSection, CarouselSlide, VideoFormatPayload, SeoMeta)
 │   │   │   services/
 │   │   │     llm.py              # Multi-provider LLM routing (Gemini + Together AI)
-│   │   │     vector_store.py     # pgvector ingestion & semantic search
+│   │   │     vector_store.py     # pgvector ingestion & semantic search (RAW-CONTEXT, LOCAL, GLOBAL scopes)
 │   │   │     chunking.py         # Markdown text splitter
 │   │   │     web_search.py       # TavilySearchService
-│   │   │     context_builder.py  # RAG query composition, evidence formatting, AssembledContext
+│   │   │     context_builder.py  # RAG query composition (dual diversified queries), evidence formatting, AssembledContext — queries RAW-CONTEXT + LOCAL + GLOBAL
 │   │   │     claim_mapper.py     # Embedding-based claim identity tracking for the Optimization History Ledger (cosine similarity matrix + greedy 1-to-1 assignment)
-│   │   │     tools.py            # Tool + ToolRegistry — declarative, permission-gated tool registration (singleton, registered at startup)
+│   │   │     tools.py            # Tool + ToolRegistry — declarative, permission-gated tool registration (singleton, 9 standard tools)
+│   │   │     optimizer_tools.py  # make_gated_search_tool — two-tier evidence retrieval for ScriptOptimizerAgent (pre-existing evidence + semantic search fallback)
 │   │   │     format_validator.py # FormatValidator → BlogValidator, CarouselValidator
 │   │   │     image_gen.py        # ImageGenerationService — Together AI FLUX.1-schnell, retry logic, platform dimensions, global rate-limit coordinator (asyncio Lock, 3s min gap, exponential backoff on 429)
+│   │   │     video_gen.py        # VideoGenProvider ABC + TogetherVideoGen (Together AI videos.create/retrieve). Provider registry pattern. Tool factories: make_generate_video_tool, make_poll_video_tool
 │   │   │   storage/
 │   │   │     adapter.py          # get_storage() dispatcher (s3 or local)
 │   │   │     s3.py               # S3Storage — boto3 client, SeaweedFS, auto-create bucket
 │   │   │     local.py            # LocalStorage — saves to static/carousel_images/
 │   │   │   workers/
-│   │   │     orchestrator.py     # Agentic state machine
+│   │   │     orchestrator.py     # Agentic state machine — 11 states, working memory management, GLOBAL promotion, epistemic ledger
 │   │   │     queue_worker.py     # asyncio poll loop with SKIP LOCKED
-│   │   │     agents.py           # BaseAgent → LLMAgent (Copywriter, RedTeam, AssetStudio) + ServiceAgent
-│   │   │     optimizer.py        # ScriptOptimizerAgent (receives optimization history ledger)
+│   │   │     agents.py           # BaseAgent → LLMAgent (Copywriter, RedTeam, AssetStudio-deprecated) + ServiceAgent
+│   │   │     optimizer.py        # ScriptOptimizerAgent (receives optimization history ledger + working memory optimizer phase)
 │   │   │     formatters.py       # BlogFormatterAgent, CarouselFormatterAgent, VideoFormatterAgent
+│   │   │     video_generator_agent.py  # VideoGeneratorAgent (ServiceAgent) — 4-step: submit → poll → download → upload S3
 │   │   │     carousel_image_agent.py  # CarouselImageAgent (ServiceAgent) — real image gen via Together AI FLUX
 │   │   │     harness.py          # AgentHarness — generate-validate-retry with doom loop detection, tool injection, dual ServiceAgent/LLMAgent paths
 │   │   │     retry_policies.py   # Centralized two-tier tenacity configs (agent_api_retry + agent_parent_retry)
-│   │   │     tasks.py            # Post-completion LOCAL chunk cleanup
+│   │   │     tasks.py            # Post-completion LOCAL chunk cleanup + GLOBAL scope fact promotion
 │   │   ├── alembic/              # Database migrations
+│   │   │   versions/             # incl. migration for GLOBAL scope, working memory columns
 │   │   ├── tests/                # Python test suite
 │   │   │   ├── evals/
 │   │   │   │   ├── contracts/    # 27 eval contracts across 8 pipeline stages (Research → E2E)
 │   │   │   │   ├── fixtures/     # eval1_research.json — frozen Tavily corpus + cached scores
-│   │   │   │   ├── plans/        # Implementation plans for eval 1.x
+│   │   │   │   ├── plans/        # Implementation plans for eval 1.x + eval 9 (memory)
 │   │   │   │   ├── audit/        # Eval audit trail
 │   │   │   │   ├── conftest.py   # EvalRunner, researching_runner, quality_corpus fixtures
 │   │   │   │   ├── schemas.py    # ResearchingCase, QualityCorpus, CachedChunkScore, etc.
@@ -348,6 +399,38 @@ content-factory/                  # Nx workspace root
 │   │   │   │   ├── judge.py      # LLM-as-Judge scoring
 │   │   │   │   ├── rubrics.py    # Weighted scoring rubrics
 │   │   │   │   └── baselines.json
+│   │   │   ├── agents/           # 11 test files
+│   │   │   │   ├── test_asset_studio_agent.py
+│   │   │   │   ├── test_blog_formatter.py
+│   │   │   │   ├── test_carousel_formatter.py
+│   │   │   │   ├── test_carousel_image_agent.py
+│   │   │   │   ├── test_copywriter_agent.py
+│   │   │   │   ├── test_optimizer_agent.py
+│   │   │   │   ├── test_red_team_agent.py
+│   │   │   │   ├── test_tool_loop.py
+│   │   │   │   ├── test_video_formatter_agent.py
+│   │   │   │   └── test_video_generator_agent.py
+│   │   │   ├── unit/             # 14 test files
+│   │   │   │   ├── test_chunking.py
+│   │   │   │   ├── test_claim_mapper.py
+│   │   │   │   ├── test_config.py
+│   │   │   │   ├── test_context_builder.py
+│   │   │   │   ├── test_crud.py
+│   │   │   │   ├── test_format_validator.py
+│   │   │   │   ├── test_formatter_harness.py
+│   │   │   │   ├── test_image_gen_service.py
+│   │   │   │   ├── test_promote_to_global.py
+│   │   │   │   ├── test_queue_worker.py
+│   │   │   │   ├── test_routes.py
+│   │   │   │   ├── test_tool_wiring.py
+│   │   │   │   ├── test_vector_store.py
+│   │   │   │   ├── test_web_search.py
+│   │   │   │   └── test_working_memory.py
+│   │   │   ├── integration/      # 3 test files
+│   │   │   │   ├── test_formatting_transition.py
+│   │   │   │   ├── test_orchestrator_transitions.py
+│   │   │   │   └── test_researching_source_types.py
+│   │   │   └── golden/           # 23+ cases across 6 categories
 │   │   ├── scripts/              # Type generation scripts + capture_corpus.py (Eval 1 corpus builder), generate_openapi.py
 │   │   ├── pyproject.toml        # uv-managed Python deps
 │   │   ├── uv.lock               # Lockfile for deterministic Python builds
@@ -384,11 +467,11 @@ The project uses pytest with `asyncio_mode = "auto"` and five custom markers:
 
 | Marker | Scope | Files |
 |--------|-------|-------|
-| `unit` | Core logic — chunking, config, CRUD, routes, queue worker, vector store, context builder, formatter harness, format validator, image gen service, guardrail config, story directives | `tests/unit/` (10 files) |
-| `agent` | Agent behavior — copywriter, red team, asset studio, optimizer, blog formatter, carousel formatter, carousel image, video formatter | `tests/agents/` (9 files, 65+ tests) |
-| `eval` | Outcome evals with LLM-as-Judge scoring across pipeline stages + **Eval 1** (research coverage + chunk quality) | `tests/evals/` (6 files, 40+ parametrized cases) |
+| `unit` | Core logic — chunking, config, CRUD, routes, queue worker, vector store, context builder, formatter harness, format validator, image gen service, guardrail config, story directives, **working memory, GLOBAL promotion, tool wiring** | `tests/unit/` (14 files) |
+| `agent` | Agent behavior — copywriter, red team, asset studio (deprecated), optimizer, blog/carousel/video formatters, carousel image, **video generator** | `tests/agents/` (11 files, 80+ tests) |
+| `eval` | Outcome evals with LLM-as-Judge scoring across pipeline stages + **Eval 1** (research coverage + chunk quality) + **Eval 9** (memory implementation) | `tests/evals/` (6 files, 40+ parametrized cases) |
 | `golden` | Trajectory validation against golden dataset | `tests/golden/` (23+ cases across 6 categories) |
-| `integration` | End-to-end orchestrator flows with RETRIEVAL phase, retry logic, evidence context passing, formatting transitions | `tests/integration/` (60+ tests, CI-only) |
+| `integration` | End-to-end orchestrator flows with RETRIEVAL phase, retry logic, evidence context passing, formatting transitions, **video/carousel/branch transitions** | `tests/integration/` (3 files, 80+ tests, CI-only) |
 
 ### Eval Contracts & Criteria
 
@@ -397,6 +480,8 @@ The eval suite is governed by formal contracts at `apps/api/tests/evals/contract
 **Eval 1 (Research Phase)** adds two dedicated test files:
 - `test_eval1_research_coverage.py` — Validates chunk count, domain diversity, duplicate detection, scope/source_type metadata from Tavily-researched topics
 - `test_eval1_chunk_quality.py` — LLM-judged scoring (relevance, density, coherence) on a frozen corpus of 7 canonical topics (BRICS, Quantum Computing, Fed Rates, etc.) captured via `scripts/capture_corpus.py`
+
+**Eval 9 (Memory Implementation)** adds a dedicated plan at `tests/evals/plans/eval9-memory-implementation-plan.md`.
 
 ### Outcome Eval Test Matrix
 
@@ -434,36 +519,38 @@ docker-build-api (after python lint only)
 - **Step 1 (Ingestion)** — `POST /api/v1/jobs/` creates a PENDING RenderJob with `title`, `user_reference`, `research_inputs.source_urls`, `story_directives`, `format_type`, `platform`, and optional `device_id` (for S3 key prefixing)
 - **Step 2 (Extraction)** — `MarkdownTextSplitter` chunks raw_text into RAW-CONTEXT scope vectors (with `source_type: "USER_PROVIDED"` metadata)
 - **Step 3 (Deep Research / Web Enrichment)** — Tavily web search ingests live results as LOCAL-scope vectors (with `source_type: "WEB_SEARCH"` metadata). User-provided `source_urls` are extracted via Tavily extract API (with `source_type: "URL_EXTRACT"` metadata). Advances to RETRIEVAL.
-- **Step 4 (Context Retrieval & Synthesis)** — The orchestrator builds `refined_context` directly from `user_reference` + `story_directives` (no LLM Research Agent). **ContextBuilder** then performs a structured RAG query (title + story_directives + user_reference) against RAW-CONTEXT + LOCAL scopes, producing an `AssembledContext` (narrative_summary + evidence_sections + raw_chunks) persisted as JSONB. Retry mechanism (max 3) for missing context.
-- **Step 5 (Scripting)** — CopywriterAgent receives `refined_context`, `evidence_sections` (from AssembledContext), and `story_directives` (target_audience, tone, angle) from orchestrator. On revision, `ScriptOptimizerAgent` surgically patches failed claims with the same evidence context plus active failures and optimization history from the ledger, preventing reversion of previously-successful patches.
-- **Step 6 (Red Team)** — RedTeamAgent audits script claims with three-pass evaluation, persists verdicts with `evidence_text_inline` snapshots and `hedge_required` flags, configurable max revision loops. **ClaimMapper** updates the Optimization History Ledger after each pass to track claim identity across iterations.
-- **Step 7 (Format Output)** — BlogFormatterAgent and CarouselFormatterAgent produce structured blog/carousel outputs via Plan-then-Execute two-phase LLM calls. Wrapped in `AgentHarness` with tool injection, doom loop detection, and validator integration. Platform-aware validation (Twitter 280, LinkedIn 700, Instagram 2200 character limits). Branches by `format_type`: `video` skips, `blog`/`carousel` format then complete, `all` runs both in parallel then continues to asset generation
-- **Step 8 (Asset Generation)** — CarouselImageAgent generates real images via Together AI FLUX.1-schnell with platform-specific dimensions (1088×1344/1616/1920), editorial styling (no text/typography), S3/SeaweedFS storage with `device_id/job_id` folder prefixing, global rate-limit coordinator (3s min gap, exponential backoff on 429), and retry logic (3 attempts). AssetStudioAgent generates video production prompts (mocked `s3://` URL). Regenerate endpoint available for carousel images post-completion.
-- **Step 9 (Completion)** — LOCAL-scope chunk cleanup, final state
+- **Step 4 (Context Retrieval & Synthesis)** — The orchestrator builds `refined_context` directly from `user_reference` + `story_directives` (no LLM Research Agent). **ContextBuilder** then performs a **dual diversified RAG query** (title + angle + user_reference) against RAW-CONTEXT, LOCAL, and **GLOBAL** scopes, producing an `AssembledContext` (narrative_summary + evidence_sections + raw_chunks) persisted as JSONB. Retry mechanism (max 3) for missing context.
+- **Step 5 (Scripting)** — CopywriterAgent receives `refined_context`, `evidence_sections`, `story_directives`, and `working_memory.copywriter_rationale` from orchestrator. On revision, `ScriptOptimizerAgent` surgically patches failed claims with the same evidence context plus active failures, optimization history from the ledger, and `working_memory.optimizer_phase` — preventing reversion of previously-successful patches. The optimizer uses a `retrieve_evidence_for_claim` tool for self-verification.
+- **Step 6 (Red Team)** — RedTeamAgent audits script claims with three-pass evaluation, persists verdicts with `evidence_text_inline` snapshots and `hedge_required` flags, configurable max revision loops. **ClaimMapper** updates the Optimization History Ledger after each pass. **Epistemic ledger** (`working_memory.epistemic_ledger`) tracks weak passes for formatter hedging.
+- **Step 7 (Format Output)** — BlogFormatterAgent, CarouselFormatterAgent, and **VideoFormatterAgent** produce structured blog/carousel/video outputs via Plan-then-Execute two-phase LLM calls. Wrapped in `AgentHarness` with tool injection, doom loop detection, and validator integration. Platform-aware validation (Twitter 280, LinkedIn 700, Instagram 2200 character limits). Formatters consume the epistemic ledger for automatic hedging. Branches by `format_type`: video → FORMATTING → ASSET_GENERATION, blog/carousel → FORMATTING → COMPLETED (no assets) or ASSET_GENERATION, `all` → formats in parallel → asset generation.
+- **Step 8 (Asset Generation)** — **VideoGeneratorAgent** (ServiceAgent) generates real videos via Together AI: submit → poll (up to 300s) → download → upload to S3. Provider-agnostic `VideoGenProvider` ABC with `TogetherVideoGen` implementation. **CarouselImageAgent** generates real images via Together AI FLUX.1-schnell with platform-specific dimensions (1088×1344/1616/1920), editorial styling (no text/typography), S3/SeaweedFS storage with `device_id/job_id` folder prefixing, global rate-limit coordinator (3s min gap, exponential backoff on 429), and retry logic (3 attempts). Regenerate endpoint available for carousel images post-completion. Legacy `AssetStudioAgent` (mocked URLs) is deprecated.
+- **Step 9 (Completion)** — **Two-phase teardown**: (1) GLOBAL promotion — SUPPORTED claims compressed into factual statements via `promotion_model` LLM and ingested as persistent `GLOBAL`-scope chunks (`job_id=None`); (2) LOCAL-scope chunk cleanup. Final job state, scripts, claims audit, and S3 asset URLs available via API. Working memory JSONB retained as audit trail.
 
 ### Infrastructure
 
 - **Nx Monorepo** — Backend (`apps/api/`), Frontend (`apps/web/`), Shared types (`libs/shared-types/`)
 - **Next.js Frontend** — App Router with shadcn/ui, React Query, Zustand; Docker-ready with standalone output
 - **Postgres-backed Queue** — `QueueWorker` with `asyncio.create_task` + `FOR UPDATE SKIP LOCKED` + crash recovery. Two-tier tenacity retry policies (`agent_api_retry` + `agent_parent_retry`) for transient API errors.
-- **Declarative Tool Registry** — Singleton `ToolRegistry` (`app/services/tools.py`) registers all pipeline capabilities as first-class `Tool` objects. Symmetric permissions enforce that both the tool and the agent must consent to binding. `register_standard_tools()` registers 6 capabilities: `generate_image`, `upload_image`, `execute_web_search`, `semantic_search`, `ingest_chunks`, `validate_format`. Agents declare `_required_di_tools` / `_required_llm_tools` class variables; `AgentHarness` injects permitted tools automatically at composition time.
+- **Declarative Tool Registry** — Singleton `ToolRegistry` (`app/services/tools.py`) registers all pipeline capabilities as first-class `Tool` objects. **9 standard tools**: `generate_image`, `upload_image`, `execute_web_search`, `semantic_search`, `ingest_chunks`, `validate_format`, **`generate_video`**, **`poll_video`**, **`upload_video`**. Symmetric permissions enforce that both the tool and the agent must consent to binding. `register_standard_tools()` registers 9 capabilities at startup. Agents declare `_required_di_tools` / `_required_llm_tools` class variables; `AgentHarness` injects permitted tools automatically at composition time.
 - **Two-Class Agent Architecture** — `LLMAgent` (provider-agnostic `self.llm`, `_run_tool_loop` for LLM-decided tool calls, context checkpointing with self-healing) and `ServiceAgent` (no LLM, deterministic DI tools only) both extend `BaseAgent`. All agents share the `run(context)` → `_execute(context)` contract.
 - **Context Checkpointing for Retries** — RedTeamAgent checkpoints claim extraction + evidence retrieval across tenacity and harness retries. Self-healing wipes corrupted `_*_checkpoint` keys on `ValidationError`/`TypeError`/`KeyError`/`ValueError` and re-raises for a fresh retry.
 - **Web Search Enrichment** — Tavily web search by `title` + Tavily extract from user-provided `source_urls`, both ingested as LOCAL-scope vectors with `source_type: "WEB_SEARCH"` / `"URL_EXTRACT"` metadata
-- **Context Builder (Structured RAG)** — `ContextBuilder` service (`app/services/context_builder.py`) composes a multi-field query from `title` + `story_directives` + `user_reference`, retrieves from both RAW-CONTEXT and LOCAL scopes, enriches chunks with `topic_relevance` labels, and formats evidence sections for prompt injection. `AssembledContext` persisted as JSONB on `render_jobs`.
-- **Prompt Chaining + Evidence Injection** — Orchestrator mediates ContextBuilder → Copywriter pipeline: `refined_context` (narrative from user_reference + story_directives) + `evidence_sections` (retrieved chunks) + `story_directives` (audience/tone/angle) are injected into agent prompts. Copywriter and Optimizer both receive the same evidence context.
+- **Context Builder (Structured RAG)** — `ContextBuilder` service (`app/services/context_builder.py`) composes **dual diversified queries** from `title` + `story_directives` + `user_reference`, retrieves from RAW-CONTEXT, LOCAL, and **GLOBAL** scopes, enriches chunks with `topic_relevance` labels, and formats evidence sections for prompt injection. `AssembledContext` persisted as JSONB on `render_jobs`.
+- **Prompt Chaining + Evidence Injection** — Orchestrator mediates ContextBuilder → Copywriter pipeline: `refined_context` (narrative from user_reference + story_directives) + `evidence_sections` (retrieved chunks from all three scopes) + `story_directives` (audience/tone/angle) + `working_memory` are injected into agent prompts. Copywriter and Optimizer both receive the same evidence context.
 - **Evaluator-Optimizer with Short-Term Memory** — Configurable models/temperatures via env vars for both Red Team and Optimizer agents. **Optimization History Ledger** (ADR 0006) tracks claim identity via `ClaimMapper` service (numpy cosine similarity, greedy 1-to-1 assignment at 0.75 threshold). `optimization_history` JSONB column on `Script` model prevents optimizer oscillation.
-- **Test Suite** — Unit + agent + integration (200+ tests) with CI pipeline via GitHub Actions
-- **Eval Infrastructure** — LLM-as-Judge scoring (judge.py), deterministic assertions, rubrics, golden dataset (23+ cases), 6 outcome + eval1 test files with 40+ parametrized cases, 27 eval contracts across 8 pipeline stages, master criteria document (409 lines), frozen Tavily corpus (7 canonical topics via `scripts/capture_corpus.py`)
-- **Multi-provider LLM** — Routing via model name prefix: `gemini-*` → Google GenAI SDK, all others → Together AI (OpenAI-compatible). Two production tiers via Together AI: **Premium** (`meta-llama/Llama-3.3-70B-Instruct-Turbo` for CopywriterAgent, RedTeamAgent) and **Standard** (`openai/gpt-oss-20b` for ScriptOptimizerAgent, AssetStudioAgent, formatters). Configurable per-stage via env vars. Embeddings always use `models/gemini-embedding-001` (Gemini). Eval suite uses separate `eval_*` model configs.
-- **Multi-Format Output** — Blog and carousel formatters with Plan-then-Execute two-phase LLM calls, `AgentHarness` generate-validate-retry with doom loop detection, tool injection, and validator integration. Platform-aware validation (per-slide character limits).
+- **Working Memory Across Pipeline** — Tripartite `working_memory` JSONB on `RenderJob`: `copywriter_rationale` (narrative intent + claim disambiguations), `optimizer_phase` (per-iteration patch summaries, fallback rate), `epistemic_ledger` (weak passes for hedging). Orchestrator-owned; agents remain stateless. Formatters consume epistemic ledger for automatic hedging of uncertain content.
+- **GLOBAL Scope / Long-Term Memory** — At COMPLETED, SUPPORTED claims are compressed into factual statements via a dedicated LLM (`promotion_model`) and ingested as `GLOBAL`-scope chunks (`job_id=None`, `source_type="COMPRESSED_FACT"`) — creating a persistent organizational knowledge base across job runs. ContextBuilder queries GLOBAL scope alongside run-local scopes on every job.
+- **Live Video Generation** — `VideoGeneratorAgent` (ServiceAgent, `app/workers/video_generator_agent.py`) submits to Together AI via `videos.create`, polls via `videos.retrieve` (up to 60 attempts at 5s intervals), downloads, and uploads to S3. `VideoGenProvider` ABC (`app/services/video_gen.py`) with `TogetherVideoGen` implementation and provider registry pattern. `VideoFormatterAgent` produces `VideoFormatPayload` with unified visual prompt. Configurable via `video_gen_*` env vars. Legacy `AssetStudioAgent` (mocked URLs) is deprecated.
+- **Optimizer Tool for Self-Verification** — `make_gated_search_tool()` in `app/services/optimizer_tools.py` creates a `retrieve_evidence_for_claim` tool for `ScriptOptimizerAgent`. Two-tier strategy: primary hit uses pre-existing Red Team evidence; fallback performs semantic search across RAW-CONTEXT, LOCAL, and GLOBAL scopes. Tracks fallback rate for monitoring.
+- **Test Suite** — Unit + agent + integration (250+ tests) with CI pipeline via GitHub Actions. 14 unit test files, 11 agent test files, 3 integration test files, 23+ golden cases.
+- **Eval Infrastructure** — LLM-as-Judge scoring (judge.py), deterministic assertions, rubrics, golden dataset, 6 outcome + eval1 test files with 40+ parametrized cases, 27 eval contracts across 8 pipeline stages, master criteria document (409 lines), frozen Tavily corpus (7 canonical topics via `scripts/capture_corpus.py`), Eval 9 memory implementation plan.
+- **Multi-provider LLM** — Routing via model name prefix: `gemini-*` → Google GenAI SDK, all others → Together AI (OpenAI-compatible). Two production tiers via Together AI: **Premium** (`meta-llama/Llama-3.3-70B-Instruct-Turbo` for CopywriterAgent, RedTeamAgent) and **Standard** (`openai/gpt-oss-20b` for ScriptOptimizerAgent, formatters, promotion). Configurable per-stage via env vars. Embeddings always use `models/gemini-embedding-001` (Gemini). Eval suite uses separate `eval_*` model configs.
+- **Multi-Format Output** — Blog, carousel, and video formatters with Plan-then-Execute two-phase LLM calls, `AgentHarness` generate-validate-retry with doom loop detection, tool injection, and validator integration. Platform-aware validation (per-slide character limits). Video format routes through FORMATTING to produce storyboard, then to ASSET_GENERATION for rendering.
 - **Carousel Image Generation** — Real image gen via Together AI `FLUX.1-schnell` with platform-specific dimensions (1088×1344/1616/1920), editorial brand styling (no text/typography), global rate-limit coordinator (asyncio Lock, 3s min gap, exponential backoff on 429), S3/SeaweedFS storage with `device_id/job_id` folder prefixing, and retry logic (3 attempts). Regenerate endpoint available post-completion.
-- **S3/SeaweedFS Cloud Storage** — `StorageAdapter` dispatcher with `S3Storage` (boto3, auto-create buckets, `device_id/job_id` key prefixing) and `LocalStorage` (static files) backends. Images are uploaded to SeaweedFS S3 buckets (`media-images`, `media-videos`) and served via public URL. Configurable via `S3_*` env vars. Default backend: `s3`.
+- **S3/SeaweedFS Cloud Storage** — `StorageAdapter` dispatcher with `S3Storage` (boto3, auto-create buckets, `device_id/job_id` key prefixing) and `LocalStorage` (static files) backends. Images uploaded to SeaweedFS S3 buckets (`media-images`, `media-videos`). Video files also uploaded via S3. Configurable via `S3_*` env vars. Default backend: `s3`.
 - **Editorial Frontend Design** — App Router dark mode with Stone & Copper color tokens (oklch), Playfair Display + Inter + JetBrains Mono typography, StatusBar (Live/Stalled/Disconnected), Tabbed detail layout (TabBar), MiniPipeline tooltips, Editorial Timeline, reusable format viewers with CopyButton.
 - **Docker** — 5-service Compose stack (pgvector, pgAdmin, SeaweedFS, API, Web). Migrations auto-run on API container start via `entrypoint.sh`. Single workspace lockfile at repo root (`apps/web/pnpm-lock.yaml` removed). pnpm 11 `allowBuilds` in `pnpm-workspace.yaml`. SeaweedFS S3 identity configured via `s3.json`.
 
-### Intentionally Deferred (Wizard of Oz MVP)
+### Intentionally Deferred
 
 - **SynthID Watermarking** — Config flag exists (`synthid_watermark_enabled`) but no implementation
-- **GLOBAL Knowledge Base** — Skipped; platform constraints are hardcoded in agent system prompts
-- **Video Asset Generation** — No TTS, video rendering, or FFmpeg; AssetStudioAgent returns mocked URLs (carousel images are real via Together AI FLUX)
