@@ -105,3 +105,15 @@ def register_standard_tools() -> None:
     if "validate_format" not in registry:
         # registered externally with a per-format validator instance
         pass
+    if "generate_video" not in registry:
+        from app.services.video_gen import make_generate_video_tool
+
+        registry.register(make_generate_video_tool())
+    if "poll_video" not in registry:
+        from app.services.video_gen import make_poll_video_tool
+
+        registry.register(make_poll_video_tool())
+    if "upload_video" not in registry:
+        from app.storage.adapter import make_upload_video_tool
+
+        registry.register(make_upload_video_tool())

@@ -168,6 +168,7 @@ class TestValidateFormatTool:
             "total_duration_seconds": 90.0,
             "visual_style": "Cinematic documentary",
             "audio_direction": "Orchestral",
+            "unified_visual_prompt": "A cinematic documentary visual style with tension-building and climax scenes.",
         }
 
         import asyncio

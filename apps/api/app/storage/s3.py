@@ -13,8 +13,10 @@ class S3Storage:
             config=BotoConfig(signature_version="s3v4"),
         )
         self.bucket = settings.s3_bucket_images
+        self.bucket_videos = settings.s3_bucket_videos
         self.public_url = settings.s3_public_url.rstrip("/")
         self._bucket_checked = False
+        self._video_bucket_checked = False
 
     def _ensure_bucket(self) -> None:
         if self._bucket_checked:
@@ -24,6 +26,15 @@ class S3Storage:
         except Exception:
             self.client.create_bucket(Bucket=self.bucket)
         self._bucket_checked = True
+
+    def _ensure_video_bucket(self) -> None:
+        if self._video_bucket_checked:
+            return
+        try:
+            self.client.head_bucket(Bucket=self.bucket_videos)
+        except Exception:
+            self.client.create_bucket(Bucket=self.bucket_videos)
+        self._video_bucket_checked = True
 
     def upload_image(
         self,
@@ -50,3 +61,20 @@ class S3Storage:
             self.client.delete_object(Bucket=self.bucket, Key=key)
         except Exception:
             pass
+
+    def upload_video(
+        self,
+        file_bytes: bytes,
+        filename: str,
+        folder: str = "",
+        content_type: str = "video/mp4",
+    ) -> str:
+        key = f"{folder}/{filename}" if folder else filename
+        self._ensure_video_bucket()
+        self.client.put_object(
+            Bucket=self.bucket_videos,
+            Key=key,
+            Body=file_bytes,
+            ContentType=content_type,
+        )
+        return f"{self.public_url}/{self.bucket_videos}/{key}"

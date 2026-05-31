@@ -9,6 +9,18 @@ from app.schemas.formats import BlogSection, SeoMeta, CarouselSlide, VideoScene
 
 logger = logging.getLogger(__name__)
 
+PLATFORM_ASPECT_RATIOS: dict[str, str] = {
+    "tiktok": "9:16",
+    "youtube": "16:9",
+    "instagram": "4:5",
+    "twitter": "16:9",
+    "linkedin": "16:9",
+}
+
+
+def _resolve_aspect_ratio(platform: str) -> str:
+    return PLATFORM_ASPECT_RATIOS.get(platform.lower().strip(), "16:9")
+
 
 def _build_hedge_block(hedge_index: list, epistemic_ledger: dict | None = None) -> str:
     if not hedge_index:
@@ -251,7 +263,7 @@ VIDEO_PLAN_SYSTEM = (
     "5. Note which verified claims map to which scenes.\n"
     "6. Total duration must be 60-300 seconds (1-5 minutes).\n"
     "7. Each scene should be 5-45 seconds.\n"
-    "8. Define a visual style direction (cinematic, documentary, animated, etc.).\n\n"
+    "8. Define a visual style direction (documentary, animated, narrative, etc.).\n\n"
     "STOP CONDITIONS — evaluate as you read the input, before producing any output:\n"
     "- If the script_content is too thin to produce a coherent video plan (e.g., no\n"
     "  scene structure, no narration beats, no duration or pacing signals), set\n"
@@ -264,6 +276,8 @@ VIDEO_PLAN_HUMAN = (
     "<script>\n{script_content}\n</script>\n\n"
     "<refined_context>\n{refined_context}\n</refined_context>\n\n"
     "<verified_claims>\n{verified_claims}\n</verified_claims>\n\n"
+    "<platform>\n{platform}\n</platform>\n\n"
+    "<platform_aspect_ratio>\n{platform_aspect_ratio}\n</platform_aspect_ratio>\n\n"
     "<correction_hint>\n{correction_hint}\n</correction_hint>\n\n"
     "Produce a structured scene outline with scene number, purpose, key visual, "
     "and duration estimate per scene. Do NOT write the full narration or visual prompts."
@@ -287,7 +301,12 @@ VIDEO_FORMATTER_SYSTEM = (
     "7. audio_direction: describe the overall audio/music direction.\n"
     "8. Scene transitions should feel natural and maintain narrative flow.\n"
     "9. Write narration in a conversational, engaging tone.\n"
-    "10. Visual prompts should be cinematic and specific (camera angles, lighting, colors).\n\n"
+    "10. Visual prompts should describe what the scene shows (setting, subjects, action, mood, colors) — not how to film it.\n"
+    "11. Construct a unified_visual_prompt that synthesizes all per-scene visual_prompt fields into one coherent description:\n"
+    "    - Capture the narrative arc across all scenes (opening mood → rising action → climax → resolution).\n"
+    "    - Include the overall color palette, lighting atmosphere, and setting continuity.\n"
+    "    - Reference the platform aspect ratio so the generated video dimensions are correct.\n"
+    "    - Use plain descriptive language — no camera or lens terminology.\n\n"
     "STOP CONDITIONS — evaluate as you read the input, before producing any output:\n"
     "- If the plan omits scene duration estimates or total video length targets,\n"
     "  state the pacing assumptions you are applying (e.g., 30s average scene,\n"
@@ -295,7 +314,11 @@ VIDEO_FORMATTER_SYSTEM = (
     "  did not specify without making them explicit.\n"
     "- If correction_hint requests a change that directly contradicts a structural\n"
     "  or factual constraint in the plan (not merely adds to it), set status=ESCALATE\n"
-    "  and describe the specific conflict. Do not silently prioritize one over the other."
+    "  and describe the specific conflict. Do not silently prioritize one over the other.\n"
+    "- If the per-scene visual_prompt fields contain contradictory settings that cannot be\n"
+    "  coherently merged into a single unified_visual_prompt (e.g., one scene specifies\n"
+    "  daytime outdoor lighting while another specifies a dark indoor studio), set\n"
+    "  status=ERROR and describe the specific contradiction."
 )
 
 VIDEO_FORMATTER_HUMAN = (
@@ -304,9 +327,12 @@ VIDEO_FORMATTER_HUMAN = (
     "<script>\n{script_content}\n</script>\n\n"
     "<refined_context>\n{refined_context}\n</refined_context>\n\n"
     "<verified_claims>\n{verified_claims}\n</verified_claims>\n\n"
+    "<platform>\n{platform}\n</platform>\n\n"
+    "<platform_aspect_ratio>\n{platform_aspect_ratio}\n</platform_aspect_ratio>\n\n"
     "<correction_hint>\n{correction_hint}\n</correction_hint>\n\n"
     "Follow the plan's scene structure. Generate complete scenes with narration, visual prompts, "
-    "and audio cues. Include overall visual_style and audio_direction."
+    "and audio cues. Include overall visual_style, audio_direction, and a unified_visual_prompt "
+    "that synthesizes all scene visuals into one coherent description."
 )
 
 
@@ -527,6 +553,8 @@ class VideoFormatterAgent(LLMAgent):
         hedge_index = context.get("hedge_index", [])
         epistemic_ledger = context.get("epistemic_ledger", {})
         correction_hint = context.get("correction_hint", "")
+        platform = context.get("platform", "")
+        platform_aspect_ratio = _resolve_aspect_ratio(platform)
 
         if not script_content:
             return AgentResult(
@@ -566,6 +594,8 @@ class VideoFormatterAgent(LLMAgent):
                 "script_content": script_content,
                 "refined_context": refined_context,
                 "verified_claims": claims_text,
+                "platform": platform or "default",
+                "platform_aspect_ratio": platform_aspect_ratio,
                 "correction_hint": correction_hint,
             }
         )
@@ -590,6 +620,8 @@ class VideoFormatterAgent(LLMAgent):
                 "script_content": script_content,
                 "refined_context": refined_context,
                 "verified_claims": claims_text,
+                "platform": platform or "default",
+                "platform_aspect_ratio": platform_aspect_ratio,
                 "correction_hint": correction_hint,
             }
         )

@@ -74,6 +74,7 @@ def _video_output():
         total_duration_seconds=65.0,
         visual_style="Cinematic documentary with golden hour lighting and smooth camera transitions",
         audio_direction="Orchestral with electronic undertones",
+        unified_visual_prompt="Open on a cinematic drone shot over a world map with BRICS nations illuminated in gold. Cut to a close-up of an animated bar chart showing GDP growth. Close on currency symbols dissolving into a digital payment network with warm amber lighting.",
     )
 
 

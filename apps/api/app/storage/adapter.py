@@ -32,3 +32,21 @@ def make_upload_image_tool() -> Tool:
         callable=_upload,
         permissions={"CarouselImageAgent", "*"},
     )
+
+
+def make_upload_video_tool() -> Tool:
+    async def _upload(
+        file_bytes: bytes,
+        filename: str,
+        folder: str = "",
+        content_type: str = "video/mp4",
+    ) -> str:
+        storage = get_storage()
+        return storage.upload_video(file_bytes, filename, folder, content_type)
+
+    return Tool(
+        name="upload_video",
+        description="Upload a video to the configured storage backend.",
+        callable=_upload,
+        permissions={"VideoGeneratorAgent", "*"},
+    )
