@@ -512,6 +512,7 @@ def _valid_video_payload(**overrides):
         "total_duration_seconds": 90.0,
         "visual_style": "Cinematic documentary with golden hour lighting",
         "audio_direction": "Orchestral with electronic undertones",
+        "unified_visual_prompt": "Open on a wide shot of a sunlit documentary scene with golden hour lighting. Slow zoom into a close-up of the subject's face. Cut to a detailed macro shot of hands at work, then pull back to reveal the full workshop in warm amber tones.",
     }
     base.update(overrides)
     return base
