@@ -43,8 +43,8 @@ Multi-agent AI pipeline generating short/reel scripts, blog articles, and social
 | `SCRIPTING` | Writer's Desk | `CopywriterAgent` drafts script (or `ScriptOptimizerAgent` for revisions) |
 | `FACT_CHECKING_SCRIPT` | Fact-Check Desk | `RedTeamAgent` extracts atomic claims → per-claim evidence search → structured verdict |
 | `FORMATTING` | Layout Desk | `AgentHarness` runs blog/carousel/video formatters in parallel |
-| `ASSET_GENERATION` | Production Studio | `AssetStudioAgent` (video prompts) + `CarouselImageAgent` (images via FLUX) |
-| `COMPLETED` | Published | Garbage-collect LOCAL-scoped chunks, finalize |
+| `ASSET_GENERATION` | Production Studio | `VideoGeneratorAgent` (video gen via Together AI) + `CarouselImageAgent` (images via FLUX) |
+| `COMPLETED` | Published | Promote SUPPORTED claims to GLOBAL-scoped facts (long-term memory), garbage-collect LOCAL-scoped chunks |
 | `FAILED` | Killed Story | Orchestrator exception → logged |
 | `HUMAN_REVIEW_NEEDED` | Editor's Review | High-strictness pass, max revisions exhausted, or escalation |
 
@@ -64,7 +64,7 @@ All production agents default via Together AI. Two tiers:
 | Env var | Default | Temp | Purpose |
 |---------|---------|------|---------|
 | `optimizer_model` | gpt-oss-20b | 0.3 | Surgical script patching |
-| `asset_model` | gpt-oss-20b | 0.5 | Asset studio (video/audio prompts) |
+| `asset_model` | gpt-oss-20b | 0.5 | (Legacy) Asset studio — deprecated, video now uses VideoGeneratorAgent |
 | `formatter_model` | gpt-oss-20b | 0.3 | Blog/carousel/video formatting |
 
 **Image generation:** `black-forest-labs/FLUX.1-schnell` via Together AI. Platform-specific dimensions. Storage via `StorageAdapter` (default: `s3` → SeaweedFS, fallback `local` → `static/carousel_images/`).
@@ -78,7 +78,7 @@ All production agents default via Together AI. Two tiers:
 | `eval_optimizer_model` | `openai/gpt-oss-20b` | 0.3 |
 | `eval_judge_model` | `Qwen/Qwen3-235B-A22B-Instruct-2507-tput` | 0.0 |
 
-**Other settings:** `max_red_team_revisions=3`, `similarity_threshold=0.75`, `retrieval_retry_max=3`, `context_builder_top_k=10`, `synthid_watermark_enabled=True`, `claim_mapper_threshold=0.75`.
+**Other settings:** `max_red_team_revisions=3`, `similarity_threshold=0.75`, `retrieval_retry_max=3`, `context_builder_top_k=10`, `synthid_watermark_enabled=True`, `claim_mapper_threshold=0.75`, `promotion_model=openai/gpt-oss-20b`, `promotion_temperature=0.3`, `video_gen_provider=together`, `video_gen_poll_interval_seconds=5`, `video_gen_max_poll_retries=60`.
 
 ## Agents
 
@@ -87,7 +87,8 @@ All production agents default via Together AI. Two tiers:
 | `CopywriterAgent` | `app/workers/agents.py` | Draft narrative script with hook/body/closer (LLMAgent) |
 | `RedTeamAgent` | `app/workers/agents.py` | 3-pass: claim extraction → evidence retrieval → structured verdict (LLMAgent) |
 | `ScriptOptimizerAgent` | `app/workers/optimizer.py` | Surgical patching with optimization history ledger input (LLMAgent) |
-| `AssetStudioAgent` | `app/workers/agents.py` | Veo video prompts + Lyria audio prompts (LLMAgent) |
+| `AssetStudioAgent` | `app/workers/agents.py` | (Deprecated) Veo video prompts — replaced by VideoGeneratorAgent (LLMAgent) |
+| `VideoGeneratorAgent` | `app/workers/video_generator_agent.py` | 4-step video gen: submit → poll → download → upload S3 (ServiceAgent — no LLM, DI tools) |
 | `BlogFormatterAgent` | `app/workers/formatters.py` | Plan→Execute blog layout (LLMAgent) |
 | `CarouselFormatterAgent` | `app/workers/formatters.py` | Plan→Execute carousel with platform char limits (LLMAgent) |
 | `VideoFormatterAgent` | `app/workers/formatters.py` | Plan→Execute with scene structure (LLMAgent) |
@@ -101,9 +102,10 @@ All production agents default via Together AI. Two tiers:
 
 1. **RedTeamAgent** (3-pass): extract atomic claims → per-claim `semantic_search` → structured `RedTeamVerdict` per claim
 2. Verdicts persisted to `fact_check_claims` table (versioned per script)
-3. **ClaimMapper** (`app/services/claim_mapper.py`) updates the **Optimization History Ledger** — embeds previous and new claims via Gemini, computes cosine similarity matrix with greedy 1-to-1 assignment (threshold 0.75), resolves claim verdict delta (resolved/regressed/unchanged), and persists to `Script.optimization_history`
-4. On `REVISION_NEEDED` → feedback + ledger active failures saved → `ScriptOptimizerAgent` patches only failed claims (preserves supported ones, never reverts previously-successful patches)
-5. Max `max_red_team_revisions` loops → `HUMAN_REVIEW_NEEDED`
+3. Orchestrator updates `working_memory.epistemic_ledger` with weak passes (UNCERTAIN/CONTESTED/SUPPORTED-low-confidence claims)
+4. **ClaimMapper** (`app/services/claim_mapper.py`) updates the **Optimization History Ledger** — embeds previous and new claims via Gemini, computes cosine similarity matrix with greedy 1-to-1 assignment (threshold 0.75), resolves claim verdict delta (resolved/regressed/unchanged), and persists to `Script.optimization_history`
+5. On `REVISION_NEEDED` → feedback + ledger active failures + `working_memory.optimizer_phase` saved → `ScriptOptimizerAgent` patches only failed claims (preserves supported ones, never reverts previously-successful patches)
+6. Max `max_red_team_revisions` loops → `HUMAN_REVIEW_NEEDED`
 
 ## Guardrails
 
