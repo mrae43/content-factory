@@ -20,6 +20,7 @@ class VideoFormatPayload(BaseModel):
     total_duration_seconds: float = Field(ge=60.0, le=300.0)
     visual_style: str = Field(min_length=5)
     audio_direction: str = ""
+    unified_visual_prompt: str = Field(min_length=20)
 
 
 class BlogSection(BaseModel):
