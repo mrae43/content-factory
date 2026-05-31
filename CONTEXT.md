@@ -55,20 +55,36 @@ A text-only rendering of a Story in blog format. Produced by the Layout Desk fro
 
 A media artifact that must be rendered from a blueprint. Two sub-types, both produced by a two-stage pipeline (Layout Desk plans the structure, Production Studio renders the media):
 
-- **Carousel Slide Deck** — a sequence of composited slides (HTML layout + SVG graphics), targeted at Instagram/TikTok. The Layout Desk produces a slide outline with per-slide text and visual prompts; the Production Studio renders each slide into browser-displayable HTML (frontend-rendered from structured data — no image export in MVP).
-- **Video** — a rendered motion picture with scenes, narration, and audio. The Layout Desk produces a scene outline; the Production Studio renders each scene and assembles the final video.
+- **Carousel Slide Deck** — a sequence of composited slides with per-slide text and visual descriptions. The Layout Desk produces the carousel structure; the Production Studio renders each slide image via FLUX and uploads to S3.
+- **Video** — a rendered motion picture with scenes and audio direction. The Layout Desk produces a structured scene outline plus a `unified_visual_prompt`; the Production Studio calls a model-agnostic video generation API (Together AI for testing, Seedance V2 for production) and stores the result in S3.
 
 _Avoid_: Calling a Carousel a "Format Output" — it's a Visual Asset that gets rendered, not formatted.
 
 ## Visual Generation
 
-The role of the AssetStudioAgent: translate video scenes and visual style into technical visual/audio prompts for production-grade AI models (Veo for video, Lyria for audio). Visual Generation explicitly does NOT generate text or typography — text captions are a separate concern handled by the text generation layer (CopywriterAgent, formatters). This is a hard domain separation boundary: the visual model renders the image; the text agent renders the caption. Rule 2 in AssetStudioAgent's prompt enforces this: "Do NOT include text or typography in visual prompts."
+The role of the Video Generator Agent: accept a structured video scene payload (produced by the Layout Desk's VideoFormatterAgent) and produce a playable video file by calling a model-agnostic video generation API (Together AI for testing, Seedance V2 for production). The agent orchestrates three deterministic steps: submit generation job, poll for completion, upload result to S3. Visual Generation explicitly does NOT generate text or typography — text captions are a separate concern handled by the text generation layer (CopywriterAgent, formatters). This is a hard domain separation boundary: the visual model renders the image; the text agent renders the caption.
 
-_Avoid_: Asking the Asset Studio to embed text into generated images. That is an integration failure, not a feature gap.
+_Avoid_: Asking the Video Generator Agent to embed text into generated videos. That is an integration failure, not a feature gap.
+
+## Unified Visual Prompt
+
+A single 1-3 sentence prompt (produced by the VideoFormatterAgent) that synthesises all video scenes into one API-ready description. Used as the input for single-shot video generation APIs (Together AI during testing). The `unified_visual_prompt` includes platform aspect ratio and narrative arc coverage. Per-scene `visual_prompt` fields are retained alongside it for future per-scene rendering (Seedance V2).
+
+## Video Generator Agent
+
+A `ServiceAgent` (no LLM) that orchestrates the video rendering pipeline. Injected DI tools: `generate_video`, `poll_video`, `upload_video`. Replaces the earlier `AssetStudioAgent`'s video track (which only produced prompts and a placeholder URL). Always runs wrapped in `AgentHarness`.
+
+## Video Generation Provider
+
+A provider-agnostic abstraction (`VideoGenProvider` ABC in `app/services/video_gen.py`) that mirrors the LLM provider registry pattern. Two implementations: `TogetherVideoGen` (testing, single-shot) and planned `SeedanceVideoGen` (production, per-scene). Selected via `video_gen_provider` env var.
+
+## Audio Direction
+
+Metadata describing the intended background music and sound effects for a video. Produced by the `VideoFormatterAgent` as a per-scene `audio_cue` and an overall `audio_direction` field. For v1, this is describe-only — no audio file is generated. A future audio generation agent could consume this metadata to call a music generation API.
 
 ## Underspecified Scene
 
-Input that lacks sufficient detail to produce a coherent visual/audio prompt within the 2-sentence hard limit. When a scene cannot be specified in 2 sentences of prompt, that is a signal the scene input is underspecified — the agent must return status=ERROR describing what is missing, not expand the prompt. This is enforced by AssetStudioAgent Rule 3.
+Input that lacks sufficient detail to produce a coherent visual description. When a scene's `visual_prompt` or `narration_text` is generic, placeholder-level text, the formatter's stop conditions trigger status=ERROR describing what is missing. The video generation provider also enforces input validation: if the combined visual prompt is incoherent or contradictory, the agent escalates rather than hallucinating content.
 
 ## Red Team Report
 
@@ -119,7 +135,7 @@ In code, the bounded counter is named `remediation_depth` (0–3). In editorial/
 
 ## Asset
 
-A generated media file associated with a Story. Produced by the Production Studio. Each asset carries generation metadata (prompt, timing, SynthID watermark). Types:
+A generated media file associated with a Story. Produced by the Production Studio via `ServiceAgent`-based generators (`CarouselImageAgent`, `VideoGeneratorAgent`). Each asset carries generation metadata (prompt, timing, SynthID watermark). Types:
 
 | Asset Type | Applies To | Description |
 |---|---|---|
@@ -209,7 +225,7 @@ appropriately hedged language in the formatted output.
 
 The capability level of the LLM assigned to a pipeline agent. Two tiers (see ADR 0003 for embedding model — embedding is independent of agent LLM tier):
 - **Premium**: agents requiring deep reasoning, synthesis, or precise fact-checking (CopywriterAgent, RedTeamAgent).
-- **Standard**: agents performing constrained structured-output tasks or prompt enrichment (ScriptOptimizerAgent, AssetStudioAgent, BlogFormatterAgent, CarouselFormatterAgent, VideoFormatterAgent).
+- **Standard**: agents performing constrained structured-output tasks or prompt enrichment (ScriptOptimizerAgent, BlogFormatterAgent, CarouselFormatterAgent, VideoFormatterAgent).
 
 The specific model names are **env-var-driven defaults** (see `app/core/config.py`). The architecture is the tier assignment, not the particular model name. Swap models via env vars without code changes.
 
