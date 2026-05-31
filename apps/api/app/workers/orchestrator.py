@@ -42,9 +42,9 @@ from app.workers.tasks import cleanup_local_research_chunks
 from app.workers.agents import (
     CopywriterAgent,
     RedTeamAgent,
-    AssetStudioAgent,
     AgentActionStatus,
 )
+from app.workers.video_generator_agent import VideoGeneratorAgent
 from app.workers.optimizer import ScriptOptimizerAgent
 from app.workers.carousel_image_agent import CarouselImageAgent, merge_image_urls
 from app.workers.formatters import (
@@ -728,25 +728,24 @@ async def _transition_asset_generation(db: AsyncSession, job) -> None:
 
     # --- Video asset generation ---
     if video_script and video_script.format_payload:
-        studio_context: Dict[str, Any] = {"job_id": job.id}
-        fmt = video_script.format_payload
-        studio_context["scenes"] = fmt.get("scenes", [])
-        studio_context["visual_style"] = fmt.get("visual_style", "")
-        studio_context["script_content"] = video_script.content
+        video_harness = AgentHarness(agent=VideoGeneratorAgent())
+        context: Dict[str, Any] = {
+            "format_type": "video",
+            "job_id": job.id,
+            "format_payload": video_script.format_payload,
+            "platform": job.platform or "",
+            "device_id": job.device_id,
+        }
+        video_result = await video_harness.run_with_harness(context)
 
-        studio = AssetStudioAgent(
-            model_name=settings.asset_model,
-            temperature=settings.asset_temperature,
-        )
-        result = await studio.run(context=studio_context)
-
-        if result.status == AgentActionStatus.SUCCESS:
-            job.final_video_url = result.payload["video_url"]
+        if video_result.success:
+            job.final_video_url = video_result.payload["video_url"]
             any_success = True
-        elif result.status == AgentActionStatus.ERROR:
-            await log_error(
-                db, job.id, result.reasoning, phase="VIDEO_ASSET_GENERATION"
+        else:
+            error_msg = (
+                video_result.error_log[0] if video_result.error_log else "Unknown error"
             )
+            await log_error(db, job.id, error_msg, phase="VIDEO_ASSET_GENERATION")
 
     # --- Carousel image generation ---
     if carousel_script and carousel_script.format_payload:

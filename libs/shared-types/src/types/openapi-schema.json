@@ -1190,13 +1190,19 @@
             "type": "string",
             "title": "Audio Direction",
             "default": ""
+          },
+          "unified_visual_prompt": {
+            "type": "string",
+            "minLength": 20,
+            "title": "Unified Visual Prompt"
           }
         },
         "type": "object",
         "required": [
           "scenes",
           "total_duration_seconds",
-          "visual_style"
+          "visual_style",
+          "unified_visual_prompt"
         ],
         "title": "VideoFormatPayload"
       },

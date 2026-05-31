@@ -520,6 +520,8 @@ export interface components {
              * @default
              */
             audio_direction: string;
+            /** Unified Visual Prompt */
+            unified_visual_prompt: string;
         };
         /** VideoScene */
         VideoScene: {
