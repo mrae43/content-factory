@@ -95,9 +95,7 @@ class TestScriptPipelineRunner:
         await pipeline._phase_fact_checking()
         assert len(pipeline.notifier.messages) == 0
 
-    async def test_full_run_publishes_progress(
-        self, pipeline, mock_job
-    ):
+    async def test_full_run_publishes_progress(self, pipeline, mock_job):
         with (
             patch.object(
                 pipeline,
@@ -141,9 +139,7 @@ class TestScriptPipelineRunner:
             pipeline._phase_scripting.assert_awaited_once()
             pipeline._phase_fact_checking.assert_awaited_once()
 
-    async def test_run_skips_research_when_no_user_reference(
-        self, pipeline, mock_job
-    ):
+    async def test_run_skips_research_when_no_user_reference(self, pipeline, mock_job):
         with (
             patch.object(
                 pipeline,

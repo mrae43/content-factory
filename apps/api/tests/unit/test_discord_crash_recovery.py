@@ -7,11 +7,13 @@ from app.db.script_crud import get_stuck_script_jobs
 from app.schemas.shorts import ScriptJobStatusEnum
 
 
-TERMINAL_STATUSES = frozenset({
-    ScriptJobStatusEnum.COMPLETED,
-    ScriptJobStatusEnum.FAILED,
-    ScriptJobStatusEnum.HUMAN_REVIEW_NEEDED,
-})
+TERMINAL_STATUSES = frozenset(
+    {
+        ScriptJobStatusEnum.COMPLETED,
+        ScriptJobStatusEnum.FAILED,
+        ScriptJobStatusEnum.HUMAN_REVIEW_NEEDED,
+    }
+)
 
 
 @pytest.fixture
@@ -46,9 +48,7 @@ async def _make_execute_result(rows):
 
 @pytest.mark.unit
 class TestGetStuckScriptJobs:
-    async def test_returns_stuck_locked_jobs(
-        self, mock_db, mock_job
-    ):
+    async def test_returns_stuck_locked_jobs(self, mock_db, mock_job):
         mock_db.execute.return_value = await _make_execute_result([mock_job])
 
         result = await get_stuck_script_jobs(mock_db, timeout_minutes=15)

@@ -124,9 +124,7 @@ class TestCreateFormatJob:
 
 @pytest.mark.unit
 class TestClaimNextFormatJob:
-    async def test_locks_and_returns_available_job(
-        self, mock_db, mock_scalar_result
-    ):
+    async def test_locks_and_returns_available_job(self, mock_db, mock_scalar_result):
         mock_job = MagicMock()
         mock_job.locked_at = None
         mock_job.locked_by = None
@@ -139,9 +137,7 @@ class TestClaimNextFormatJob:
         assert mock_job.locked_by == "worker-1"
         mock_db.commit.assert_awaited_once()
 
-    async def test_returns_none_when_no_jobs(
-        self, mock_db, mock_scalar_result
-    ):
+    async def test_returns_none_when_no_jobs(self, mock_db, mock_scalar_result):
         mock_scalar_result.scalar_one_or_none.return_value = None
 
         result = await claim_next_format_job(mock_db, "worker-1")
@@ -149,9 +145,7 @@ class TestClaimNextFormatJob:
         assert result is None
         mock_db.commit.assert_not_awaited()
 
-    async def test_uses_for_update_skip_locked(
-        self, mock_db, mock_scalar_result
-    ):
+    async def test_uses_for_update_skip_locked(self, mock_db, mock_scalar_result):
         mock_scalar_result.scalar_one_or_none.return_value = None
 
         await claim_next_format_job(mock_db, "worker-1")

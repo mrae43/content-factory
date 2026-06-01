@@ -139,9 +139,7 @@ class TestQueueWorkerDualPollLoop:
 
         with (
             patch("app.workers.queue_worker.claim_next_job", return_value=None),
-            patch(
-                "app.workers.queue_worker.claim_next_format_job", return_value=None
-            ),
+            patch("app.workers.queue_worker.claim_next_format_job", return_value=None),
         ):
             await worker._poll_loop()
 
@@ -175,9 +173,7 @@ class TestQueueWorkerDualPollLoop:
                 "app.workers.queue_worker.claim_next_format_job",
                 side_effect=fake_claim,
             ),
-            patch(
-                "app.workers.queue_worker.release_format_job_lock"
-            ) as mock_release,
+            patch("app.workers.queue_worker.release_format_job_lock") as mock_release,
             patch.object(
                 worker,
                 "_process_one_format_transition",
@@ -218,12 +214,8 @@ class TestQueueWorkerDualPollLoop:
                 "app.workers.queue_worker.claim_next_format_job",
                 side_effect=fake_claim,
             ),
-            patch(
-                "app.workers.queue_worker.log_format_job_error"
-            ) as mock_log_error,
-            patch(
-                "app.workers.queue_worker.update_format_job_status"
-            ) as mock_update,
+            patch("app.workers.queue_worker.log_format_job_error") as mock_log_error,
+            patch("app.workers.queue_worker.update_format_job_status") as mock_update,
             patch("app.workers.queue_worker.release_format_job_lock"),
             patch.object(
                 worker,
