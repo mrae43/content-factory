@@ -233,3 +233,27 @@ The specific model names are **env-var-driven defaults** (see `app/core/config.p
 
 A formal object wrapping a service capability with name, description, input/output schemas, workflow scope, and permissions. Tools serve two roles: **dependency injection** (DI tools, injected into agents at runtime by the harness) and **LLM function-calling** (LLM tools, registered with the model for dynamic invocation during execution). Defined alongside the backing service, registered in a central `ToolRegistry`. Agents declare tool dependencies explicitly via `di_tools` and `llm_tools` class attributes. Tool access is governed by symmetric permissions: both the tool and the agent must agree. See ADR 0004.
 
+## Discord Bot
+
+A standalone process (`python -m app.discord_bot`) that manages the Script Content Pipeline for Discord-originated jobs. Runs inline in its own process — no QueueWorker involvement. Shares the `app/` package with the API via standard Python imports (no code duplication). Monorepo structure: two processes, one codebase.
+
+## ScriptJob
+
+A job that produces a completed script with verified claims, but does not produce formatted outputs or assets. Created by the Discord Bot in response to a user's `/script` command. Stored in the `factory.script_jobs` table with its own status enum (`script_job_status`). Managed exclusively by the Discord Bot — the QueueWorker never touches it. Produces a Script Content, a set of Claim Verdicts (denormalized as JSONB), and associated Working Memory. Does NOT produce platform-specific formatting or visual assets — those are handled by separate FormatJobs.
+
+_Avoid:_ Calling it a "RenderJob" — ScriptJobs are a narrower concern with a different lifecycle. RenderJobs continue to exist for the API pipeline.
+
+## FormatJob
+
+A job that renders a completed Script into a platform-specific format. Created by the Discord Bot when a user clicks a format button (e.g. "Create Carousel") after a Script completes. Stored in the `factory.format_jobs` table with its own status enum (`format_job_status`). Managed by the QueueWorker via the same `FOR UPDATE SKIP LOCKED` pattern as RenderJobs. Always references a completed ScriptJob via `source_job_id`. Unique per `(source_job_id, platform, format_type)` — duplicate requests return the existing job.
+
+## Script Content Pipeline
+
+The text-only subset of the Content Factory pipeline: Research → Retrieval → Scripting → Fact-Check → Optimizer Loop. Produces a script and claims, no formatting or assets. Run inline by the Discord Bot process — not via the QueueWorker. A separate, decoupled concern from the Format & Asset Pipeline, which is managed by the QueueWorker. The split happens at the ADR 0010 boundary: text work is real-time and bot-managed; rendering work is queued and QueueWorker-managed.
+
+## Snapshot Context Handoff
+
+When a FormatJob is created from a completed ScriptJob, the necessary context (script content, claims, refined context, story directives, hedge index, epistemic ledger) is **copied** into the FormatJob row at creation time, not referenced via FK. This ensures FormatJobs are fully self-contained — they survive garbage collection of the source ScriptJob, and a failure in one FormatJob cannot corrupt shared data. The `source_job_id` FK is retained for traceability only, not for runtime data access.
+
+_Avoid:_ Treating `source_job_id` as a live data source at format-runtime. All data needed for formatting lives in the FormatJob's snapshot columns.
+
