@@ -87,6 +87,17 @@ class VerdictEnum(str, Enum):
     UNCERTAIN = "UNCERTAIN"
 
 
+class ScriptJobStatusEnum(str, Enum):
+    PENDING = "PENDING"
+    RESEARCHING = "RESEARCHING"
+    RETRIEVAL = "RETRIEVAL"
+    SCRIPTING = "SCRIPTING"
+    FACT_CHECKING_SCRIPT = "FACT_CHECKING_SCRIPT"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    HUMAN_REVIEW_NEEDED = "HUMAN_REVIEW_NEEDED"
+
+
 class FormatJobStatusEnum(str, Enum):
     PENDING = "PENDING"
     FORMATTING = "FORMATTING"
