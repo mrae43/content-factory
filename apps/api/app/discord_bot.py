@@ -2,6 +2,7 @@
 Discord bot for Content Factory.
 Standalone process: python -m app.discord_bot
 """
+
 import asyncio
 import logging
 
@@ -22,9 +23,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 GUILD = discord.Object(id=settings.discord_guild_id)
 
 
-@bot.tree.command(
-    guild=GUILD, name="ping", description="Check if the bot is alive"
-)
+@bot.tree.command(guild=GUILD, name="ping", description="Check if the bot is alive")
 async def ping(interaction: discord.Interaction):
     await interaction.response.send_message("pong!")
 
