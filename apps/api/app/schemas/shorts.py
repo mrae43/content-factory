@@ -87,6 +87,15 @@ class VerdictEnum(str, Enum):
     UNCERTAIN = "UNCERTAIN"
 
 
+class FormatJobStatusEnum(str, Enum):
+    PENDING = "PENDING"
+    FORMATTING = "FORMATTING"
+    ASSET_GENERATION = "ASSET_GENERATION"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    HUMAN_REVIEW_NEEDED = "HUMAN_REVIEW_NEEDED"
+
+
 class PlatformEnum(str, Enum):
     TWITTER = "twitter"
     LINKEDIN = "linkedin"

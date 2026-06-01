@@ -88,6 +88,7 @@ class TestQueueWorkerStart:
         self, mock_recover, mock_session_factory, mock_settings, mock_db, worker
     ):
         mock_session_factory.return_value = _make_session_ctx(mock_db)
+        mock_settings.worker_lock_timeout_minutes = LOCK_TIMEOUT
 
         await worker.start()
 
@@ -101,6 +102,7 @@ class TestQueueWorkerStart:
         self, mock_recover, mock_session_factory, mock_settings, mock_db, worker
     ):
         mock_session_factory.return_value = _make_session_ctx(mock_db)
+        mock_settings.worker_lock_timeout_minutes = LOCK_TIMEOUT
 
         await worker.start()
 
@@ -118,6 +120,7 @@ class TestQueueWorkerStop:
         self, mock_recover, mock_session_factory, mock_settings, mock_db, worker
     ):
         mock_session_factory.return_value = _make_session_ctx(mock_db)
+        mock_settings.worker_lock_timeout_minutes = LOCK_TIMEOUT
         await worker.start()
 
         await worker.stop()
@@ -131,6 +134,7 @@ class TestQueueWorkerStop:
         self, mock_recover, mock_session_factory, mock_settings, mock_db, worker
     ):
         mock_session_factory.return_value = _make_session_ctx(mock_db)
+        mock_settings.worker_lock_timeout_minutes = LOCK_TIMEOUT
         await worker.start()
         task = worker._current_task
 
@@ -145,6 +149,7 @@ class TestQueueWorkerStop:
         self, mock_recover, mock_session_factory, mock_settings, mock_db, worker
     ):
         mock_session_factory.return_value = _make_session_ctx(mock_db)
+        mock_settings.worker_lock_timeout_minutes = LOCK_TIMEOUT
         await worker.start()
 
         await worker.stop()
@@ -166,8 +171,15 @@ class TestQueueWorkerPollLoop:
     )
     @patch("app.workers.queue_worker.AsyncSessionLocal")
     @patch("app.workers.queue_worker.asyncio.sleep")
+    @patch("app.workers.queue_worker.claim_next_format_job", return_value=None)
     async def test_poll_sleeps_when_no_job_available(
-        self, mock_sleep, mock_session_factory, mock_settings, mock_db, worker
+        self,
+        mock_claim_fmt,
+        mock_sleep,
+        mock_session_factory,
+        mock_settings,
+        mock_db,
+        worker,
     ):
         mock_session_factory.side_effect = lambda: _make_session_ctx(mock_db)
 
@@ -187,8 +199,15 @@ class TestQueueWorkerPollLoop:
         "app.workers.queue_worker.settings", worker_poll_interval_seconds=POLL_INTERVAL
     )
     @patch("app.workers.queue_worker.AsyncSessionLocal")
+    @patch("app.workers.queue_worker.claim_next_format_job", return_value=None)
     async def test_poll_processes_job_when_available(
-        self, mock_session_factory, mock_settings, mock_db, mock_job, worker
+        self,
+        mock_claim_fmt,
+        mock_session_factory,
+        mock_settings,
+        mock_db,
+        mock_job,
+        worker,
     ):
         mock_session_factory.side_effect = lambda: _make_session_ctx(mock_db)
         fake_claim = _make_claim_factory(mock_job, worker)
@@ -214,8 +233,10 @@ class TestQueueWorkerPollLoopErrorHandling:
         "app.workers.queue_worker.settings", worker_poll_interval_seconds=POLL_INTERVAL
     )
     @patch("app.workers.queue_worker.AsyncSessionLocal")
+    @patch("app.workers.queue_worker.claim_next_format_job", return_value=None)
     async def test_poll_marks_job_failed_on_exception(
         self,
+        mock_claim_fmt,
         mock_session_factory,
         mock_settings,
         mock_db,
@@ -246,8 +267,10 @@ class TestQueueWorkerPollLoopErrorHandling:
         "app.workers.queue_worker.settings", worker_poll_interval_seconds=POLL_INTERVAL
     )
     @patch("app.workers.queue_worker.AsyncSessionLocal")
+    @patch("app.workers.queue_worker.claim_next_format_job", return_value=None)
     async def test_poll_releases_lock_on_error(
         self,
+        mock_claim_fmt,
         mock_session_factory,
         mock_settings,
         mock_db,
@@ -275,8 +298,10 @@ class TestQueueWorkerPollLoopErrorHandling:
         "app.workers.queue_worker.settings", worker_poll_interval_seconds=POLL_INTERVAL
     )
     @patch("app.workers.queue_worker.AsyncSessionLocal")
+    @patch("app.workers.queue_worker.claim_next_format_job", return_value=None)
     async def test_poll_releases_lock_on_success(
         self,
+        mock_claim_fmt,
         mock_session_factory,
         mock_settings,
         mock_db,
