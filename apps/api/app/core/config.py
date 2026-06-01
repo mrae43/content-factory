@@ -97,8 +97,8 @@ class Settings(BaseSettings):
     worker_lock_timeout_minutes: int = 15
 
     # Discord Bot
-    discord_token: str
-    discord_guild_id: int
+    discord_token: str = ""
+    discord_guild_id: int = 0
     discord_channel_id: int | None = None
 
     model_config = SettingsConfigDict(
