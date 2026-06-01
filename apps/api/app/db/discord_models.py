@@ -2,21 +2,18 @@ import uuid
 
 from sqlalchemy import (
     Column,
-    String,
     Text,
-    ForeignKey,
+    String,
     DateTime,
-    text,
+    ForeignKey,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB, ENUM
 from sqlalchemy.orm import relationship
 
 from app.db.models import Base, TrackedJSONB
 
-# ==========================================
-# 1. ENUMS
-# ==========================================
 
 ScriptJobStatusEnum = ENUM(
     "PENDING",
@@ -46,24 +43,30 @@ FormatJobStatusEnum = ENUM(
 
 
 class ScriptJob(Base):
+    """Tracks a script content generation request from a Discord user."""
+
     __tablename__ = "script_jobs"
     __table_args__ = {"schema": "factory"}
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     title = Column(Text, nullable=False)
     user_reference = Column(Text, nullable=True)
-    source_urls = Column(JSONB, nullable=False, server_default="[]")
-    story_directives = Column(JSONB, nullable=False, server_default="{}")
+    source_urls = Column(JSONB, nullable=True)
+    story_directives = Column(JSONB, nullable=True)
+
     status = Column(ScriptJobStatusEnum, nullable=False, server_default="PENDING")
+
     refined_context = Column(Text, nullable=True)
     assembled_context = Column(JSONB, nullable=True)
     script_content = Column(Text, nullable=True)
     claims = Column(TrackedJSONB, nullable=True)
-    working_memory = Column(JSONB, nullable=False, server_default="{}")
+    working_memory = Column(JSONB, nullable=True)
     hedge_index = Column(JSONB, nullable=True)
     error_log = Column(JSONB, nullable=True)
+
     locked_at = Column(DateTime(timezone=True), nullable=True)
     locked_by = Column(String(36), nullable=True)
+
     created_at = Column(
         DateTime(timezone=True), server_default=text("now()"), nullable=False
     )
@@ -71,10 +74,14 @@ class ScriptJob(Base):
         DateTime(timezone=True), server_default=text("now()"), nullable=False
     )
 
-    format_jobs = relationship("FormatJob", back_populates="script_job")
+    format_jobs = relationship(
+        "FormatJob", back_populates="script_job", cascade="all, delete-orphan"
+    )
 
 
 class FormatJob(Base):
+    """Tracks a request to render a completed script into a specific format."""
+
     __tablename__ = "format_jobs"
     __table_args__ = (
         UniqueConstraint(
@@ -90,24 +97,31 @@ class FormatJob(Base):
     source_job_id = Column(
         UUID(as_uuid=True),
         ForeignKey("factory.script_jobs.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
+        nullable=False,
     )
     title = Column(Text, nullable=False)
     platform = Column(Text, nullable=False)
     format_type = Column(Text, nullable=False)
+
     status = Column(FormatJobStatusEnum, nullable=False, server_default="PENDING")
+
+    # Snapshot columns — copied from script_job at creation time
     script_content = Column(Text, nullable=True)
     claims = Column(JSONB, nullable=True)
     refined_context = Column(Text, nullable=True)
     story_directives = Column(JSONB, nullable=True)
     hedge_index = Column(JSONB, nullable=True)
     epistemic_ledger = Column(JSONB, nullable=True)
+
+    # Output columns
     format_payload = Column(JSONB, nullable=True)
     final_video_url = Column(Text, nullable=True)
+
     error_log = Column(JSONB, nullable=True)
+
     locked_at = Column(DateTime(timezone=True), nullable=True)
     locked_by = Column(String(36), nullable=True)
+
     created_at = Column(
         DateTime(timezone=True), server_default=text("now()"), nullable=False
     )
