@@ -61,6 +61,9 @@ async def on_ready():
 
 
 async def main():
+    if not settings.discord_token or not settings.discord_guild_id:
+        logger.error("DISCORD_TOKEN and DISCORD_GUILD_ID must be set in .env")
+        return
     async with bot:
         await bot.start(settings.discord_token)
 
