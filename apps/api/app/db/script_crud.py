@@ -7,11 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.discord_models import ScriptJob
 from app.schemas.shorts import ScriptJobStatusEnum
 
-TERMINAL_STATUSES = frozenset({
-    ScriptJobStatusEnum.COMPLETED,
-    ScriptJobStatusEnum.FAILED,
-    ScriptJobStatusEnum.HUMAN_REVIEW_NEEDED,
-})
+TERMINAL_STATUSES = frozenset(
+    {
+        ScriptJobStatusEnum.COMPLETED,
+        ScriptJobStatusEnum.FAILED,
+        ScriptJobStatusEnum.HUMAN_REVIEW_NEEDED,
+    }
+)
 
 
 async def create_script_job(
