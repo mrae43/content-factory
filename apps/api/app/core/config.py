@@ -96,6 +96,11 @@ class Settings(BaseSettings):
     worker_poll_interval_seconds: int = 5
     worker_lock_timeout_minutes: int = 15
 
+    # Discord Bot
+    discord_token: str
+    discord_guild_id: int
+    discord_channel_id: int | None = None
+
     model_config = SettingsConfigDict(
         env_file=str(_REPO_ROOT / ".env"),
         env_file_encoding="utf-8",
