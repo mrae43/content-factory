@@ -1,11 +1,19 @@
 from uuid import UUID
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import datetime, timezone, timedelta
+from typing import Optional, Sequence
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.discord_models import ScriptJob
 from app.schemas.shorts import ScriptJobStatusEnum
+
+TERMINAL_STATUSES = frozenset(
+    {
+        ScriptJobStatusEnum.COMPLETED,
+        ScriptJobStatusEnum.FAILED,
+        ScriptJobStatusEnum.HUMAN_REVIEW_NEEDED,
+    }
+)
 
 
 async def create_script_job(
@@ -56,3 +64,20 @@ async def log_script_job_error(
         }
         job.error_log = error_log
         await db.commit()
+
+
+async def get_stuck_script_jobs(
+    db: AsyncSession, timeout_minutes: int = 15
+) -> Sequence[ScriptJob]:
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=timeout_minutes)
+    stmt = (
+        select(ScriptJob)
+        .where(
+            ScriptJob.status.notin_(TERMINAL_STATUSES),
+            ScriptJob.locked_at.isnot(None),
+            ScriptJob.locked_at < cutoff,
+        )
+        .order_by(ScriptJob.created_at.asc())
+    )
+    result = await db.execute(stmt)
+    return result.scalars().all()

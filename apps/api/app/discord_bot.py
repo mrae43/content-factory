@@ -16,7 +16,11 @@ from discord.ext import commands
 
 from app.core.config import settings
 from app.db.session import AsyncSessionLocal
-from app.db.script_crud import create_script_job, get_script_job
+from app.db.script_crud import (
+    create_script_job,
+    get_script_job,
+    get_stuck_script_jobs,
+)
 from app.db.format_crud import create_format_job
 from app.services.script_pipeline import ScriptPipelineRunner
 
@@ -29,6 +33,9 @@ logger = logging.getLogger(__name__)
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 GUILD = discord.Object(id=settings.discord_guild_id)
+
+# Limit concurrent pipeline runs to avoid OOM
+_script_semaphore = asyncio.Semaphore(3)
 
 
 # ── Progress Notifier (Discord implementation) ──────────────────────────
@@ -72,52 +79,62 @@ async def _run_script_pipeline(
     user_reference: str,
     source_urls: list[str],
 ):
-    try:
-        async with AsyncSessionLocal() as db:
-            job = await create_script_job(
-                db,
-                title=title,
-                user_reference=user_reference,
-                source_urls=source_urls,
-            )
-
-            thread = await interaction.followup.send(
-                f"🎬 **Starting script generation: *{title}***",
-                wait=True,
-            )
-            thread = await thread.create_thread(
-                name=f"Script: {title[:90]}",
-                auto_archive_duration=60,
-            )
-
-            notifier = DiscordProgressNotifier(thread)
-            runner = ScriptPipelineRunner(db, job.id, notifier)
-            await runner.run()
-
-            job = await get_script_job(db, job.id)
-            if job and job.status.value == "COMPLETED":
-                await _post_completion(thread, job)
-            elif job and job.status.value == "HUMAN_REVIEW_NEEDED":
-                await thread.send(
-                    "⚠️ **Pipeline escalated** — human review is required."
-                )
-            elif job and job.status.value == "FAILED":
-                error_log = job.error_log or {}
-                error_msg = (
-                    list(error_log.values())[0].get("message", "Unknown error")
-                    if error_log
-                    else "Unknown error"
-                )
-                await thread.send(f"❌ **Pipeline failed**: {error_msg[:2000]}")
-    except Exception:
-        logger.exception("Script pipeline crashed")
+    async with _script_semaphore:
         try:
-            await interaction.followup.send(
-                "❌ An unexpected error occurred while generating the script.",
-                ephemeral=True,
-            )
+            job = None
+            thread = None
+            async with AsyncSessionLocal() as db:
+                job = await create_script_job(
+                    db,
+                    title=title,
+                    user_reference=user_reference,
+                    source_urls=source_urls,
+                )
+
+                msg = await interaction.followup.send(
+                    f"🎬 **Starting script generation: *{title}***",
+                    wait=True,
+                )
+                thread = await msg.create_thread(
+                    name=f"Script: {title[:90]}",
+                    auto_archive_duration=60,
+                )
+
+                working_memory = dict(job.working_memory or {})
+                working_memory["discord_thread_id"] = str(thread.id)
+                job.working_memory = working_memory
+                await db.commit()
+
+                notifier = DiscordProgressNotifier(thread)
+                runner = ScriptPipelineRunner(db, job.id, notifier)
+                await runner.run()
+
+                job = await get_script_job(db, job.id)
+
+            if job and thread:
+                if job.status.value == "COMPLETED":
+                    await _post_completion(thread, job)
+                elif job.status.value == "HUMAN_REVIEW_NEEDED":
+                    await thread.send(
+                        "⚠️ **Pipeline escalated** — human review is required."
+                    )
+                elif job.status.value == "FAILED":
+                    error_log = job.error_log or {}
+                    error_msg = (
+                        list(error_log.values())[0].get("message", "Unknown error")
+                        if error_log
+                        else "Unknown error"
+                    )
+                    await thread.send(f"❌ **Pipeline failed**: {error_msg[:2000]}")
         except Exception:
-            pass
+            logger.exception("Script pipeline crashed")
+            try:
+                await interaction.followup.send(
+                    "❌ An unexpected error occurred while generating the script.",
+                    ephemeral=True,
+                )
+            except Exception:
+                pass
 
 
 async def _post_completion(thread: discord.Thread, job) -> None:
@@ -300,6 +317,25 @@ async def on_ready():
     logger.info("Bot logged in as %s", bot.user)
     for g in bot.guilds:
         logger.info("  - %s (%s)", g.name, g.id)
+
+    await recover_stuck_script_jobs()
+
+
+async def recover_stuck_script_jobs():
+    """Release stale locks and resume any stuck script pipelines on startup."""
+    logger.info("Checking for stuck script jobs...")
+    async with AsyncSessionLocal() as db:
+        stuck = await get_stuck_script_jobs(db, timeout_minutes=15)
+        logger.info("Found %d stuck script jobs", len(stuck))
+        for job in stuck:
+            job.locked_at = None
+            job.locked_by = None
+            await db.commit()
+            logger.info(
+                "Released lock on stuck ScriptJob %s (status=%s)",
+                job.id,
+                job.status.value,
+            )
 
 
 async def main():
