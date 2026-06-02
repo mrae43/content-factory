@@ -64,7 +64,7 @@ class TestCreateFormatJob:
     ):
         mock_db.execute.return_value = mock_scalar_result
 
-        result = await create_format_job(
+        await create_format_job(
             mock_db,
             source_job_id=source_job_id,
             platform="instagram",
