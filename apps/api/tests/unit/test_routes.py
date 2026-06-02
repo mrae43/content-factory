@@ -368,7 +368,11 @@ class TestResolveFormats:
 
     def test_all_on_youtube_returns_blog_short_video(self):
         result = resolve_formats(PlatformEnum.YOUTUBE, FormatTypeEnum.ALL)
-        assert result == [FormatTypeEnum.BLOG, FormatTypeEnum.SHORT, FormatTypeEnum.VIDEO]
+        assert result == [
+            FormatTypeEnum.BLOG,
+            FormatTypeEnum.SHORT,
+            FormatTypeEnum.VIDEO,
+        ]
 
     def test_specific_format_returns_itself(self):
         result = resolve_formats(PlatformEnum.TWITTER, FormatTypeEnum.BLOG)
