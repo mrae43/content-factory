@@ -139,7 +139,7 @@ class TestScriptPipelineRunner:
             pipeline._phase_scripting.assert_awaited_once()
             pipeline._phase_fact_checking.assert_awaited_once()
 
-    async def test_run_skips_research_when_no_user_reference(self, pipeline, mock_job):
+    async def test_run_always_runs_research(self, pipeline, mock_job):
         with (
             patch.object(
                 pipeline,
@@ -174,8 +174,57 @@ class TestScriptPipelineRunner:
             await pipeline.run()
 
             pipeline._phase_pending.assert_awaited_once()
-            pipeline._phase_researching.assert_not_awaited()
+            pipeline._phase_researching.assert_awaited_once()
             pipeline._phase_retrieval.assert_awaited_once()
+
+    async def test_run_sets_and_clears_lock(self, pipeline, mock_job):
+        mock_job.locked_at = None
+        mock_job.locked_by = None
+        lock_seen = False
+
+        original_commit = pipeline.db.commit
+
+        async def tracking_commit():
+            nonlocal lock_seen
+            if mock_job.locked_at is not None and mock_job.locked_by == "discord_bot":
+                lock_seen = True
+            await original_commit()
+
+        pipeline.db.commit = AsyncMock(side_effect=tracking_commit)
+
+        with (
+            patch.object(pipeline, "_phase_pending", new=AsyncMock()),
+            patch.object(pipeline, "_phase_researching", new=AsyncMock()),
+            patch.object(pipeline, "_phase_retrieval", new=AsyncMock()),
+            patch.object(pipeline, "_phase_scripting", new=AsyncMock()),
+            patch.object(pipeline, "_phase_fact_checking", new=AsyncMock()),
+            patch.object(pipeline, "_set_status", new=AsyncMock()),
+        ):
+            mock_job.status = "PENDING"
+            await pipeline.run()
+
+            assert lock_seen is True
+            assert mock_job.locked_at is None
+            assert mock_job.locked_by is None
+
+    async def test_phase_skipping_on_resume(self, pipeline, mock_job):
+        """When resuming from SCRIPTING, earlier phases should skip."""
+        with (
+            patch.object(pipeline, "_phase_pending", new=AsyncMock()),
+            patch.object(pipeline, "_phase_researching", new=AsyncMock()),
+            patch.object(pipeline, "_phase_retrieval", new=AsyncMock()),
+            patch.object(pipeline, "_phase_scripting", new=AsyncMock()),
+            patch.object(pipeline, "_phase_fact_checking", new=AsyncMock()),
+            patch.object(pipeline, "_set_status", new=AsyncMock()),
+        ):
+            mock_job.status = "SCRIPTING"
+            await pipeline.run()
+
+            pipeline._phase_pending.assert_awaited_once()
+            pipeline._phase_researching.assert_awaited_once()
+            pipeline._phase_retrieval.assert_awaited_once()
+            pipeline._phase_scripting.assert_awaited_once()
+            pipeline._phase_fact_checking.assert_awaited_once()
 
     async def test_run_sets_completed_on_success(self, pipeline, mock_job):
         with (

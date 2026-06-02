@@ -1,5 +1,6 @@
 import logging
 import traceback
+from datetime import datetime, timezone
 from typing import Any, Dict, Protocol
 from uuid import UUID
 
@@ -71,11 +72,16 @@ class ScriptPipelineRunner:
         await update_script_job_status(self.db, self.script_job_id, status)
 
     async def run(self) -> None:
+        job = None
         try:
+            job = await self._get_job()
+            job.locked_at = datetime.now(timezone.utc)
+            job.locked_by = "discord_bot"
+            await self.db.commit()
+
             await self._phase_pending()
             job = await self._get_job()
-            if job.user_reference:
-                await self._phase_researching()
+            await self._phase_researching()
 
             await self._phase_retrieval()
             await self._phase_scripting()
@@ -94,6 +100,14 @@ class ScriptPipelineRunner:
                 "pipeline",
             )
             await self._set_status(ScriptJobStatusEnum.FAILED)
+        finally:
+            if job is not None:
+                job.locked_at = None
+                job.locked_by = None
+                try:
+                    await self.db.commit()
+                except Exception:
+                    pass
 
     async def _phase_pending(self) -> None:
         job = await self._get_job()

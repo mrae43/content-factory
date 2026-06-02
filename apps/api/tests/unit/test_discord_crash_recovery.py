@@ -46,6 +46,19 @@ async def _make_execute_result(rows):
     return result
 
 
+class _AsyncMockContextManager:
+    """Wraps an async object so it can be used as an async context manager."""
+
+    def __init__(self, async_obj):
+        self._async_obj = async_obj
+
+    async def __aenter__(self):
+        return self._async_obj
+
+    async def __aexit__(self, exc_type, exc, tb):
+        pass
+
+
 @pytest.mark.unit
 class TestGetStuckScriptJobs:
     async def test_returns_stuck_locked_jobs(self, mock_db, mock_job):
@@ -109,3 +122,68 @@ class TestScriptPipelineResumeCheckpoints:
         assert ScriptJobStatusEnum.HUMAN_REVIEW_NEEDED in TERMINAL_STATUSES
         assert ScriptJobStatusEnum.PENDING not in TERMINAL_STATUSES
         assert ScriptJobStatusEnum.RESEARCHING not in TERMINAL_STATUSES
+
+
+@pytest.mark.unit
+class TestCrashRecoveryResumption:
+    async def test_recovery_launches_background_task(self, mock_db, mock_job):
+        mock_job.working_memory = {"discord_thread_id": "123456789"}
+        mock_db.execute.return_value = await _make_execute_result([mock_job])
+
+        with (
+            patch("app.discord_bot.bot") as mock_bot,
+            patch(
+                "app.discord_bot.AsyncSessionLocal",
+                return_value=_AsyncMockContextManager(mock_db),
+            ),
+            patch(
+                "app.discord_bot.get_stuck_script_jobs",
+                new=AsyncMock(return_value=[mock_job]),
+            ),
+        ):
+            mock_thread = MagicMock()
+            mock_bot.fetch_channel = AsyncMock(return_value=mock_thread)
+            mock_bot.loop.create_task = MagicMock()
+
+            from app.discord_bot import recover_stuck_script_jobs
+
+            await recover_stuck_script_jobs()
+
+            mock_bot.fetch_channel.assert_awaited_once_with(123456789)
+            mock_bot.loop.create_task.assert_called_once()
+
+    async def test_recovery_handles_deleted_thread(self, mock_db, mock_job):
+        mock_job.working_memory = {"discord_thread_id": "123456789"}
+        mock_db.execute.return_value = await _make_execute_result([mock_job])
+
+        with (
+            patch("app.discord_bot.bot") as mock_bot,
+            patch(
+                "app.discord_bot.AsyncSessionLocal",
+                return_value=_AsyncMockContextManager(mock_db),
+            ),
+            patch(
+                "app.discord_bot.log_script_job_error", new=AsyncMock()
+            ) as mock_log_error,
+            patch(
+                "app.discord_bot.update_script_job_status", new=AsyncMock()
+            ) as mock_update_status,
+            patch(
+                "app.discord_bot.get_stuck_script_jobs",
+                new=AsyncMock(return_value=[mock_job]),
+            ),
+        ):
+            import discord
+
+            mock_bot.fetch_channel = AsyncMock(
+                side_effect=discord.NotFound(MagicMock(), "Not found")
+            )
+
+            from app.discord_bot import recover_stuck_script_jobs
+
+            await recover_stuck_script_jobs()
+
+            mock_bot.fetch_channel.assert_awaited_once_with(123456789)
+            mock_log_error.assert_awaited_once()
+            call_args, _ = mock_update_status.await_args
+            assert call_args[2] == ScriptJobStatusEnum.FAILED
