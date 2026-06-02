@@ -1,7 +1,6 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
-from datetime import datetime, timezone, timedelta
 
 from app.db.format_crud import (
     create_format_job,
@@ -65,14 +64,6 @@ class TestCreateFormatJob:
     ):
         mock_db.execute.return_value = mock_scalar_result
 
-        result = await create_format_job(
-            mock_db,
-            source_job_id=source_job_id,
-            platform="instagram",
-            format_type="carousel",
-            snapshot_data=sample_snapshot,
-        )
-
         mock_db.add.assert_called_once()
         added = mock_db.add.call_args[0][0]
         assert added.title == "Test Script"
@@ -110,14 +101,6 @@ class TestCreateFormatJob:
     ):
         snapshot = {"title": "Test", "script_content": "content"}
         mock_db.execute.return_value = mock_scalar_result
-
-        result = await create_format_job(
-            mock_db,
-            source_job_id=source_job_id,
-            platform="twitter",
-            format_type="video",
-            snapshot_data=snapshot,
-        )
 
         added = mock_db.add.call_args[0][0]
         assert added.script_content == "content"

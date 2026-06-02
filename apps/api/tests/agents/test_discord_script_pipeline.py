@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
-from app.services.script_pipeline import ScriptPipelineRunner, ProgressNotifier
+from app.services.script_pipeline import ScriptPipelineRunner
 
 
 class AccumulatingNotifier:

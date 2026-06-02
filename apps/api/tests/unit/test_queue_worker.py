@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4, UUID
+from uuid import uuid4
 
 from app.workers.queue_worker import QueueWorker
 from app.schemas.shorts import JobStatusEnum
