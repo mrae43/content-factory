@@ -109,13 +109,12 @@ class TestCreateFormatJob:
     ):
         mock_db.execute.return_value = mock_scalar_result
 
-        snapshot = {"script_content": "content"}
         await create_format_job(
             mock_db,
             source_job_id=source_job_id,
             platform="instagram",
             format_type="carousel",
-            snapshot_data=snapshot,
+            snapshot_data={"script_content": "content"},
         )
 
         added = mock_db.add.call_args[0][0]
