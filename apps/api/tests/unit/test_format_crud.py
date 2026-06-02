@@ -64,6 +64,14 @@ class TestCreateFormatJob:
     ):
         mock_db.execute.return_value = mock_scalar_result
 
+        result = await create_format_job(
+            mock_db,
+            source_job_id=source_job_id,
+            platform="instagram",
+            format_type="carousel",
+            snapshot_data=sample_snapshot,
+        )
+
         mock_db.add.assert_called_once()
         added = mock_db.add.call_args[0][0]
         assert added.title == "Test Script"
@@ -100,6 +108,15 @@ class TestCreateFormatJob:
         self, mock_db, mock_scalar_result, source_job_id
     ):
         mock_db.execute.return_value = mock_scalar_result
+
+        snapshot = {"script_content": "content"}
+        await create_format_job(
+            mock_db,
+            source_job_id=source_job_id,
+            platform="instagram",
+            format_type="carousel",
+            snapshot_data=snapshot,
+        )
 
         added = mock_db.add.call_args[0][0]
         assert added.script_content == "content"
