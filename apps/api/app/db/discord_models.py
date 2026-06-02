@@ -75,7 +75,7 @@ class ScriptJob(Base):
     )
 
     format_jobs = relationship(
-        "FormatJob", back_populates="script_job", cascade="all, delete-orphan"
+        "FormatJob", back_populates="script_job", cascade="save-update, merge"
     )
 
 
@@ -97,7 +97,7 @@ class FormatJob(Base):
     source_job_id = Column(
         UUID(as_uuid=True),
         ForeignKey("factory.script_jobs.id", ondelete="SET NULL"),
-        nullable=False,
+        nullable=True,
     )
     title = Column(Text, nullable=False)
     platform = Column(Text, nullable=False)
