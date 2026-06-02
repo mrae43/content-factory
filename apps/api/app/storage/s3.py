@@ -85,3 +85,20 @@ class S3Storage:
             ContentType=content_type,
         )
         return f"{self.public_url}/{self.bucket_videos}/{key}"
+
+    def upload_voiceover(
+        self,
+        file_bytes: bytes,
+        filename: str,
+        folder: str = "",
+        content_type: str = "audio/mpeg",
+    ) -> str:
+        key = f"{folder}/{filename}" if folder else filename
+        self._ensure_video_bucket()
+        self.client.put_object(
+            Bucket=self.bucket_videos,
+            Key=key,
+            Body=file_bytes,
+            ContentType=content_type,
+        )
+        return f"{self.public_url}/{self.bucket_videos}/{key}"

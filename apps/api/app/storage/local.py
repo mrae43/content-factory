@@ -4,6 +4,7 @@ from app.core.config import settings
 
 UPLOAD_DIR = Path(settings.image_storage_path)
 VIDEO_UPLOAD_DIR = Path("static/videos")
+VOICEOVER_UPLOAD_DIR = Path("static/voiceovers")
 
 
 class LocalStorage:
@@ -40,3 +41,17 @@ class LocalStorage:
         path.write_bytes(file_bytes)
         prefix = f"{folder}/" if folder else ""
         return f"/api/proxy/videos/{prefix}{filename}"
+
+    def upload_voiceover(
+        self,
+        file_bytes: bytes,
+        filename: str,
+        folder: str = "",
+        content_type: str = "audio/mpeg",
+    ) -> str:
+        target = VOICEOVER_UPLOAD_DIR / folder if folder else VOICEOVER_UPLOAD_DIR
+        target.mkdir(parents=True, exist_ok=True)
+        path = target / filename
+        path.write_bytes(file_bytes)
+        prefix = f"{folder}/" if folder else ""
+        return f"/api/proxy/voiceovers/{prefix}{filename}"
