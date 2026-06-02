@@ -33,6 +33,7 @@ FormatJobStatusEnum = ENUM(
     "PENDING",
     "FORMATTING",
     "ASSET_GENERATION",
+    "COMPOSITION",
     "COMPLETED",
     "FAILED",
     "HUMAN_REVIEW_NEEDED",
