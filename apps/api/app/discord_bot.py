@@ -348,9 +348,7 @@ async def recover_stuck_script_jobs():
                     notifier = DiscordProgressNotifier(thread)
                     runner = ScriptPipelineRunner(db, job.id, notifier)
                     bot.loop.create_task(_safe_resume(runner, job.id))
-                    logger.info(
-                        "Resuming ScriptJob %s in thread %s", job.id, thread_id
-                    )
+                    logger.info("Resuming ScriptJob %s in thread %s", job.id, thread_id)
                 except discord.NotFound:
                     logger.warning(
                         "Thread %s deleted for ScriptJob %s", thread_id, job.id
@@ -365,18 +363,14 @@ async def recover_stuck_script_jobs():
                         db, job.id, ScriptJobStatusEnum.FAILED
                     )
             else:
-                logger.warning(
-                    "No thread_id for ScriptJob %s; cannot resume", job.id
-                )
+                logger.warning("No thread_id for ScriptJob %s; cannot resume", job.id)
                 await log_script_job_error(
                     db,
                     job.id,
                     "Missing discord_thread_id in working_memory; cannot resume after crash",
                     "crash_recovery",
                 )
-                await update_script_job_status(
-                    db, job.id, ScriptJobStatusEnum.FAILED
-                )
+                await update_script_job_status(db, job.id, ScriptJobStatusEnum.FAILED)
 
 
 async def main():
