@@ -117,3 +117,11 @@ def register_standard_tools() -> None:
         from app.storage.adapter import make_upload_video_tool
 
         registry.register(make_upload_video_tool())
+    if "generate_voiceover" not in registry:
+        from app.services.tts import make_generate_voiceover_tool
+
+        registry.register(make_generate_voiceover_tool())
+    if "get_alignment" not in registry:
+        from app.services.tts import make_get_alignment_tool
+
+        registry.register(make_get_alignment_tool())
