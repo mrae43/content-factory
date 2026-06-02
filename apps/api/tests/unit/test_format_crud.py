@@ -99,7 +99,6 @@ class TestCreateFormatJob:
     async def test_empty_claims_in_snapshot(
         self, mock_db, mock_scalar_result, source_job_id
     ):
-        snapshot = {"title": "Test", "script_content": "content"}
         mock_db.execute.return_value = mock_scalar_result
 
         added = mock_db.add.call_args[0][0]
