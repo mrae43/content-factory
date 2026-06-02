@@ -16,6 +16,7 @@ from app.schemas.formats import (
     VideoFormatPayload,
     BlogFormatPayload,
     CarouselFormatPayload,
+    ShortFormatPayload,
 )
 
 
@@ -30,6 +31,7 @@ FormatPayload = Annotated[
         Annotated[VideoFormatPayload, Tag("video")],
         Annotated[BlogFormatPayload, Tag("blog")],
         Annotated[CarouselFormatPayload, Tag("carousel")],
+        Annotated[ShortFormatPayload, Tag("short")],
     ],
     Discriminator(_discriminate_format),
 ]
@@ -59,6 +61,7 @@ class JobStatusEnum(str, Enum):
     FACT_CHECKING_SCRIPT = "FACT_CHECKING_SCRIPT"
     FORMATTING = "FORMATTING"
     ASSET_GENERATION = "ASSET_GENERATION"
+    COMPOSITION = "COMPOSITION"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
     HUMAN_REVIEW_NEEDED = "HUMAN_REVIEW_NEEDED"
@@ -69,6 +72,7 @@ class FormatTypeEnum(str, Enum):
     VIDEO = "video"
     BLOG = "blog"
     CAROUSEL = "carousel"
+    SHORT = "short"
 
 
 class AssetTypeEnum(str, Enum):
@@ -78,6 +82,10 @@ class AssetTypeEnum(str, Enum):
     VOICEOVER = "VOICEOVER"
     SUBTITLE_JSON = "SUBTITLE_JSON"
     DATA_CHART = "DATA_CHART"
+    SHORT_VIDEO_CLIP = "SHORT_VIDEO_CLIP"
+    SHORT_STILL_IMAGE = "SHORT_STILL_IMAGE"
+    VOCAL_ALIGNMENT = "VOCAL_ALIGNMENT"
+    SHORT_COMPOSED_VIDEO = "SHORT_COMPOSED_VIDEO"
 
 
 class VerdictEnum(str, Enum):
@@ -102,6 +110,7 @@ class FormatJobStatusEnum(str, Enum):
     PENDING = "PENDING"
     FORMATTING = "FORMATTING"
     ASSET_GENERATION = "ASSET_GENERATION"
+    COMPOSITION = "COMPOSITION"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
     HUMAN_REVIEW_NEEDED = "HUMAN_REVIEW_NEEDED"
@@ -126,9 +135,13 @@ PLATFORM_FORMAT_MAP: dict[PlatformEnum, list[FormatTypeEnum]] = {
         FormatTypeEnum.VIDEO,
     ],
     PlatformEnum.LINKEDIN: [FormatTypeEnum.CAROUSEL, FormatTypeEnum.BLOG],
-    PlatformEnum.INSTAGRAM: [FormatTypeEnum.CAROUSEL, FormatTypeEnum.VIDEO],
-    PlatformEnum.TIKTOK: [FormatTypeEnum.CAROUSEL, FormatTypeEnum.VIDEO],
-    PlatformEnum.YOUTUBE: [FormatTypeEnum.BLOG, FormatTypeEnum.VIDEO],
+    PlatformEnum.INSTAGRAM: [FormatTypeEnum.CAROUSEL, FormatTypeEnum.SHORT],
+    PlatformEnum.TIKTOK: [FormatTypeEnum.CAROUSEL, FormatTypeEnum.SHORT],
+    PlatformEnum.YOUTUBE: [
+        FormatTypeEnum.BLOG,
+        FormatTypeEnum.SHORT,
+        FormatTypeEnum.VIDEO,
+    ],
 }
 
 
@@ -183,6 +196,12 @@ class StoryDirectives(BaseModel):
     angle: Optional[str] = Field(
         None, description="Specific editorial angle or framing"
     )
+    voice_id: Optional[str] = Field(
+        None, description="ElevenLabs voice identifier string"
+    )
+    loopable: bool = Field(
+        True, description="When True, formatter writes loop-hook narrative"
+    )
 
 
 class AssetRenderMeta(BaseModel):
@@ -196,6 +215,9 @@ class AssetRenderMeta(BaseModel):
     prompt_used: Optional[str] = Field(None, description="The exact prompt used")
     failure_reason: Optional[str] = Field(
         None, description="Reason for asset generation failure, if any"
+    )
+    scene_number: Optional[int] = Field(
+        None, description="Scene number linking back to format payload"
     )
 
 

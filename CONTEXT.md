@@ -257,3 +257,55 @@ When a FormatJob is created from a completed ScriptJob, the necessary context (s
 
 _Avoid:_ Treating `source_job_id` as a live data source at format-runtime. All data needed for formatting lives in the FormatJob's snapshot columns.
 
+## Short
+
+A format type (`SHORT`) for short-form vertical video (30–50s, up to 90s) targeting TikTok, Instagram Reels, and YouTube Shorts. Produces a composed MP4 via asset hybridization — per-scene video clips mixed with Ken Burns animated stills, overlaid with TTS voiceover, burned-in subtitles (karaoke-style per platform), and background music. Structurally distinct from `VIDEO` (which is a single-shot AI video with describe-only audio). Rendered by the Production Studio through a three-stage post-FORMATTING path: `ASSET_GENERATION` → `COMPOSITION` → `COMPLETED`.
+
+_Avoid:_ Calling a Short a "video" — it follows a different pipeline path and produces a fundamentally different artifact.
+
+## Short Format Payload
+
+The structured output of the `ShortFormatterAgent`. A `ShortFormatPayload` containing: scenes (each with `asset_type` and optional `kb_motion`), `target_total_duration`, `visual_style`, `audio_direction`, `music_mood`, `voice_id`, `subtitle_preset`, and optional `loop_hook`. The `_format` discriminator is `"short"`. Stored as `Script.format_payload` with `Script.role = "format"` and `Script.format_type = "SHORT"`.
+
+## Asset Hybridization
+
+Per-scene visual generation strategy where the LLM tags each scene as either `video_clip` (generated via Together AI) or `ken_burns` (a FLUX still animated with slow pan/zoom via FFmpeg `zoompan`). A validator enforces 1–2 `video_clip` scenes minimum per Short (auto-fixes violations). Cost-efficient and visually varied — avoids the monolithic single-shot approach of the `VIDEO` format.
+
+## Ken Burns Motion
+
+A preset camera movement applied to a static image to create the illusion of motion. Specified per scene as `kb_motion` with values: `pan_left`, `pan_right`, `zoom_in`, `zoom_out`, `static_zoom_in`. Required when `asset_type = "ken_burns"`, forbidden when `asset_type = "video_clip"`. Mapped to FFmpeg `zoompan` filter parameters in the Composition phase.
+
+## TTS Provider
+
+A provider-agnostic abstraction (`TTSProvider` ABC) for text-to-speech generation, mirroring the `VideoGenProvider` pattern. `ElevenLabsTTS` is the first implementation. Returns audio bytes plus `vocal_alignment_data` (word-level timestamps) for subtitle timing. Selected via config; swapping providers requires no pipeline changes.
+
+## Vocal Alignment Data
+
+Word-level timestamp JSON returned by the TTS provider alongside the voiceover audio. Used by the Composition phase to: (1) split the continuous voiceover into per-scene time ranges via string matching against each scene's `narration_text`, (2) generate `.ass` subtitle files with per-word karaoke highlighting. The source of truth for timing — scene `target_duration_seconds` is a pacing budget, not a hard constraint.
+
+## Subtitle Preset
+
+Platform-aware subtitle rendering template. Three presets: `CENTER_POP_YELLOW` (TikTok — bold karaoke with yellow highlight), `CLEAN_WHITE_LOWER` (YouTube — subtle bottom-center), `NEON_BOXED` (Instagram — boxed neon accent). Root-level on `ShortFormatPayload`, not per-scene. Mapped to hardcoded `.ass` style configurations in the Composition phase.
+
+## Composition
+
+A pipeline state (`COMPOSITION`) between `ASSET_GENERATION` and `COMPLETED` where the `ShortComposerAgent` assembles all raw assets (video clips, Ken Burns stills, voiceover, vocal alignment data, background music) into a final MP4 via FFmpeg. Deterministic, local, and fast — no external API calls. Pre-flight validation ensures all artifacts exist before FFmpeg runs. General-purpose: future formats (e.g., carousel PDF composition) can use this state.
+
+_Avoid:_ Confusing Composition with ASSET_GENERATION. ASSET_GENERATION is all external I/O; Composition is local assembly.
+
+## Short Composer Agent
+
+A `ServiceAgent` (no LLM) that runs the 5-step composition pipeline: pre-flight validation → concurrent S3 download → .ass subtitle generation → atomic FFmpeg composition → S3 upload and cleanup. Receives asset URLs and alignment data from ASSET_GENERATION artifacts. Produces a single `SHORT_COMPOSED_VIDEO` asset.
+
+## Short Visual Asset Agent
+
+A `ServiceAgent` that generates per-scene visual assets for a Short. For scenes tagged `video_clip`, calls Together AI's video generation API. For scenes tagged `ken_burns`, calls FLUX image generation. On video clip failure, retries once then falls back to Ken Burns, updating `asset_type` in-place. All assets uploaded to S3 with appropriate `AssetType` (`SHORT_VIDEO_CLIP` or `SHORT_STILL_IMAGE`) and `render_meta.scene_number`.
+
+## Short Voiceover Agent
+
+A `ServiceAgent` that generates a continuous TTS voiceover track via a `TTSProvider` (ElevenLabs). Takes the concatenated scene narration texts and a `voice_id`, returns audio bytes plus `vocal_alignment_data`. Uploads a single `VOICEOVER` asset and a `VOCAL_ALIGNMENT` asset to S3.
+
+## Loop Hook
+
+A narrative bridge on `ShortFormatPayload` (populated when `story_directives.loopable = true`) describing how the final scene's narration connects back to the opening hook. Instructs the `ShortFormatterAgent` to write circular narrative structure. No FFmpeg stitch — the content itself loops by design.
+
