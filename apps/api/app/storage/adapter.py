@@ -36,7 +36,7 @@ def make_upload_image_tool() -> Tool:
         name="upload_image",
         description="Upload an image to the configured storage backend.",
         callable=_upload,
-        permissions={"CarouselImageAgent", "*"},
+        permissions={"CarouselImageAgent", "ShortVisualAssetAgent", "*"},
     )
 
 
@@ -54,5 +54,23 @@ def make_upload_video_tool() -> Tool:
         name="upload_video",
         description="Upload a video to the configured storage backend.",
         callable=_upload,
-        permissions={"VideoGeneratorAgent", "*"},
+        permissions={"VideoGeneratorAgent", "ShortVisualAssetAgent", "*"},
+    )
+
+
+def make_upload_voiceover_tool() -> Tool:
+    async def _upload(
+        file_bytes: bytes,
+        filename: str,
+        folder: str = "",
+        content_type: str = "audio/mpeg",
+    ) -> str:
+        storage = get_storage()
+        return storage.upload_voiceover(file_bytes, filename, folder, content_type)
+
+    return Tool(
+        name="upload_voiceover",
+        description="Upload a voiceover audio file to the configured storage backend.",
+        callable=_upload,
+        permissions={"ShortVoiceoverAgent", "*"},
     )
