@@ -33,15 +33,17 @@ async def create_format_job(
         db.add(job)
         await db.commit()
         return job
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        stmt = select(FormatJob).where(
-            FormatJob.source_job_id == source_job_id,
-            FormatJob.platform == platform,
-            FormatJob.format_type == format_type,
-        )
-        result = await db.execute(stmt)
-        return result.scalar_one()
+        if "uq_format_jobs_source_platform_type" in str(exc.orig):
+            stmt = select(FormatJob).where(
+                FormatJob.source_job_id == source_job_id,
+                FormatJob.platform == platform,
+                FormatJob.format_type == format_type,
+            )
+            result = await db.execute(stmt)
+            return result.scalar_one()
+        raise
 
 
 async def claim_next_format_job(
