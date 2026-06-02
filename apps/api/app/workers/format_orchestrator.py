@@ -96,6 +96,10 @@ async def _transition_formatting(db: AsyncSession, format_job: FormatJob) -> Non
         for c in claims
         if c.get("hedge_required")
     ]
+    format_job.hedge_index = hedge_index
+    await db.commit()
+
+    await update_format_job_status(db, format_job.id, FormatJobStatusEnum.FORMATTING)
 
     base_context = {
         "script_content": format_job.script_content,
@@ -314,9 +318,7 @@ async def _transition_asset_generation(db: AsyncSession, format_job: FormatJob) 
                 db, format_job.id, error_msg, phase="CAROUSEL_IMAGE_GENERATION"
             )
 
-    elif fmt_type == "blog":
-        any_success = True
-
+    # Blog jobs complete during formatting and never reach asset generation.
     if any_success:
         await update_format_job_status(db, format_job.id, FormatJobStatusEnum.COMPLETED)
     else:
