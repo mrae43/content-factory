@@ -62,6 +62,11 @@ class Settings(BaseSettings):
     video_gen_poll_interval_seconds: int = 5
     video_gen_max_poll_retries: int = 60
 
+    # TTS (Text-to-Speech)
+    tts_provider: str = "elevenlabs"
+    tts_api_key: str = ""
+    default_voice_map: dict[str, str] = {}
+
     storage_backend: str = "s3"
 
     # S3 / SeaweedFS

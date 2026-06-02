@@ -64,6 +64,14 @@ class TestCreateFormatJob:
     ):
         mock_db.execute.return_value = mock_scalar_result
 
+        result = await create_format_job(
+            mock_db,
+            source_job_id=source_job_id,
+            platform="instagram",
+            format_type="carousel",
+            snapshot_data=sample_snapshot,
+        )
+
         mock_db.add.assert_called_once()
         added = mock_db.add.call_args[0][0]
         assert added.title == "Test Script"
@@ -99,8 +107,15 @@ class TestCreateFormatJob:
     async def test_empty_claims_in_snapshot(
         self, mock_db, mock_scalar_result, source_job_id
     ):
-        snapshot = {"title": "Test", "script_content": "content"}
         mock_db.execute.return_value = mock_scalar_result
+
+        await create_format_job(
+            mock_db,
+            source_job_id=source_job_id,
+            platform="instagram",
+            format_type="carousel",
+            snapshot_data={"script_content": "content"},
+        )
 
         added = mock_db.add.call_args[0][0]
         assert added.script_content == "content"
