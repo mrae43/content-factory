@@ -358,17 +358,17 @@ class TestResolveFormats:
         result = resolve_formats(PlatformEnum.LINKEDIN, FormatTypeEnum.ALL)
         assert result == [FormatTypeEnum.CAROUSEL, FormatTypeEnum.BLOG]
 
-    def test_all_on_instagram_returns_carousel_video(self):
+    def test_all_on_instagram_returns_carousel_short(self):
         result = resolve_formats(PlatformEnum.INSTAGRAM, FormatTypeEnum.ALL)
-        assert result == [FormatTypeEnum.CAROUSEL, FormatTypeEnum.VIDEO]
+        assert result == [FormatTypeEnum.CAROUSEL, FormatTypeEnum.SHORT]
 
-    def test_all_on_tiktok_returns_carousel_video(self):
+    def test_all_on_tiktok_returns_carousel_short(self):
         result = resolve_formats(PlatformEnum.TIKTOK, FormatTypeEnum.ALL)
-        assert result == [FormatTypeEnum.CAROUSEL, FormatTypeEnum.VIDEO]
+        assert result == [FormatTypeEnum.CAROUSEL, FormatTypeEnum.SHORT]
 
-    def test_all_on_youtube_returns_blog_video(self):
+    def test_all_on_youtube_returns_blog_short_video(self):
         result = resolve_formats(PlatformEnum.YOUTUBE, FormatTypeEnum.ALL)
-        assert result == [FormatTypeEnum.BLOG, FormatTypeEnum.VIDEO]
+        assert result == [FormatTypeEnum.BLOG, FormatTypeEnum.SHORT, FormatTypeEnum.VIDEO]
 
     def test_specific_format_returns_itself(self):
         result = resolve_formats(PlatformEnum.TWITTER, FormatTypeEnum.BLOG)
