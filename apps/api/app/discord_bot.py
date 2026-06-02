@@ -20,8 +20,11 @@ from app.db.script_crud import (
     create_script_job,
     get_script_job,
     get_stuck_script_jobs,
+    log_script_job_error,
+    update_script_job_status,
 )
 from app.db.format_crud import create_format_job
+from app.schemas.shorts import ScriptJobStatusEnum
 from app.services.script_pipeline import ScriptPipelineRunner
 
 logging.basicConfig(
@@ -112,13 +115,13 @@ async def _run_script_pipeline(
                 job = await get_script_job(db, job.id)
 
             if job and thread:
-                if job.status.value == "COMPLETED":
+                if job.status == ScriptJobStatusEnum.COMPLETED:
                     await _post_completion(thread, job)
-                elif job.status.value == "HUMAN_REVIEW_NEEDED":
+                elif job.status == ScriptJobStatusEnum.HUMAN_REVIEW_NEEDED:
                     await thread.send(
                         "⚠️ **Pipeline escalated** — human review is required."
                     )
-                elif job.status.value == "FAILED":
+                elif job.status == ScriptJobStatusEnum.FAILED:
                     error_log = job.error_log or {}
                     error_msg = (
                         list(error_log.values())[0].get("message", "Unknown error")
@@ -205,24 +208,7 @@ class FormatSelectionView(discord.ui.View):
 
 # ── Platform Modal ──────────────────────────────────────────────────────
 
-
-PLATFORM_CHOICES = [
-    discord.SelectOption(
-        label="TikTok", value="tiktok", description="Short-form vertical video"
-    ),
-    discord.SelectOption(
-        label="YouTube", value="youtube", description="Long-form horizontal video"
-    ),
-    discord.SelectOption(
-        label="Instagram", value="instagram", description="Square carousel"
-    ),
-    discord.SelectOption(
-        label="Twitter / X", value="twitter", description="Wide carousel"
-    ),
-    discord.SelectOption(
-        label="LinkedIn", value="linkedin", description="Professional carousel"
-    ),
-]
+VALID_PLATFORMS = {"tiktok", "youtube", "instagram", "twitter", "linkedin"}
 
 
 class PlatformModal(discord.ui.Modal):
@@ -231,17 +217,19 @@ class PlatformModal(discord.ui.Modal):
         self.script_job_id = script_job_id
         self.format_type = format_type
 
-        self.platform = discord.ui.Select(
-            placeholder="Choose a platform...",
-            options=PLATFORM_CHOICES,
-            min_values=1,
-            max_values=1,
+        self.platform_input = discord.ui.TextInput(
+            label="Platform",
+            placeholder="tiktok, youtube, instagram, twitter, linkedin",
+            min_length=1,
+            max_length=20,
+            required=True,
         )
-        self.add_item(self.platform)
+        self.add_item(self.platform_input)
 
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=False)
-        platform = self.platform.values[0] if self.platform.values else "instagram"
+        raw_platform = (self.platform_input.value or "").strip().lower()
+        platform = raw_platform if raw_platform in VALID_PLATFORMS else "instagram"
 
         try:
             async with AsyncSessionLocal() as db:
@@ -260,7 +248,11 @@ class PlatformModal(discord.ui.Modal):
                     "refined_context": job.refined_context,
                     "story_directives": job.story_directives,
                     "hedge_index": job.hedge_index,
-                    "epistemic_ledger": None,
+                    "epistemic_ledger": (
+                        job.working_memory.get("epistemic_ledger")
+                        if job.working_memory
+                        else None
+                    ),
                 }
 
                 fmt_job = await create_format_job(
@@ -321,6 +313,15 @@ async def on_ready():
     await recover_stuck_script_jobs()
 
 
+async def _safe_resume(runner: ScriptPipelineRunner, job_id: UUID) -> None:
+    """Resume a recovered pipeline, guarding the bot event loop."""
+    async with _script_semaphore:
+        try:
+            await runner.run()
+        except Exception:
+            logger.exception("Crash recovery failed for ScriptJob %s", job_id)
+
+
 async def recover_stuck_script_jobs():
     """Release stale locks and resume any stuck script pipelines on startup."""
     logger.info("Checking for stuck script jobs...")
@@ -334,8 +335,48 @@ async def recover_stuck_script_jobs():
             logger.info(
                 "Released lock on stuck ScriptJob %s (status=%s)",
                 job.id,
-                job.status.value,
+                getattr(job.status, "value", str(job.status)),
             )
+
+            thread_id = None
+            if job.working_memory:
+                thread_id = job.working_memory.get("discord_thread_id")
+
+            if thread_id:
+                try:
+                    thread = await bot.fetch_channel(int(thread_id))
+                    notifier = DiscordProgressNotifier(thread)
+                    runner = ScriptPipelineRunner(db, job.id, notifier)
+                    bot.loop.create_task(_safe_resume(runner, job.id))
+                    logger.info(
+                        "Resuming ScriptJob %s in thread %s", job.id, thread_id
+                    )
+                except discord.NotFound:
+                    logger.warning(
+                        "Thread %s deleted for ScriptJob %s", thread_id, job.id
+                    )
+                    await log_script_job_error(
+                        db,
+                        job.id,
+                        f"Discord thread {thread_id} was deleted during bot downtime",
+                        "crash_recovery",
+                    )
+                    await update_script_job_status(
+                        db, job.id, ScriptJobStatusEnum.FAILED
+                    )
+            else:
+                logger.warning(
+                    "No thread_id for ScriptJob %s; cannot resume", job.id
+                )
+                await log_script_job_error(
+                    db,
+                    job.id,
+                    "Missing discord_thread_id in working_memory; cannot resume after crash",
+                    "crash_recovery",
+                )
+                await update_script_job_status(
+                    db, job.id, ScriptJobStatusEnum.FAILED
+                )
 
 
 async def main():
