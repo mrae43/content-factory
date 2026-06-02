@@ -90,7 +90,9 @@ class TestCreateFormatJob:
 
         from sqlalchemy.exc import IntegrityError
 
-        mock_db.commit.side_effect = IntegrityError("mock", "mock", "mock")
+        mock_db.commit.side_effect = IntegrityError(
+            "mock", "mock", Exception("uq_format_jobs_source_platform_type")
+        )
         mock_scalar_result.scalar_one.return_value = existing
 
         result = await create_format_job(
@@ -120,6 +122,25 @@ class TestCreateFormatJob:
         added = mock_db.add.call_args[0][0]
         assert added.script_content == "content"
         assert added.claims is None
+
+    async def test_reraises_unexpected_integrity_error(
+        self, mock_db, mock_scalar_result, source_job_id, sample_snapshot
+    ):
+        from sqlalchemy.exc import IntegrityError
+
+        mock_db.commit.side_effect = IntegrityError(
+            "mock", "mock", Exception("not_null_violation")
+        )
+        mock_scalar_result.scalar_one.side_effect = Exception("should not reach")
+
+        with pytest.raises(IntegrityError):
+            await create_format_job(
+                mock_db,
+                source_job_id=source_job_id,
+                platform="instagram",
+                format_type="carousel",
+                snapshot_data=sample_snapshot,
+            )
 
 
 @pytest.mark.unit
