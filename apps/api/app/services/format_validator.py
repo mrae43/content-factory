@@ -8,6 +8,7 @@ from app.services.tools import Tool
 from app.schemas.formats import (
     BlogFormatPayload,
     CarouselFormatPayload,
+    ShortFormatPayload,
     VideoFormatPayload,
 )
 
@@ -163,6 +164,73 @@ class VideoValidator(FormatValidator):
                 error_message=(
                     "unified_visual_prompt must be more than just the visual_style. "
                     "Include scene-by-scene visual direction."
+                ),
+            )
+
+        return FormatValidationResult(
+            valid=True,
+            validated_payload=validated.model_dump(by_alias=True, mode="json"),
+        )
+
+
+class ShortValidator(FormatValidator):
+    def __init__(self, platform: str = "default"):
+        self.platform = platform
+
+    def validate(self, payload: dict) -> FormatValidationResult:
+        try:
+            validated = ShortFormatPayload.model_validate(payload)
+        except ValidationError as e:
+            return FormatValidationResult(
+                valid=False,
+                error_message=str(e),
+            )
+
+        scenes = validated.scenes
+        video_clip_indices = [
+            i for i, s in enumerate(scenes) if s.asset_type == "video_clip"
+        ]
+
+        modified = False
+        if len(video_clip_indices) == 0:
+            # Upgrade scene 1 (index 0) to video_clip
+            scenes[0].asset_type = "video_clip"
+            scenes[0].kb_motion = None
+            modified = True
+        elif len(video_clip_indices) > 2:
+            # Downgrade excess (highest scene numbers first)
+            excess_count = len(video_clip_indices) - 2
+            to_downgrade = sorted(
+                video_clip_indices,
+                key=lambda i: scenes[i].scene_number,
+                reverse=True,
+            )[:excess_count]
+            for idx in to_downgrade:
+                scenes[idx].asset_type = "ken_burns"
+                scenes[idx].kb_motion = "zoom_in"
+            modified = True
+
+        if modified:
+            try:
+                raw = validated.model_dump(by_alias=True, mode="json")
+                validated = ShortFormatPayload.model_validate(raw)
+            except ValidationError as e:
+                return FormatValidationResult(
+                    valid=False,
+                    error_message=f"Auto-fix produced invalid payload: {e}",
+                )
+
+        empty_scenes = [
+            s.scene_number
+            for s in validated.scenes
+            if not s.narration_text.strip() or not s.visual_prompt.strip()
+        ]
+        if empty_scenes:
+            return FormatValidationResult(
+                valid=False,
+                error_message=(
+                    f"Scenes {empty_scenes} have empty narration_text or "
+                    "visual_prompt. Every scene must have both fields populated."
                 ),
             )
 
