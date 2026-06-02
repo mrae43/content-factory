@@ -112,7 +112,7 @@ def make_generate_video_tool() -> Tool:
         name="generate_video",
         description="Submit a video generation job via the configured video provider.",
         callable=_generate,
-        permissions={"VideoGeneratorAgent", "*"},
+        permissions={"VideoGeneratorAgent", "ShortVisualAssetAgent", "*"},
     )
 
 
@@ -126,5 +126,5 @@ def make_poll_video_tool() -> Tool:
         name="poll_video",
         description="Poll a video generation job for completion status.",
         callable=_poll,
-        permissions={"VideoGeneratorAgent", "*"},
+        permissions={"VideoGeneratorAgent", "ShortVisualAssetAgent", "*"},
     )

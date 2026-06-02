@@ -332,5 +332,5 @@ def make_generate_image_tool(
         name="generate_image",
         description="Generate a carousel slide image via FLUX on Together AI.",
         callable=_generate,
-        permissions={"CarouselImageAgent", "*"},
+        permissions={"CarouselImageAgent", "ShortVisualAssetAgent", "*"},
     )
