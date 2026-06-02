@@ -32,7 +32,7 @@ def upgrade() -> None:
         "HUMAN_REVIEW_NEEDED",
         name="script_job_status",
         schema="factory",
-        create_type=True,
+        create_type=False,
     )
     script_job_status.create(op.get_bind())
 
@@ -45,7 +45,7 @@ def upgrade() -> None:
         "HUMAN_REVIEW_NEEDED",
         name="format_job_status",
         schema="factory",
-        create_type=True,
+        create_type=False,
     )
     format_job_status.create(op.get_bind())
 
