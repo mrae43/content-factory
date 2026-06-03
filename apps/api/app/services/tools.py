@@ -125,3 +125,7 @@ def register_standard_tools() -> None:
         from app.services.tts import make_get_alignment_tool
 
         registry.register(make_get_alignment_tool())
+    if "upload_voiceover" not in registry:
+        from app.storage.adapter import make_upload_voiceover_tool
+
+        registry.register(make_upload_voiceover_tool())
