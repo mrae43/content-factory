@@ -1,6 +1,6 @@
 # Content Factory
 
-Multi-agent system that generates multi-format content (Shorts/Reels/TikToks, blog articles, social carousels, **and now full video assets**) for high-stakes domains — politics, macro-economics, historical analysis. Treats **Truth and Guardrails as first-class citizens** via a rigorous Red Team agentic loop that verifies claims against a vector database before any rendering occurs.
+Multi-agent system that generates multi-format content (short-form vertical videos with TTS voiceover, karaoke subtitles, background music, and Ken Burns animation; full video assets; blog articles; and social carousels) for high-stakes domains — politics, macro-economics, historical analysis. Treats **Truth and Guardrails as first-class citizens** via a rigorous Red Team agentic loop that verifies claims against a vector database before any rendering occurs.
 
 **Nx monorepo** with a Python FastAPI backend, Next.js 16 frontend (App Router, React 19), and shared TypeScript types. Ships with an editorial design system (Stone & Copper palette, Playfair Display + Inter + JetBrains Mono typography, dark mode).
 
@@ -16,24 +16,29 @@ Multi-agent system that generates multi-format content (Shorts/Reels/TikToks, bl
 - **Web-Enriched RAG** — Tavily search enriches user-provided context with live web results, ingested as vector chunks for semantic retrieval by downstream agents.
 - **Evaluator-Optimizer with Short-Term Memory** — On revision, a dedicated `ScriptOptimizerAgent` surgically patches failed claims instead of re-drafting the entire script, preserving quality sections and reducing hallucination drift. An **Optimization History Ledger** (ADR 0006) tracks claim identity across evaluator-optimizer iterations via Gemini embedding anchoring — a `ClaimMapper` service (`app/services/claim_mapper.py`) computes cosine similarity matrices with greedy 1-to-1 assignment to resolve which claims were fixed, regressed, or unchanged, preventing the optimizer from reverting previously-successful patches.
 - **Live Video Generation** — The `VideoGeneratorAgent` (`ServiceAgent`) generates real videos via Together AI's video API — submits a generation job, polls for completion (up to 300s), downloads the result, and uploads to S3/SeaweedFS. Replaces the legacy mocked-URL `AssetStudioAgent`. The `VideoFormatterAgent` produces a single-shot `unified_visual_prompt` with scene structure, duration, and visual style. A provider-agnostic `VideoGenProvider` ABC mirrors the LLM provider registry pattern for future backend swaps.
-- **Multi-Format Output** — Pipeline branches by `format_type` after Red Team approval: `video` → formatting (video storyboard) → asset generation (render), `blog` → formatting → complete, `carousel` → formatting → asset generation (images) → complete, or `all` → blog + carousel formatting in parallel → asset generation → complete. `AgentHarness` wraps each formatter with generate-validate-retry loops and doom loop detection.
+- **SHORT Format Pipeline** — A complete short-form vertical video pipeline (30-90s for TikTok, Instagram Reels, YouTube Shorts) with `ShortFormatterAgent` (Plan→Execute LLM agent producing per-scene storyboard), `ShortVisualAssetAgent` (ServiceAgent generating video clips + Ken Burns stills per scene), `ShortVoiceoverAgent` (ServiceAgent for ElevenLabs TTS with word-level alignment), and `ShortComposerAgent` (ServiceAgent that downloads all assets → generates karaoke ASS subtitles → FFmpeg composes final MP4 with background music → uploads to S3). A dedicated **COMPOSITION** pipeline state sits between ASSET_GENERATION and COMPLETED. Three subtitle presets (`CENTER_POP_YELLOW`, `CLEAN_WHITE_LOWER`, `NEON_BOXED`) with word-level karaoke highlighting.
+- **TTS Provider Abstraction** — A `TTSProvider` ABC with `ElevenLabsTTS` implementation mirrors the provider registry pattern. `generate_voiceover()` returns audio bytes + vocal alignment timestamps. Provider-agnostic via `TTS_PROVIDERS` dict and `get_tts_provider()` factory.
+- **Multi-Format Output** — Pipeline branches by `format_type` after Red Team approval: `video` → formatting → asset generation → complete, `blog` → formatting → complete, `carousel` → formatting → asset generation (images) → complete, `short` → formatting → asset generation (visual + voiceover) → composition (final MP4) → complete, or `all` → platform-specific format resolution → formatting in parallel → asset generation → composition (for SHORT) → complete. `AgentHarness` wraps each formatter with generate-validate-retry loops and doom loop detection.
 - **S3/SeaweedFS Object Storage** — `StorageAdapter` abstracts between `S3Storage` (boto3, auto-creates buckets, `device_id/job_id` key prefixing) and `LocalStorage` (static files). SeaweedFS runs as a first-class Docker service. Default backend: `s3`.
-- **Platform-Aware Validation** — `BlogValidator` and `CarouselValidator` enforce schema constraints and platform-specific character limits (Twitter 280, LinkedIn 700, Instagram 2200) before accepting output.
-- **Declarative Tool Registry** — All pipeline capabilities (image generation/upload, video gen/poll/upload, web search, semantic search, chunk ingestion, format validation) are registered as first-class `Tool` objects in a singleton `ToolRegistry` (`app/services/tools.py`). **9 standard tools** registered at startup. Symmetric permissions enforce that both the tool and the agent must consent to binding, caught at composition time. Agents declare dependencies via `_required_di_tools` and `_required_llm_tools` class variables; `AgentHarness` injects permitted tools automatically.
+- **Platform-Aware Validation** — `BlogValidator`, `CarouselValidator`, and `ShortValidator` enforce schema constraints and platform-specific rules. `ShortValidator` auto-fixes video_clip vs ken_burns asset balance (ensures ≥1 video clip, caps at 2 video clips).
+- **Declarative Tool Registry** — All pipeline capabilities (image generation/upload, video gen/poll/upload, web search, semantic search, chunk ingestion, format validation, **voiceover gen/alignment/upload**) are registered as first-class `Tool` objects in a singleton `ToolRegistry` (`app/services/tools.py`). **12 standard tools** registered at startup. Symmetric permissions enforce that both the tool and the agent must consent to binding, caught at composition time. Agents declare dependencies via `_required_di_tools` and `_required_llm_tools` class variables; `AgentHarness` injects permitted tools automatically.
 - **Context Checkpointing for Retries** — The RedTeamAgent checkpoints intermediate state (claim extraction + evidence retrieval) across both tenacity and harness retry layers, preventing token waste. Two-tier retry policies (`agent_api_retry` inner 3 attempts, `agent_parent_retry` outer 3 attempts) with self-healing on checkpoint corruption.
 - **Two-Class Agent Hierarchy** — `LLMAgent` (provider-agnostic `self.llm`, tool-calling via `_run_tool_loop`) and `ServiceAgent` (deterministic, no LLM) both extend `BaseAgent`. All agents share declarative tool declarations, permission enforcement, and the `run(context)` → `_execute(context)` contract.
+- **Discord Bot Integration** — A fully-featured Discord bot with `/script` slash command that triggers the full pipeline. `ScriptPipelineRunner` encapsulates a self-contained pipeline loop (no QueueWorker) for Discord-originated jobs: Pending → Researching → Retrieval → Scripting → Fact-Check with optimizer loop. Interactive format selection (buttons + platform modal) after script completion. Progress notifications posted to Discord threads. Concurrency limited via `asyncio.Semaphore(3)`.
+- **Crash Recovery** — Both `QueueWorker` and Discord bot recover stuck jobs on startup. Stale locks (locked > 15 min) on `ScriptJob` and `FormatJob` records are automatically released and queued for re-processing. `recover_stuck_jobs()` and `recover_stuck_format_jobs()` called on worker start.
 
 ---
 
-## The 9-Step Pipeline
+## The 10-Step Pipeline
 
 A `RenderJob` flows through these state transitions asynchronously. A **Context Retrieval** phase (Step 4) replaces the legacy `FACT_CHECKING_RESEARCH` passthrough — the `refined_context` is built directly from `user_reference` + `story_directives`, and a `ContextBuilder` assembles retrieved evidence chunks (from RAW-CONTEXT, LOCAL, and GLOBAL scopes) into an `AssembledContext` for the copywriter.
 
 After Red Team approval (Step 6), the pipeline branches by `format_type`:
 
 - **`video`** → FORMATTING (VideoFormatterAgent produces storyboard) → ASSET_GENERATION (VideoGeneratorAgent renders) → COMPLETED
-- **`blog`** or **`carousel`** → FORMATTING → ASSET_GENERATION (carousel images only) → COMPLETED
-- **`all`** (default) → FORMATTING (blog + carousel in parallel) → ASSET_GENERATION (video + carousel images) → COMPLETED
+- **`blog`** or **`carousel`** → FORMATTING → ASSET_GENERATION (images only) → COMPLETED
+- **`short`** → FORMATTING (ShortFormatterAgent produces storyboard) → ASSET_GENERATION (ShortVisualAssetAgent + ShortVoiceoverAgent) → COMPOSITION (ShortComposerAgent assembles MP4) → COMPLETED
+- **`all`** (default) → FORMATTING resolves platform-specific formats (e.g. Instagram `[CAROUSEL, SHORT]`) → formats in parallel → ASSET_GENERATION → COMPOSITION (if SHORT included) → COMPLETED
 
 ### 1. Ingestion (`PENDING`)
 User submits a `title` (e.g., *"BRICS De-dollarization 2025"*) along with `user_reference` (narrative foundation text), `research_inputs.source_urls` (URLs for Tavily extraction), `story_directives` (target_audience, tone, angle, guardrail_strictness), `format_type`, `platform`, and optional `device_id` (for S3 key prefixing) via `POST /api/v1/jobs/`.
@@ -88,14 +93,15 @@ Format-specific agents produce structured output depending on `format_type`:
 - **BlogFormatterAgent** (LLMAgent) — Two-phase LLM calls (plan outline → execute full output) producing structured blog sections with SEO metadata
 - **CarouselFormatterAgent** (LLMAgent) — Two-phase LLM calls producing platform-specific slide decks with character-limit enforcement
 - **VideoFormatterAgent** (LLMAgent) — Two-phase LLM calls producing a `VideoFormatPayload` with `unified_visual_prompt`, scene breakdown, `total_duration_seconds`, `visual_style`, and `audio_direction`
+- **ShortFormatterAgent** (LLMAgent) — Two-phase LLM calls (plan outline → execute) producing a `ShortFormatPayload` with 2-12 scenes, each specifying `asset_type` (`video_clip` or `ken_burns`), narration text, visual prompt, Ken Burns motion preset, target duration, and optional SFX cue. Output includes `voice_id`, `subtitle_preset`, `music_mood`, and `visual_style`. Platform defaults resolve `voice_id` and subtitle preset automatically.
 
-Each formatter is wrapped in an **`AgentHarness`** — a generate-validate-retry loop with tool injection, doom loop detection (SHA-256 payload hashing), LLM-callable tool binding (`_inject_llm_tools`), and validator integration. `BlogValidator` and `CarouselValidator` enforce schema constraints and platform rules. Max 2 retries (3 total attempts). Formatters receive the **epistemic ledger** from working memory to apply hedging on weak claims.
+Each formatter is wrapped in an **`AgentHarness`** — a generate-validate-retry loop with tool injection, doom loop detection (SHA-256 payload hashing), LLM-callable tool binding (`_inject_llm_tools`), and validator integration. `BlogValidator`, `CarouselValidator`, and **`ShortValidator`** enforce schema constraints and platform rules. `ShortValidator` auto-fixes video_clip vs ken_burns balance to ensure feasible composition. Max 2 retries (3 total attempts). Formatters receive the **epistemic ledger** from working memory to apply hedging on weak claims.
 
-When `format_type = "all"`, blog and carousel formatters run concurrently via `asyncio.gather()`. Video format always routes through FORMATTING first (to produce the storyboard), then to ASSET_GENERATION for rendering.
+When `format_type = "all"`, platform-specific formats are resolved (e.g. Instagram → `[CAROUSEL, SHORT]`) and run concurrently via `asyncio.gather()`.
 
 After formatting, `_next_status_after_formatting()` routes to:
-- **COMPLETED** — blog-only or carousel-only jobs (no visual assets needed)
-- **ASSET_GENERATION** — video jobs, carousel jobs, or `all` jobs (assets needed)
+- **COMPLETED** — blog-only jobs (no visual assets needed)
+- **ASSET_GENERATION** — video, carousel, short, or all jobs (assets needed)
 
 ### 8. Asset Generation (`ASSET_GENERATION`)
 The orchestrator branches by format:
@@ -109,13 +115,26 @@ The orchestrator branches by format:
 
 - **Carousel** — Runs the **CarouselImageAgent** which generates real images via Together AI `FLUX.1-schnell` with platform-specific dimensions (Instagram/LinkedIn 1088×1344, Twitter 1088×1616, TikTok 1088×1920, YouTube 1920×1088), editorial brand styling (copper and stone tones, flat vector illustration, no text/typography). Images are uploaded via `StorageAdapter` (default: **S3** via SeaweedFS using boto3 with auto-created buckets, fallback: **local** → `static/carousel_images/`) with a `device_id/job_id` folder prefix for multi-device isolation. Includes retry logic (3 attempts with exponential backoff) and a global rate-limit coordinator (asyncio `Lock`, 3s minimum gap between calls, exponential backoff on HTTP 429).
 
-- **`all`** — Runs both video and carousel generation for their respective formats.
+- **SHORT** — Runs two agents concurrently via `asyncio.gather()`:
+  - **ShortVisualAssetAgent** (`ServiceAgent`) — For each scene in the `ShortFormatPayload`, generates assets: `video_clip` scenes use `generate_video`/`poll_video` tools (Together AI video gen), `ken_burns` scenes use `generate_image` tool (FLUX still for Ken Burns FFmpeg animation). Falls back video failures to Ken Burns stills. Platform-specific dimensions (TikTok/YouTube 1080×1920, Instagram 1080×1350). All assets uploaded to S3 with `scene_number` linking.
+  - **ShortVoiceoverAgent** (`ServiceAgent`) — Joins all scene narration text, calls `generate_voiceover` tool (ElevenLabs TTS with word-level timestamps), uploads audio MP3 and `VOCAL_ALIGNMENT` JSON to S3.
+
+- **`all`** — Runs video, carousel, and short asset generation for their respective resolved formats.
 
 A `POST /api/v1/jobs/{id}/regenerate-assets` endpoint allows re-running carousel image generation post-completion. **SeaweedFS** (S3-compatible object store) runs as a Docker service alongside the stack.
 
 The legacy `AssetStudioAgent` (mocked `s3://` URLs) is deprecated and no longer used in the orchestrator path.
 
-### 9. Completion (`COMPLETED`)
+### 8b. Composition (`COMPOSITION`)
+The final assembly step for SHORT format only. The **ShortComposerAgent** (`ServiceAgent`) runs a 5-step deterministic pipeline:
+
+1. **Pre-flight** — Validates voiceover and vocal alignment URLs exist
+2. **Concurrent Download** — Downloads all scene assets (video clips, still images), voiceover audio, vocal alignment JSON, and background music (from S3 `media-music` bucket or local `static/music/`) in parallel
+3. **Subtitle Generation** — Generates an ASS subtitle file with **karaoke word highlighting** using `generate_ass_file()` (`app/services/subtitles.py`). Maps word-level timestamps to per-word `{\k}` timing tags. Three presets: `CENTER_POP_YELLOW` (bold centered), `CLEAN_WHITE_LOWER` (subtle bottom), `NEON_BOXED` (boxed neon accent)
+4. **FFmpeg Composition** — Builds a complex filter graph: zoompan animation for still images, concat for video streams, ass overlay for subtitles, amix for voiceover + music. Outputs H.264/AAC MP4 with `faststart`
+5. **Upload & Cleanup** — Uploads final MP4 to S3 (`SHORT_COMPOSED_VIDEO` asset), sets `job.final_video_url`, cleans up temp files
+
+### 10. Completion (`COMPLETED`)
 Two-phase teardown:
 
 1. **GLOBAL Promotion** — The orchestrator retrieves the latest SUPPORTED claims from the current job, uses a dedicated LLM (`promotion_model`, default `openai/gpt-oss-20b`) to compress each into a factual statement, and ingests them as `GLOBAL`-scope chunks (`job_id=None`, `source_type="COMPRESSED_FACT"`) — creating persistent long-term memory for future jobs.
@@ -150,11 +169,15 @@ The final job state, scripts, audit trail, asset metadata, and S3 URLs are avail
 | AI Orchestration | LangChain + Google GenAI + Together AI (OpenAI-compatible). Claim embedding mapping via numpy. |
 | Video Generation | Together AI `videos.create` / `videos.retrieve` via `AsyncTogether`. Provider-agnostic `VideoGenProvider` ABC with registry pattern (`TogetherVideoGen`). Poll-and-download pattern with S3 upload. |
 | Image Generation | Together AI `v1/images/generations` with `FLUX.1-schnell` (configurable via `image_model` env var). Global rate-limit coordinator with exponential backoff. |
-| Storage | `StorageAdapter` dispatcher — default **S3** (`app/storage/s3.py`, via `boto3`, auto-creates buckets, targets SeaweedFS, `device_id/job_id` key prefixing), fallback **local** (`app/storage/local.py` → `static/carousel_images/`). Configured via `STORAGE_BACKEND` env var. |
-| Models | Two tiers via Together AI: **Premium** (`meta-llama/Llama-3.3-70B-Instruct-Turbo` for CopywriterAgent, RedTeamAgent), **Standard** (`openai/gpt-oss-20b` for ScriptOptimizerAgent, formatters, promotion). Video gen: Together AI (provider default model). Image model: `black-forest-labs/FLUX.1-schnell`. Eval suite uses separate `eval_*` models. Embeddings: `models/gemini-embedding-001` (Gemini). |
+| TTS (Text-to-Speech) | `TTSProvider` ABC with `ElevenLabsTTS` implementation. Provider registry pattern (`TTS_PROVIDERS` dict, `get_tts_provider()` factory). Word-level timestamp alignment for karaoke subtitles. |
+| Subtitles | ASS subtitle generation with karaoke word highlighting (`app/services/subtitles.py`). Three presets: `CENTER_POP_YELLOW`, `CLEAN_WHITE_LOWER`, `NEON_BOXED`. |
+| Video Composition | FFmpeg with complex filter graphs — zoompan animation, concat, ass overlay, amix. ShortComposerAgent produces final MP4 with H.264/AAC. |
+| Storage | `StorageAdapter` dispatcher — default **S3** (`app/storage/s3.py`, via `boto3`, auto-creates buckets, targets SeaweedFS, `device_id/job_id` key prefixing), fallback **local** (`app/storage/local.py` → `static/carousel_images/`, `static/videos/`, `static/voiceovers/`, `static/music/`). Configured via `STORAGE_BACKEND` env var. |
+| Discord Bot | `discord.py` bot with `/script` slash command. `ScriptPipelineRunner` for Discord-originated jobs (inline pipeline, no QueueWorker). Interactive format selection with buttons and modals. Crash recovery on startup. |
+| Models | Two tiers via Together AI: **Premium** (`meta-llama/Llama-3.3-70B-Instruct-Turbo` for CopywriterAgent, RedTeamAgent), **Standard** (`openai/gpt-oss-20b` for ScriptOptimizerAgent, formatters, promotion). Video gen: Together AI (provider default model). Image model: `black-forest-labs/FLUX.1-schnell`. TTS: ElevenLabs. Eval suite uses separate `eval_*` models. Embeddings: `models/gemini-embedding-001` (Gemini). |
 | Embeddings | `models/gemini-embedding-001` (768-dim, pgvector HNSW with cosine) |
 | Web Search | Tavily (`langchain-tavily`) |
-| Background Queue | `asyncio.create_task` + `FOR UPDATE SKIP LOCKED` (no Celery/Redis). Two-tier tenacity retry policies (`agent_api_retry` + `agent_parent_retry`) |
+| Background Queue | `asyncio.create_task` + `FOR UPDATE SKIP LOCKED` (no Celery/Redis). Dual queue polling (RenderJobs + FormatJobs). Two-tier tenacity retry policies (`agent_api_retry` + `agent_parent_retry`) |
 | Working Memory | Tripartite JSONB on `RenderJob` (`copywriter_rationale`, `optimizer_phase`, `epistemic_ledger`) — orchestrator-owned, agents stay stateless |
 | Testing | pytest + pytest-asyncio + httpx + deepeval + LLM-as-Judge (Together AI) |
 | CI/CD | GitHub Actions (lint → unit/agent tests → eval/integration/docker) |
@@ -211,7 +234,7 @@ After `docker compose up -d`, services are available at:
 | API (FastAPI) | http://localhost:8000/docs | Swagger UI |
 | pgAdmin | http://localhost:5050 | Login with `PGADMIN_EMAIL` / `PGADMIN_PASSWORD` |
 | PostgreSQL | `127.0.0.1:5433` | Binary protocol only — use pgAdmin or a DB client, not a browser |
-| SeaweedFS (S3) | http://localhost:8333 | S3-compatible object store — buckets `media-images`, `media-videos` |
+| SeaweedFS (S3) | http://localhost:8333 | S3-compatible object store — buckets `media-images`, `media-videos`, `media-music` |
 
 **pgAdmin DB connection:** When adding a server in pgAdmin, use Host `db` and Port `5432` (Docker internal), **not** `localhost`. pgAdmin and the database share the `factory_isolated_net` bridge network.
 
@@ -227,8 +250,8 @@ uv run pytest tests/ -v          # Run all tests
 docker compose exec api pytest tests/ -v
 
 # Run by marker
-uv run pytest -m unit            # Unit tests only (14 files)
-uv run pytest -m agent           # Agent tests only (11 files)
+uv run pytest -m unit            # Unit tests only (19 files)
+uv run pytest -m agent           # Agent tests only (16 files)
 uv run pytest -m eval            # Eval benchmarks
 uv run pytest -m golden          # Golden dataset validation
 uv run pytest -m integration     # Integration tests (format branching, CI-only)
@@ -270,8 +293,8 @@ Required `.env` variables:
 | `title` | `string` | Content title for generation |
 | `user_reference` | `string` | User-provided background text as narrative foundation |
 | `research_inputs.source_urls` | `string[]` | URLs to scrape via Tavily extract API |
-| `story_directives` | `object` | Editorial guardrails — target_audience, tone, angle, guardrail_strictness, uncertain_pass_through |
-| `format_type` | `enum` | `video`, `blog`, `carousel`, or `all` |
+| `story_directives` | `object` | Editorial guardrails — target_audience, tone, angle, guardrail_strictness, uncertain_pass_through, voice_id, loopable |
+| `format_type` | `enum` | `video`, `blog`, `carousel`, `short`, or `all` |
 | `platform` | `enum` | `twitter`, `linkedin`, `instagram`, `youtube`, `tiktok` |
 | `device_id` | `string?` | Client device identifier for S3 key prefixing (sent from `localStorage`) |
 
@@ -313,7 +336,14 @@ Optional `.env` overrides — two model tiers via Together AI (unless `gemini-` 
 | `S3_SECRET_ACCESS_KEY` | `factory-secret` | S3 secret key |
 | `S3_BUCKET_IMAGES` | `media-images` | S3 bucket for generated carousel images |
 | `S3_BUCKET_VIDEOS` | `media-videos` | S3 bucket for video assets |
-| `S3_PUBLIC_URL` | `http://localhost:8333` | Public URL prefix for browser-accessible image URLs |
+| `S3_BUCKET_MUSIC` | `media-music` | S3 bucket for background music files |
+| `S3_PUBLIC_URL` | `http://localhost:8333` | Public URL prefix for browser-accessible asset URLs |
+| `TTS_PROVIDER` | `elevenlabs` | TTS provider (ElevenLabs default) |
+| `TTS_API_KEY` | `""` | ElevenLabs API key for voiceover generation |
+| `DEFAULT_VOICE_MAP` | `{}` | Per-platform voice ID mapping (tiktok/instagram/youtube) |
+| `DISCORD_TOKEN` | `""` | Discord bot token |
+| `DISCORD_GUILD_ID` | `0` | Discord guild ID for slash command registration |
+| `DISCORD_CHANNEL_ID` | `None` | Discord channel ID for progress updates |
 | `SYNTHID_WATERMARK_ENABLED` | `True` | SynthID flag (no implementation yet) |
 | `WORKER_POLL_INTERVAL_SECONDS` | `5` | QueueWorker poll interval |
 | `WORKER_LOCK_TIMEOUT_MINUTES` | `15` | Stuck job recovery timeout |
@@ -346,17 +376,21 @@ content-factory/                  # Nx workspace root
 │   ├── api/                      # Python FastAPI backend
 │   │   ├── app/
 │   │   │   main.py               # FastAPI app + lifespan (starts/stops QueueWorker), /images and /static mounts, redirect_slashes=False
+│   │   │   discord_bot.py        # Discord bot with /script slash command, format selection, crash recovery
 │   │   │   core/
 │   │   │     config.py            # pydantic-settings, reads .env (database_url — required, promotion_model, video_gen_*, eval model configs)
 │   │   │     guardrails.py        # GuardrailStrictness enum, GUARDRAIL_PROFILES, get_guardrail_config()
 │   │   │   api/routes.py         # /api/v1/jobs/ endpoints + health check + /regenerate-assets
 │   │   │   db/
-│   │   │     models.py           # SQLAlchemy models (factory schema) — RenderJob with title, device_id (S3 key prefix), user_reference, source_urls (JSONB), story_directives (JSONB), refined_context, assembled_context (JSONB), working_memory (JSONB), retrieval_retry_count. Script.format_payload uses TrackedJSONB (MutableDict) for in-place mutation support.
+│   │   │     models.py           # SQLAlchemy models (factory schema) — RenderJob with title, device_id (S3 key prefix), user_reference, source_urls (JSONB), story_directives (JSONB), refined_context, assembled_context (JSONB), working_memory (JSONB), retrieval_retry_count. Script.format_payload uses TrackedJSONB (MutableDict) for in-place mutation support. Asset model with SHORT_VIDEO_CLIP/SHORT_STILL_IMAGE/VOCAL_ALIGNMENT/SHORT_COMPOSED_VIDEO asset types.
+│   │   │     discord_models.py   # ScriptJob and FormatJob models for Discord pipeline (with locked_at/locked_by for crash recovery)
 │   │   │     session.py          # async engine + session factory (settings.database_url)
-│   │   │     crud.py             # query helpers + queue operations
+│   │   │     crud.py             # query helpers + queue operations (RenderJobs)
+│   │   │     script_crud.py      # ScriptJob CRUD + stuck job recovery queries
+│   │   │     format_crud.py      # FormatJob CRUD + stuck job recovery queries
 │   │   │   schemas/
 │   │   │     shorts.py           # Pydantic request/response models + FormatTypeEnum, PlatformEnum, device_id for S3 key prefixing, AssembledContext
-│   │   │     formats.py          # Structured format schemas (BlogSection, CarouselSlide, VideoFormatPayload, SeoMeta)
+│   │   │     formats.py          # Structured format schemas (BlogSection, CarouselSlide, VideoFormatPayload, ShortScene, ShortFormatPayload, SeoMeta)
 │   │   │   services/
 │   │   │     llm.py              # Multi-provider LLM routing (Gemini + Together AI)
 │   │   │     vector_store.py     # pgvector ingestion & semantic search (RAW-CONTEXT, LOCAL, GLOBAL scopes)
@@ -366,21 +400,30 @@ content-factory/                  # Nx workspace root
 │   │   │     claim_mapper.py     # Embedding-based claim identity tracking for the Optimization History Ledger (cosine similarity matrix + greedy 1-to-1 assignment)
 │   │   │     tools.py            # Tool + ToolRegistry — declarative, permission-gated tool registration (singleton, 9 standard tools)
 │   │   │     optimizer_tools.py  # make_gated_search_tool — two-tier evidence retrieval for ScriptOptimizerAgent (pre-existing evidence + semantic search fallback)
-│   │   │     format_validator.py # FormatValidator → BlogValidator, CarouselValidator
+│   │   │     format_validator.py # FormatValidator → BlogValidator, CarouselValidator, ShortValidator
 │   │   │     image_gen.py        # ImageGenerationService — Together AI FLUX.1-schnell, retry logic, platform dimensions, global rate-limit coordinator (asyncio Lock, 3s min gap, exponential backoff on 429)
 │   │   │     video_gen.py        # VideoGenProvider ABC + TogetherVideoGen (Together AI videos.create/retrieve). Provider registry pattern. Tool factories: make_generate_video_tool, make_poll_video_tool
+│   │   │     tts.py              # TTSProvider ABC + ElevenLabsTTS. Provider registry pattern. Tool factories: make_generate_voiceover_tool, make_get_alignment_tool
+│   │   │     subtitles.py        # ASS subtitle generation with karaoke word highlighting. generate_ass_file(), three presets (CENTER_POP_YELLOW, CLEAN_WHITE_LOWER, NEON_BOXED)
+│   │   │     short_config.py     # Short-format constants — voice maps, subtitle presets, KB motion presets, platform aspect ratios, music mood map
+│   │   │     script_pipeline.py  # Self-contained pipeline runner for Discord-originated jobs (ScriptPipelineRunner)
 │   │   │   storage/
-│   │   │     adapter.py          # get_storage() dispatcher (s3 or local)
-│   │   │     s3.py               # S3Storage — boto3 client, SeaweedFS, auto-create bucket
-│   │   │     local.py            # LocalStorage — saves to static/carousel_images/
+│   │   │     adapter.py          # get_storage() dispatcher (s3 or local) + tool factories: upload_video, upload_voiceover
+│   │   │     s3.py               # S3Storage — boto3 client, SeaweedFS, auto-create bucket. upload_video, upload_voiceover, download_file methods
+│   │   │     local.py            # LocalStorage — saves to static/carousel_images/, static/videos/, static/voiceovers/. upload_video, upload_voiceover, download_file methods
 │   │   │   workers/
-│   │   │     orchestrator.py     # Agentic state machine — 11 states, working memory management, GLOBAL promotion, epistemic ledger
-│   │   │     queue_worker.py     # asyncio poll loop with SKIP LOCKED
+│   │   │     orchestrator.py     # Agentic state machine — 12 states (+COMPOSITION), working memory management, GLOBAL promotion, epistemic ledger, short pipeline transitions
+│   │   │     queue_worker.py     # asyncio poll loop with SKIP LOCKED — dual queue: RenderJobs + FormatJobs
 │   │   │     agents.py           # BaseAgent → LLMAgent (Copywriter, RedTeam, AssetStudio-deprecated) + ServiceAgent
 │   │   │     optimizer.py        # ScriptOptimizerAgent (receives optimization history ledger + working memory optimizer phase)
 │   │   │     formatters.py       # BlogFormatterAgent, CarouselFormatterAgent, VideoFormatterAgent
+│   │   │     short_formatter.py  # ShortFormatterAgent (LLMAgent) — Plan→Execute two-stage: produces ShortFormatPayload with scenes, voice_id, subtitle_preset, music_mood
 │   │   │     video_generator_agent.py  # VideoGeneratorAgent (ServiceAgent) — 4-step: submit → poll → download → upload S3
 │   │   │     carousel_image_agent.py  # CarouselImageAgent (ServiceAgent) — real image gen via Together AI FLUX
+│   │   │     short_visual_asset_agent.py  # ShortVisualAssetAgent (ServiceAgent) — per-scene video clips + Ken Burns stills
+│   │   │     short_voiceover_agent.py    # ShortVoiceoverAgent (ServiceAgent) — TTS voiceover + word-level alignment
+│   │   │     short_composer_agent.py     # ShortComposerAgent (ServiceAgent) — 5-step: download → ASS subs → FFmpeg → upload
+│   │   │     format_orchestrator.py      # Discord format job orchestration (format job state machine)
 │   │   │     harness.py          # AgentHarness — generate-validate-retry with doom loop detection, tool injection, dual ServiceAgent/LLMAgent paths
 │   │   │     retry_policies.py   # Centralized two-tier tenacity configs (agent_api_retry + agent_parent_retry)
 │   │   │     tasks.py            # Post-completion LOCAL chunk cleanup + GLOBAL scope fact promotion
@@ -399,35 +442,51 @@ content-factory/                  # Nx workspace root
 │   │   │   │   ├── judge.py      # LLM-as-Judge scoring
 │   │   │   │   ├── rubrics.py    # Weighted scoring rubrics
 │   │   │   │   └── baselines.json
-│   │   │   ├── agents/           # 11 test files
+│   │   │   ├── agents/           # 16 test files
 │   │   │   │   ├── test_asset_studio_agent.py
 │   │   │   │   ├── test_blog_formatter.py
 │   │   │   │   ├── test_carousel_formatter.py
 │   │   │   │   ├── test_carousel_image_agent.py
 │   │   │   │   ├── test_copywriter_agent.py
+│   │   │   │   ├── test_discord_bot.py
+│   │   │   │   ├── test_discord_script_pipeline.py
 │   │   │   │   ├── test_optimizer_agent.py
 │   │   │   │   ├── test_red_team_agent.py
+│   │   │   │   ├── test_short_composer_agent.py
+│   │   │   │   ├── test_short_formatter_agent.py
+│   │   │   │   ├── test_short_visual_asset_agent.py
+│   │   │   │   ├── test_short_voiceover_agent.py
 │   │   │   │   ├── test_tool_loop.py
 │   │   │   │   ├── test_video_formatter_agent.py
 │   │   │   │   └── test_video_generator_agent.py
-│   │   │   ├── unit/             # 14 test files
+│   │   │   ├── unit/             # 19 test files
 │   │   │   │   ├── test_chunking.py
 │   │   │   │   ├── test_claim_mapper.py
 │   │   │   │   ├── test_config.py
 │   │   │   │   ├── test_context_builder.py
 │   │   │   │   ├── test_crud.py
+│   │   │   │   ├── test_discord_crash_recovery.py
+│   │   │   │   ├── test_discord_models.py
+│   │   │   │   ├── test_format_crud.py
+│   │   │   │   ├── test_format_orchestrator.py
 │   │   │   │   ├── test_format_validator.py
 │   │   │   │   ├── test_formatter_harness.py
 │   │   │   │   ├── test_image_gen_service.py
+│   │   │   │   ├── test_kb_motion_presets.py
 │   │   │   │   ├── test_promote_to_global.py
 │   │   │   │   ├── test_queue_worker.py
+│   │   │   │   ├── test_queue_worker_dual.py
 │   │   │   │   ├── test_routes.py
+│   │   │   │   ├── test_short_validator.py
+│   │   │   │   ├── test_subtitle_generation.py
 │   │   │   │   ├── test_tool_wiring.py
+│   │   │   │   ├── test_tts_provider.py
 │   │   │   │   ├── test_vector_store.py
 │   │   │   │   ├── test_web_search.py
 │   │   │   │   └── test_working_memory.py
-│   │   │   ├── integration/      # 3 test files
+│   │   │   ├── integration/      # 4 test files
 │   │   │   │   ├── test_formatting_transition.py
+│   │   │   │   ├── test_orchestrator_short_path.py
 │   │   │   │   ├── test_orchestrator_transitions.py
 │   │   │   │   └── test_researching_source_types.py
 │   │   │   └── golden/           # 23+ cases across 6 categories
@@ -467,11 +526,11 @@ The project uses pytest with `asyncio_mode = "auto"` and five custom markers:
 
 | Marker | Scope | Files |
 |--------|-------|-------|
-| `unit` | Core logic — chunking, config, CRUD, routes, queue worker, vector store, context builder, formatter harness, format validator, image gen service, guardrail config, story directives, **working memory, GLOBAL promotion, tool wiring** | `tests/unit/` (14 files) |
-| `agent` | Agent behavior — copywriter, red team, asset studio (deprecated), optimizer, blog/carousel/video formatters, carousel image, **video generator** | `tests/agents/` (11 files, 80+ tests) |
+| `unit` | Core logic — chunking, config, CRUD, routes, queue worker, vector store, context builder, formatter harness, format validator, image gen service, guardrail config, story directives, **short validator, TTS provider, format orchestrator, dual queue, discord models, format CRUD, KB motion presets, subtitle generation, working memory, GLOBAL promotion, tool wiring** | `tests/unit/` (19 files) |
+| `agent` | Agent behavior — copywriter, red team, optimizer, blog/carousel/video/short formatters, carousel image, video generator, **short composer, short visual asset, short voiceover, discord script pipeline, discord bot** | `tests/agents/` (16 files) |
 | `eval` | Outcome evals with LLM-as-Judge scoring across pipeline stages + **Eval 1** (research coverage + chunk quality) + **Eval 9** (memory implementation) | `tests/evals/` (6 files, 40+ parametrized cases) |
 | `golden` | Trajectory validation against golden dataset | `tests/golden/` (23+ cases across 6 categories) |
-| `integration` | End-to-end orchestrator flows with RETRIEVAL phase, retry logic, evidence context passing, formatting transitions, **video/carousel/branch transitions** | `tests/integration/` (3 files, 80+ tests, CI-only) |
+| `integration` | End-to-end orchestrator flows with RETRIEVAL phase, retry logic, evidence context passing, formatting transitions, **short pipeline path, video/carousel/branch transitions** | `tests/integration/` (4 files, CI-only) |
 
 ### Eval Contracts & Criteria
 
@@ -514,7 +573,7 @@ docker-build-api (after python lint only)
 
 ## MVP Status
 
-### Fully Implemented (Pipeline Steps 1–9)
+### Fully Implemented (Pipeline Steps 1–10)
 
 - **Step 1 (Ingestion)** — `POST /api/v1/jobs/` creates a PENDING RenderJob with `title`, `user_reference`, `research_inputs.source_urls`, `story_directives`, `format_type`, `platform`, and optional `device_id` (for S3 key prefixing)
 - **Step 2 (Extraction)** — `MarkdownTextSplitter` chunks raw_text into RAW-CONTEXT scope vectors (with `source_type: "USER_PROVIDED"` metadata)
@@ -522,16 +581,17 @@ docker-build-api (after python lint only)
 - **Step 4 (Context Retrieval & Synthesis)** — The orchestrator builds `refined_context` directly from `user_reference` + `story_directives` (no LLM Research Agent). **ContextBuilder** then performs a **dual diversified RAG query** (title + angle + user_reference) against RAW-CONTEXT, LOCAL, and **GLOBAL** scopes, producing an `AssembledContext` (narrative_summary + evidence_sections + raw_chunks) persisted as JSONB. Retry mechanism (max 3) for missing context.
 - **Step 5 (Scripting)** — CopywriterAgent receives `refined_context`, `evidence_sections`, `story_directives`, and `working_memory.copywriter_rationale` from orchestrator. On revision, `ScriptOptimizerAgent` surgically patches failed claims with the same evidence context plus active failures, optimization history from the ledger, and `working_memory.optimizer_phase` — preventing reversion of previously-successful patches. The optimizer uses a `retrieve_evidence_for_claim` tool for self-verification.
 - **Step 6 (Red Team)** — RedTeamAgent audits script claims with three-pass evaluation, persists verdicts with `evidence_text_inline` snapshots and `hedge_required` flags, configurable max revision loops. **ClaimMapper** updates the Optimization History Ledger after each pass. **Epistemic ledger** (`working_memory.epistemic_ledger`) tracks weak passes for formatter hedging.
-- **Step 7 (Format Output)** — BlogFormatterAgent, CarouselFormatterAgent, and **VideoFormatterAgent** produce structured blog/carousel/video outputs via Plan-then-Execute two-phase LLM calls. Wrapped in `AgentHarness` with tool injection, doom loop detection, and validator integration. Platform-aware validation (Twitter 280, LinkedIn 700, Instagram 2200 character limits). Formatters consume the epistemic ledger for automatic hedging. Branches by `format_type`: video → FORMATTING → ASSET_GENERATION, blog/carousel → FORMATTING → COMPLETED (no assets) or ASSET_GENERATION, `all` → formats in parallel → asset generation.
-- **Step 8 (Asset Generation)** — **VideoGeneratorAgent** (ServiceAgent) generates real videos via Together AI: submit → poll (up to 300s) → download → upload to S3. Provider-agnostic `VideoGenProvider` ABC with `TogetherVideoGen` implementation. **CarouselImageAgent** generates real images via Together AI FLUX.1-schnell with platform-specific dimensions (1088×1344/1616/1920), editorial styling (no text/typography), S3/SeaweedFS storage with `device_id/job_id` folder prefixing, global rate-limit coordinator (3s min gap, exponential backoff on 429), and retry logic (3 attempts). Regenerate endpoint available for carousel images post-completion. Legacy `AssetStudioAgent` (mocked URLs) is deprecated.
-- **Step 9 (Completion)** — **Two-phase teardown**: (1) GLOBAL promotion — SUPPORTED claims compressed into factual statements via `promotion_model` LLM and ingested as persistent `GLOBAL`-scope chunks (`job_id=None`); (2) LOCAL-scope chunk cleanup. Final job state, scripts, claims audit, and S3 asset URLs available via API. Working memory JSONB retained as audit trail.
+- **Step 7 (Format Output)** — BlogFormatterAgent, CarouselFormatterAgent, **VideoFormatterAgent**, and **ShortFormatterAgent** produce structured outputs via Plan-then-Execute two-phase LLM calls. Wrapped in `AgentHarness` with tool injection, doom loop detection, and validator integration. Platform-aware validation (Twitter 280, LinkedIn 700, Instagram 2200 character limits, **short auto-fix for video_clip vs ken_burns balance**). Formatters consume the epistemic ledger for automatic hedging. Branches by `format_type`: video → FORMATTING → ASSET_GENERATION, blog → FORMATTING → COMPLETED, carousel → FORMATTING → ASSET_GENERATION, short → FORMATTING → ASSET_GENERATION → COMPOSITION, `all` → platform-specific format resolution → formats in parallel → asset generation → composition (if SHORT).
+- **Step 8 (Asset Generation)** — **VideoGeneratorAgent** generates real videos via Together AI: submit → poll → download → upload. **CarouselImageAgent** generates FLUX-schnell images with platform dimensions. **ShortVisualAssetAgent** generates per-scene video clips + Ken Burns stills. **ShortVoiceoverAgent** generates ElevenLabs TTS with word-level alignment. All assets uploaded to S3. Regenerate endpoint available for carousel images post-completion. Legacy `AssetStudioAgent` deprecated.
+- **Step 9 (Composition)** — **ShortComposerAgent** downloads all scene assets, generates ASS karaoke subtitles with word-level `{\k}` highlighting, runs FFmpeg with complex filter graph (zoompan + concat + ass + amix), and uploads the final H.264/AAC MP4 to S3 as a `SHORT_COMPOSED_VIDEO` asset. The `COMPOSITION` state bridges ASSET_GENERATION and COMPLETED for SHORT format.
+- **Step 10 (Completion)** — **Two-phase teardown**: (1) GLOBAL promotion — SUPPORTED claims compressed into factual statements via `promotion_model` LLM and ingested as persistent `GLOBAL`-scope chunks (`job_id=None`); (2) LOCAL-scope chunk cleanup. Final job state, scripts, claims audit, and S3 asset URLs available via API. Working memory JSONB retained as audit trail.
 
 ### Infrastructure
 
 - **Nx Monorepo** — Backend (`apps/api/`), Frontend (`apps/web/`), Shared types (`libs/shared-types/`)
 - **Next.js Frontend** — App Router with shadcn/ui, React Query, Zustand; Docker-ready with standalone output
-- **Postgres-backed Queue** — `QueueWorker` with `asyncio.create_task` + `FOR UPDATE SKIP LOCKED` + crash recovery. Two-tier tenacity retry policies (`agent_api_retry` + `agent_parent_retry`) for transient API errors.
-- **Declarative Tool Registry** — Singleton `ToolRegistry` (`app/services/tools.py`) registers all pipeline capabilities as first-class `Tool` objects. **9 standard tools**: `generate_image`, `upload_image`, `execute_web_search`, `semantic_search`, `ingest_chunks`, `validate_format`, **`generate_video`**, **`poll_video`**, **`upload_video`**. Symmetric permissions enforce that both the tool and the agent must consent to binding. `register_standard_tools()` registers 9 capabilities at startup. Agents declare `_required_di_tools` / `_required_llm_tools` class variables; `AgentHarness` injects permitted tools automatically at composition time.
+- **Postgres-backed Queue** — `QueueWorker` with `asyncio.create_task` + `FOR UPDATE SKIP LOCKED` + crash recovery. **Dual queue polling** (RenderJobs + FormatJobs). Two-tier tenacity retry policies (`agent_api_retry` + `agent_parent_retry`) for transient API errors.
+- **Declarative Tool Registry** — Singleton `ToolRegistry` (`app/services/tools.py`) registers all pipeline capabilities as first-class `Tool` objects. **12 standard tools**: `generate_image`, `upload_image`, `execute_web_search`, `semantic_search`, `ingest_chunks`, `validate_format`, `generate_video`, `poll_video`, `upload_video`, **`generate_voiceover`**, **`get_alignment`**, **`upload_voiceover`**. Symmetric permissions enforce that both the tool and the agent must consent to binding. `register_standard_tools()` registers 12 capabilities at startup. Agents declare `_required_di_tools` / `_required_llm_tools` class variables; `AgentHarness` injects permitted tools automatically at composition time.
 - **Two-Class Agent Architecture** — `LLMAgent` (provider-agnostic `self.llm`, `_run_tool_loop` for LLM-decided tool calls, context checkpointing with self-healing) and `ServiceAgent` (no LLM, deterministic DI tools only) both extend `BaseAgent`. All agents share the `run(context)` → `_execute(context)` contract.
 - **Context Checkpointing for Retries** — RedTeamAgent checkpoints claim extraction + evidence retrieval across tenacity and harness retries. Self-healing wipes corrupted `_*_checkpoint` keys on `ValidationError`/`TypeError`/`KeyError`/`ValueError` and re-raises for a fresh retry.
 - **Web Search Enrichment** — Tavily web search by `title` + Tavily extract from user-provided `source_urls`, both ingested as LOCAL-scope vectors with `source_type: "WEB_SEARCH"` / `"URL_EXTRACT"` metadata
@@ -542,14 +602,18 @@ docker-build-api (after python lint only)
 - **GLOBAL Scope / Long-Term Memory** — At COMPLETED, SUPPORTED claims are compressed into factual statements via a dedicated LLM (`promotion_model`) and ingested as `GLOBAL`-scope chunks (`job_id=None`, `source_type="COMPRESSED_FACT"`) — creating a persistent organizational knowledge base across job runs. ContextBuilder queries GLOBAL scope alongside run-local scopes on every job.
 - **Live Video Generation** — `VideoGeneratorAgent` (ServiceAgent, `app/workers/video_generator_agent.py`) submits to Together AI via `videos.create`, polls via `videos.retrieve` (up to 60 attempts at 5s intervals), downloads, and uploads to S3. `VideoGenProvider` ABC (`app/services/video_gen.py`) with `TogetherVideoGen` implementation and provider registry pattern. `VideoFormatterAgent` produces `VideoFormatPayload` with unified visual prompt. Configurable via `video_gen_*` env vars. Legacy `AssetStudioAgent` (mocked URLs) is deprecated.
 - **Optimizer Tool for Self-Verification** — `make_gated_search_tool()` in `app/services/optimizer_tools.py` creates a `retrieve_evidence_for_claim` tool for `ScriptOptimizerAgent`. Two-tier strategy: primary hit uses pre-existing Red Team evidence; fallback performs semantic search across RAW-CONTEXT, LOCAL, and GLOBAL scopes. Tracks fallback rate for monitoring.
-- **Test Suite** — Unit + agent + integration (250+ tests) with CI pipeline via GitHub Actions. 14 unit test files, 11 agent test files, 3 integration test files, 23+ golden cases.
+- **SHORT Format Pipeline** — Complete short video pipeline: `ShortFormatterAgent` (Plan→Execute LLM agent), `ShortVisualAssetAgent` (ServiceAgent, video clips + Ken Burns stills), `ShortVoiceoverAgent` (ServiceAgent, ElevenLabs TTS), `ShortComposerAgent` (ServiceAgent, FFmpeg composition). Platform-specific dimensions (TikTok/YouTube 1080×1920, Instagram 1080×1350). Three subtitle presets with karaoke word highlighting. Background music via S3 `media-music` bucket. COMPOSITION pipeline state.
+- **TTS Provider Abstraction** — `TTSProvider` ABC with `ElevenLabsTTS`. Provider registry pattern (`TTS_PROVIDERS` dict). Word-level timestamp alignment for karaoke. Tool factories for `generate_voiceover`, `get_alignment` tools.
+- **Discord Bot** — `discord.py` bot with `/script` slash command. `ScriptPipelineRunner` encapsulates full pipeline for Discord-originated jobs. Interactive format selection with buttons/modals. Progress notifications. Concurrency limited via `asyncio.Semaphore(3)`. `ScriptJob`/`FormatJob` models with crash recovery.
+- **Crash Recovery** — Startup recovery for stuck `ScriptJob` and `FormatJob` records (stale locks > 15 min). `QueueWorker` calls `recover_stuck_jobs()` + `recover_stuck_format_jobs()` on start. Discord bot calls `recover_stuck_script_jobs()` in `on_ready()`. `locked_at`/`locked_by` columns on both job models.
+- **Test Suite** — Unit + agent + integration (350+ tests) with CI pipeline via GitHub Actions. 19 unit test files, 16 agent test files, 4 integration test files, 2 standalone test files (KB motion presets, subtitle generation), 23+ golden cases.
 - **Eval Infrastructure** — LLM-as-Judge scoring (judge.py), deterministic assertions, rubrics, golden dataset, 6 outcome + eval1 test files with 40+ parametrized cases, 27 eval contracts across 8 pipeline stages, master criteria document (409 lines), frozen Tavily corpus (7 canonical topics via `scripts/capture_corpus.py`), Eval 9 memory implementation plan.
 - **Multi-provider LLM** — Routing via model name prefix: `gemini-*` → Google GenAI SDK, all others → Together AI (OpenAI-compatible). Two production tiers via Together AI: **Premium** (`meta-llama/Llama-3.3-70B-Instruct-Turbo` for CopywriterAgent, RedTeamAgent) and **Standard** (`openai/gpt-oss-20b` for ScriptOptimizerAgent, formatters, promotion). Configurable per-stage via env vars. Embeddings always use `models/gemini-embedding-001` (Gemini). Eval suite uses separate `eval_*` model configs.
-- **Multi-Format Output** — Blog, carousel, and video formatters with Plan-then-Execute two-phase LLM calls, `AgentHarness` generate-validate-retry with doom loop detection, tool injection, and validator integration. Platform-aware validation (per-slide character limits). Video format routes through FORMATTING to produce storyboard, then to ASSET_GENERATION for rendering.
+- **Multi-Format Output** — Blog, carousel, video, and **short** formatters with Plan-then-Execute two-phase LLM calls, `AgentHarness` generate-validate-retry with doom loop detection, tool injection, and validator integration. Platform-aware validation (per-slide character limits, short asset balance auto-fix). `all` format resolves to platform-specific formats (e.g. Instagram → `[CAROUSEL, SHORT]`). Short format routes through ASSET_GENERATION → COMPOSITION (FFmpeg assembly).
 - **Carousel Image Generation** — Real image gen via Together AI `FLUX.1-schnell` with platform-specific dimensions (1088×1344/1616/1920), editorial brand styling (no text/typography), global rate-limit coordinator (asyncio Lock, 3s min gap, exponential backoff on 429), S3/SeaweedFS storage with `device_id/job_id` folder prefixing, and retry logic (3 attempts). Regenerate endpoint available post-completion.
-- **S3/SeaweedFS Cloud Storage** — `StorageAdapter` dispatcher with `S3Storage` (boto3, auto-create buckets, `device_id/job_id` key prefixing) and `LocalStorage` (static files) backends. Images uploaded to SeaweedFS S3 buckets (`media-images`, `media-videos`). Video files also uploaded via S3. Configurable via `S3_*` env vars. Default backend: `s3`.
+- **S3/SeaweedFS Cloud Storage** — `StorageAdapter` dispatcher with `S3Storage` (boto3, auto-create buckets, `device_id/job_id` key prefixing) and `LocalStorage` (static files) backends. Images uploaded to `media-images` bucket, videos to `media-videos`, **background music to `media-music`**. Video/voiceover/music/download methods on both backends. Configurable via `S3_*` env vars. Default backend: `s3`.
 - **Editorial Frontend Design** — App Router dark mode with Stone & Copper color tokens (oklch), Playfair Display + Inter + JetBrains Mono typography, StatusBar (Live/Stalled/Disconnected), Tabbed detail layout (TabBar), MiniPipeline tooltips, Editorial Timeline, reusable format viewers with CopyButton.
-- **Docker** — 5-service Compose stack (pgvector, pgAdmin, SeaweedFS, API, Web). Migrations auto-run on API container start via `entrypoint.sh`. Single workspace lockfile at repo root (`apps/web/pnpm-lock.yaml` removed). pnpm 11 `allowBuilds` in `pnpm-workspace.yaml`. SeaweedFS S3 identity configured via `s3.json`.
+- **Docker** — 5-service Compose stack (pgvector, pgAdmin, SeaweedFS, API, Web). Migrations auto-run on API container start via `entrypoint.sh`. **FFmpeg installed in API container** for ShortComposerAgent video assembly. Single workspace lockfile at repo root (`apps/web/pnpm-lock.yaml` removed). pnpm 11 `allowBuilds` in `pnpm-workspace.yaml`. SeaweedFS S3 identity configured via `s3.json`.
 
 ### Intentionally Deferred
 
