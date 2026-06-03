@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from app.workers.agents import AgentActionStatus, AgentResult, LLMAgent
 from app.workers.formatters import _build_hedge_block, _resolve_aspect_ratio
 from app.schemas.formats import ShortScene
-from app.services.short_config import DEFAULT_SUBTITLE_PRESET_MAP
+from app.services.short_config import DEFAULT_SUBTITLE_PRESET_MAP, DEFAULT_VOICE_MAP
 
 logger = logging.getLogger(__name__)
 
@@ -158,8 +158,6 @@ _SHORT_FORMATTER_HUMAN = (
 
 def _resolve_voice_id(directives: dict, platform: str) -> str:
     """Return user-specified voice_id or fall back to platform default."""
-    from app.services.short_config import DEFAULT_VOICE_MAP
-
     if directives.get("voice_id"):
         return directives["voice_id"]
     return DEFAULT_VOICE_MAP.get(platform.lower().strip(), "")
