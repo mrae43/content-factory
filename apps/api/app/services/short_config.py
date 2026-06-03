@@ -52,3 +52,15 @@ PLATFORM_ASPECT_RATIOS_SHORT: dict[str, tuple[int, int]] = {
     "instagram": (1080, 1350),  # 4:5
     "youtube": (1080, 1920),  # 9:16 (YouTube Shorts)
 }
+
+# ---------------------------------------------------------------------------
+# Background Music — mood → filename mapping for S3 library
+# ---------------------------------------------------------------------------
+
+MUSIC_MOOD_MAP: dict[str, str] = {
+    "dark_lofi": "01.mp3",
+    "synthwave_hype": "01.mp3",
+    "calm_informative": "01.mp3",
+}
+
+MUSIC_VOLUME: float = 0.1  # ~-20dB relative to voiceover
