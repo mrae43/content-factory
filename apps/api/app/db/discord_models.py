@@ -113,6 +113,7 @@ class FormatJob(Base):
     story_directives = Column(JSONB, nullable=True)
     hedge_index = Column(JSONB, nullable=True)
     epistemic_ledger = Column(JSONB, nullable=True)
+    working_memory = Column(JSONB, nullable=True)
 
     # Output columns
     format_payload = Column(JSONB, nullable=True)
