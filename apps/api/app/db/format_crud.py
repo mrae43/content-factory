@@ -16,6 +16,8 @@ async def create_format_job(
     platform: str,
     format_type: str,
     snapshot_data: dict,
+    *,
+    working_memory: Optional[dict] = None,
 ) -> FormatJob:
     try:
         job = FormatJob(
@@ -29,6 +31,7 @@ async def create_format_job(
             story_directives=snapshot_data.get("story_directives"),
             hedge_index=snapshot_data.get("hedge_index"),
             epistemic_ledger=snapshot_data.get("epistemic_ledger"),
+            working_memory=working_memory or {},
         )
         db.add(job)
         await db.commit()
@@ -151,3 +154,81 @@ async def update_format_job_video_url(db: AsyncSession, job_id: UUID, url: str) 
     if job:
         job.final_video_url = url
         await db.commit()
+
+
+async def update_format_job_working_memory(
+    db: AsyncSession, job_id: UUID, working_memory: dict
+) -> Optional[FormatJob]:
+    stmt = select(FormatJob).filter(FormatJob.id == job_id)
+    result = await db.execute(stmt)
+    job = result.scalar_one_or_none()
+
+    if job:
+        job.working_memory = working_memory
+        flag_modified(job, "working_memory")
+        await db.commit()
+
+    return job
+
+
+async def get_format_jobs_for_watcher(
+    db: AsyncSession,
+) -> list[FormatJob]:
+    stmt = (
+        select(FormatJob)
+        .where(
+            FormatJob.working_memory.is_not(None),
+            FormatJob.working_memory["discord_thread_id"].astext.is_not(None),
+            FormatJob.status.notin_(
+                [
+                    FormatJobStatusEnum.COMPLETED,
+                    FormatJobStatusEnum.FAILED,
+                    FormatJobStatusEnum.HUMAN_REVIEW_NEEDED,
+                ]
+            ),
+        )
+        .order_by(FormatJob.created_at.asc())
+    )
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def get_format_jobs_missed_terminal(
+    db: AsyncSession,
+) -> list[FormatJob]:
+    stmt = (
+        select(FormatJob)
+        .where(
+            FormatJob.status.in_(
+                [
+                    FormatJobStatusEnum.COMPLETED,
+                    FormatJobStatusEnum.FAILED,
+                ]
+            ),
+            FormatJob.working_memory.is_not(None),
+            FormatJob.working_memory["discord_message_id"].astext.is_not(None),
+            FormatJob.working_memory["final_embed_updated"].astext.is_(None),
+        )
+        .order_by(FormatJob.created_at.asc())
+    )
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def reset_format_job_to_composition(
+    db: AsyncSession, job_id: UUID
+) -> Optional[FormatJob]:
+    stmt = select(FormatJob).filter(FormatJob.id == job_id)
+    result = await db.execute(stmt)
+    job = result.scalar_one_or_none()
+
+    if job:
+        job.status = FormatJobStatusEnum.COMPOSITION
+        job.locked_at = None
+        job.locked_by = None
+        if job.working_memory:
+            job.working_memory.pop("final_embed_updated", None)
+            flag_modified(job, "working_memory")
+        await db.commit()
+
+    return job
