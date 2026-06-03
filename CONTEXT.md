@@ -66,6 +66,12 @@ The role of the Video Generator Agent: accept a structured video scene payload (
 
 _Avoid_: Asking the Video Generator Agent to embed text into generated videos. That is an integration failure, not a feature gap.
 
+## Visual Style Theme
+
+A user-facing constraint on the visual direction of a SHORT format video, selected from a fixed catalog (cinematic, minimalist, newsroom, documentary, dynamic) via a Discord dropdown at format-selection time. Injected into `story_directives` alongside the FormatJob creation and passed to the ShortFormatterAgent's plan prompt. The LLM generates the detailed `visual_style` string within bounds of the chosen theme — the theme is a creative constraint, not a hard schema. Catalog is hardcoded in the Discord bot's `ShortFormatSelectionView`; changing it requires a code deployment.
+
+_Avoid:_ Letting the LLM decide the visual style entirely without user input — the output may not match the user's intent for the content's aesthetic.
+
 ## Unified Visual Prompt
 
 A single 1-3 sentence prompt (produced by the VideoFormatterAgent) that synthesises all video scenes into one API-ready description. Used as the input for single-shot video generation APIs (Together AI during testing). The `unified_visual_prompt` includes platform aspect ratio and narrative arc coverage. Per-scene `visual_prompt` fields are retained alongside it for future per-scene rendering (Seedance V2).
@@ -245,7 +251,41 @@ _Avoid:_ Calling it a "RenderJob" — ScriptJobs are a narrower concern with a d
 
 ## FormatJob
 
-A job that renders a completed Script into a platform-specific format. Created by the Discord Bot when a user clicks a format button (e.g. "Create Carousel") after a Script completes. Stored in the `factory.format_jobs` table with its own status enum (`format_job_status`). Managed by the QueueWorker via the same `FOR UPDATE SKIP LOCKED` pattern as RenderJobs. Always references a completed ScriptJob via `source_job_id`. Unique per `(source_job_id, platform, format_type)` — duplicate requests return the existing job.
+A job that renders a completed Script into a platform-specific format. Created by the Discord Bot when a user clicks a format button (e.g. "Create Carousel" or "Create Short") after a Script completes. Stored in the `factory.format_jobs` table with its own status enum (`format_job_status`). Managed by the QueueWorker via the same `FOR UPDATE SKIP LOCKED` pattern as RenderJobs. Always references a completed ScriptJob via `source_job_id`. Unique per `(source_job_id, platform, format_type)` — duplicate requests return the existing job.
+
+Carries a `working_memory` JSONB column (mirroring ScriptJob) for Discord metadata: `discord_thread_id`, `discord_message_id`, and `final_embed_updated` flag. For SHORT format, all asset URLs are stored **inline** in `format_payload` JSONB rather than in the separate `Asset` table — see Inline Asset Storage.
+
+## FormatJob Watcher
+
+A background task in the Discord Bot process (not the QueueWorker) that polls `factory.format_jobs` every 5 seconds for rows containing a `discord_thread_id` in `working_memory`. On detecting a state change, it edits a single Living Embed message in the Discord thread to reflect the new state. Polling is scoped — only Discord-originated FormatJobs are watched; completed jobs drop out of scope immediately. On bot startup (`on_ready`), a one-shot Startup Re-Sync query catches FormatJobs that reached a terminal state while the bot was offline.
+
+_Avoid:_ Calling it the "QueueWorker" — the FormatJob Watcher is read-only, non-locking, and lives entirely in the Discord Bot's event loop. The QueueWorker claims and mutates FormatJob rows; the Watcher observes them.
+
+## Inline Asset Storage
+
+The decision to store SHORT visual asset URLs (video clips, Ken Burns stills, voiceover, vocal alignment data) inside `FormatJob.format_payload` JSONB rather than inserting rows into the shared `Asset` table. Rationale (see ADR 0012): the `Asset` table has a hard FK to `render_jobs.id`, making it unsuitable for FormatJob-originated assets. A new `FormatAsset` table would create schema proliferation and synchronization risk. Since asset URLs are intermediate artifacts on the way to the final MP4 (not independent query targets), storing them inline in the same JSONB blob that carries the formatter output is the simplest correct approach. The `final_video_url` column on FormatJob is kept as a first-class column for direct access.
+
+_Avoid:_ Expecting to find SHORT FormatJob assets via the `Asset` table. They live in `format_payload` — query the JSONB directly.
+
+## Living Embed
+
+A single Discord embed message posted when a FormatJob is created, then edited in-place as the job progresses through its states. Avoids spamming the thread with multiple progress messages. Fields: Status (emoji + label), Platform, Format, Duration (elapsed), Progress (step counter), and on completion the video URL + file upload. Updated by the FormatJob Watcher. When a SHORT FormatJob fails in the COMPOSITION phase, the embed shows a "Retry Composition" button.
+
+_Avoid:_ Posting a new message for each state transition. Edit the embed — it's cleaner, and the Discord API supports it with no extra permissions.
+
+## Composition Retry
+
+A Discord button that appears on the Living Embed when a SHORT FormatJob fails in the COMPOSITION phase. Clicking it immediately defers the interaction (Discord 3-second requirement), then resets the FormatJob's status to `COMPOSITION` (not `PENDING`). The QueueWorker re-claims the job and re-runs only `_transition_composition()` — no re-formatting, no re-generating assets, no re-calling external APIs. This works because asset URLs are already persisted in `format_payload` from the prior successful `ASSET_GENERATION` pass, and `ShortComposerAgent` is a deterministic ServiceAgent.
+
+_Avoid:_ Resetting to `PENDING` — that would require idempotency guards in every transition and waste API calls re-running successful phases.
+
+## Startup Re-Sync
+
+A one-time query run in the Discord Bot's `on_ready` hook. Scans `format_jobs` for rows where `status IN (COMPLETED, FAILED)` AND `working_memory` contains a `discord_message_id` AND `final_embed_updated` is `false`. For each match, posts the final result to the Discord thread and marks `final_embed_updated = true`. Prevents permanently stuck "PENDING" embeds after a bot container restart while the QueueWorker was processing a FormatJob.
+
+## Two-Step Write Pattern
+
+The sequence used to create a FormatJob with Discord metadata: (1) call `create_format_job()` with `working_memory={}` to get the DB row committed, (2) create the Discord thread and post the initial Living Embed, (3) update the FormatJob's `working_memory` with `discord_thread_id` and `discord_message_id`. This ordering guarantees the thread and embed exist before the working_memory references them. If thread creation fails, the FormatJob is already committed with an empty working_memory — it will still be processed by the QueueWorker, and the result can be recovered via Startup Re-Sync.
 
 ## Script Content Pipeline
 
@@ -260,6 +300,8 @@ _Avoid:_ Treating `source_job_id` as a live data source at format-runtime. All d
 ## Short
 
 A format type (`SHORT`) for short-form vertical video (30–50s, up to 90s) targeting TikTok, Instagram Reels, and YouTube Shorts. Produces a composed MP4 via asset hybridization — per-scene video clips mixed with Ken Burns animated stills, overlaid with TTS voiceover, burned-in subtitles (karaoke-style per platform), and background music. Structurally distinct from `VIDEO` (which is a single-shot AI video with describe-only audio). Rendered by the Production Studio through a three-stage post-FORMATTING path: `ASSET_GENERATION` → `COMPOSITION` → `COMPLETED`.
+
+Accessible via Discord through the two-step flow: `/script` → format selection → "Create Short" button → `ShortFormatSelectionView` (platform, visual_style_theme, loopable) → FormatJob → QueueWorker processes SHORT pipeline → FormatJob Watcher reports progress via Living Embed. See ADR 0012 for architecture.
 
 _Avoid:_ Calling a Short a "video" — it follows a different pipeline path and produces a fundamentally different artifact.
 
