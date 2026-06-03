@@ -41,7 +41,7 @@ def _scene(
     return scene
 
 
-def _format_payload(scenes: list[dict]) -> dict:
+def _format_payload(scenes: list[dict], music_mood: str = "synthwave_hype") -> dict:
     return {
         "format": "short",
         "version": 1,
@@ -49,7 +49,7 @@ def _format_payload(scenes: list[dict]) -> dict:
         "target_total_duration": 30.0,
         "visual_style": "cinematic",
         "audio_direction": "upbeat",
-        "music_mood": "synthwave_hype",
+        "music_mood": music_mood,
         "voice_id": "test-voice",
         "subtitle_preset": "CENTER_POP_YELLOW",
     }
@@ -211,6 +211,91 @@ async def test_subtitle_burn_in_filter(_patch_storage, _patch_ffmpeg):
     cmd = " ".join(args)
     assert "ass=" in cmd
     assert "subtitles.ass" in cmd
+
+
+@pytest.mark.agent
+async def test_music_overlay_adds_amix_filter(_patch_storage, _patch_ffmpeg):
+    def _custom_download(url: str) -> bytes:
+        if "music" in url:
+            return b"fake-music-bytes"
+        if url.endswith(".json"):
+            return json.dumps(_alignment("Hello world")).encode()
+        return b"fake-media-bytes"
+
+    _patch_storage.download_file.side_effect = _custom_download
+    agent = _make_agent()
+
+    await agent.run(
+        {
+            "job_id": uuid4(),
+            "format_payload": _format_payload(
+                [_scene(1, "video_clip")], music_mood="synthwave_hype"
+            ),
+            "platform": "tiktok",
+            "voiceover_url": "http://s3/vo.mp3",
+            "vocal_alignment_url": "http://s3/al.json",
+        }
+    )
+
+    args, _kwargs = _patch_ffmpeg.call_args
+    cmd = " ".join(args)
+    assert "amix=inputs=2:duration=first" in cmd
+    assert "volume=0.1" in cmd
+    assert "background_music.mp3" in cmd
+
+
+@pytest.mark.agent
+async def test_unknown_music_mood_skips_gracefully(_patch_storage, _patch_ffmpeg):
+    agent = _make_agent()
+    payload = _format_payload([_scene(1, "video_clip")])
+    payload["music_mood"] = "nonexistent_mood"
+
+    result = await agent.run(
+        {
+            "job_id": uuid4(),
+            "format_payload": payload,
+            "platform": "tiktok",
+            "voiceover_url": "http://s3/vo.mp3",
+            "vocal_alignment_url": "http://s3/al.json",
+        }
+    )
+
+    assert result.status == AgentActionStatus.SUCCESS
+    args, _kwargs = _patch_ffmpeg.call_args
+    cmd = " ".join(args)
+    assert "acopy[audio]" in cmd
+    assert "amix" not in cmd
+
+
+@pytest.mark.agent
+async def test_music_download_failure_skips_gracefully(_patch_storage, _patch_ffmpeg):
+    def _failing_download(url: str) -> bytes:
+        if "music" in url:
+            raise Exception("S3 music error")
+        if url.endswith(".json"):
+            return json.dumps(_alignment("Hello world")).encode()
+        return b"fake-media-bytes"
+
+    _patch_storage.download_file.side_effect = _failing_download
+    agent = _make_agent()
+
+    result = await agent.run(
+        {
+            "job_id": uuid4(),
+            "format_payload": _format_payload(
+                [_scene(1, "video_clip")], music_mood="synthwave_hype"
+            ),
+            "platform": "tiktok",
+            "voiceover_url": "http://s3/vo.mp3",
+            "vocal_alignment_url": "http://s3/al.json",
+        }
+    )
+
+    assert result.status == AgentActionStatus.SUCCESS
+    args, _kwargs = _patch_ffmpeg.call_args
+    cmd = " ".join(args)
+    assert "acopy[audio]" in cmd
+    assert "amix" not in cmd
 
 
 @pytest.mark.agent

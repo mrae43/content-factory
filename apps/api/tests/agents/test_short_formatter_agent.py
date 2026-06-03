@@ -466,7 +466,7 @@ async def test_short_epistemic_ledger_in_hedge_block(multi_chain_mock):
 class TestResolveVoiceId:
     def test_returns_directives_voice_id_when_set(self, monkeypatch):
         monkeypatch.setattr(
-            "app.services.short_config.DEFAULT_VOICE_MAP",
+            "app.workers.short_formatter.DEFAULT_VOICE_MAP",
             {"tiktok": "default_tiktok_voice"},
         )
         directives = {"voice_id": "custom_voice"}
@@ -474,7 +474,7 @@ class TestResolveVoiceId:
 
     def test_falls_back_to_platform_default(self, monkeypatch):
         monkeypatch.setattr(
-            "app.services.short_config.DEFAULT_VOICE_MAP",
+            "app.workers.short_formatter.DEFAULT_VOICE_MAP",
             {"tiktok": "default_tiktok_voice"},
         )
         directives = {}
@@ -482,7 +482,7 @@ class TestResolveVoiceId:
 
     def test_returns_empty_string_when_no_default(self, monkeypatch):
         monkeypatch.setattr(
-            "app.services.short_config.DEFAULT_VOICE_MAP",
+            "app.workers.short_formatter.DEFAULT_VOICE_MAP",
             {},
         )
         directives = {}
