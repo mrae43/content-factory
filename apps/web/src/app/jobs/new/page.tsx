@@ -114,6 +114,7 @@ function NewJobForm() {
           uncertain_pass_through: false,
           tone: tone || undefined,
           angle: angle || undefined,
+          loopable: true,
         },
         format_type: formatType as "all" | "video" | "blog" | "carousel",
         platform: platform as "twitter" | "linkedin" | "instagram" | "youtube" | "tiktok",
