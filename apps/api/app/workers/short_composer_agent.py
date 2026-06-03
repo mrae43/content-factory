@@ -8,16 +8,22 @@ import asyncio
 import logging
 import shutil
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Optional, Set, Tuple, Type
+from typing import Any, ClassVar, Dict, List, Optional, Set, Type
 
 import json
 from pydantic import BaseModel
 
+from app.core.config import settings
 from app.services.short_config import (
     KB_MOTION_PRESETS,
+    MUSIC_MOOD_MAP,
+    MUSIC_VOLUME,
     PLATFORM_ASPECT_RATIOS_SHORT,
 )
-from app.services.subtitles import generate_ass_file
+from app.services.subtitles import (
+    _match_words_to_scenes,
+    generate_ass_file,
+)
 from app.storage.adapter import get_storage
 from app.workers.agents import AgentActionStatus, AgentResult, ServiceAgent
 
@@ -38,29 +44,21 @@ def _prepare_zoompan_expr(kb_motion: str, duration: float, fps: int = FPS) -> st
     return expr.replace("duration*fps", str(total_frames))
 
 
-def _match_words_to_scenes(
-    vocal_alignment_data: List[Dict], scenes: List[Dict]
-) -> List[Tuple[int, List[Dict]]]:
-    """Match word-level alignment entries to scenes by word count."""
-    word_index = 0
-    groups: List[Tuple[int, List[Dict]]] = []
-    for scene_idx, scene in enumerate(scenes):
-        narration = scene.get("narration_text", "").strip()
-        clean = narration.rstrip(".!?,; ")
-        expected = len(clean.split()) if clean else 0
-        matched: List[Dict] = []
-        for _ in range(expected):
-            if word_index < len(vocal_alignment_data):
-                matched.append(vocal_alignment_data[word_index])
-                word_index += 1
-        groups.append((scene_idx, matched))
-    if word_index < len(vocal_alignment_data) and groups:
-        last = len(groups) - 1
-        groups[last] = (
-            groups[last][0],
-            groups[last][1] + vocal_alignment_data[word_index:],
+def _resolve_music_url(music_mood: str) -> Optional[str]:
+    """Resolve a music_mood tag to a downloadable URL, or None if unknown."""
+    filename = MUSIC_MOOD_MAP.get(music_mood)
+    if not filename:
+        if music_mood:
+            logger.warning(
+                "Unknown music_mood '%s' — skipping background music", music_mood
+            )
+        return None
+    if settings.storage_backend == "s3":
+        return (
+            f"{settings.s3_public_url}/{settings.s3_bucket_music}"
+            f"/music/{music_mood}/{filename}"
         )
-    return groups
+    return f"/api/proxy/music/{music_mood}/{filename}"
 
 
 def _compute_scene_durations(
@@ -220,7 +218,26 @@ class ShortComposerAgent(ServiceAgent):
                     confidence_score=0.0,
                 )
 
-            # ── Step 3: Script compilation (ASS subtitles) ───────────────
+            # ── Step 3: Background music (optional — graceful degradation) ──
+            music_mood = format_payload.get("music_mood", "")
+            music_path: Optional[Path] = None
+            if music_mood:
+                music_url = _resolve_music_url(music_mood)
+                if music_url:
+                    try:
+                        music_bytes = await asyncio.to_thread(
+                            storage.download_file, music_url
+                        )
+                        music_path = assets_dir / "background_music.mp3"
+                        music_path.write_bytes(music_bytes)
+                    except Exception as exc:
+                        logger.warning(
+                            "Background music download failed for mood '%s': %s",
+                            music_mood,
+                            exc,
+                        )
+
+            # ── Step 4: Script compilation (ASS subtitles) ───────────────
             subtitle_preset = format_payload.get("subtitle_preset", "CENTER_POP_YELLOW")
             try:
                 ass_content = generate_ass_file(
@@ -239,7 +256,7 @@ class ShortComposerAgent(ServiceAgent):
 
             scene_durations = _compute_scene_durations(alignment_data, scenes)
 
-            # ── Step 4: Atomic FFmpeg ────────────────────────────────────
+            # ── Step 5: Atomic FFmpeg ────────────────────────────────────
             width, height = PLATFORM_ASPECT_RATIOS_SHORT.get(platform, (1080, 1920))
             output_path = tmp_dir / "final_output.mp4"
             success = await self._run_ffmpeg(
@@ -251,6 +268,7 @@ class ShortComposerAgent(ServiceAgent):
                 output_path=str(output_path),
                 width=width,
                 height=height,
+                music_path=str(music_path) if music_path else None,
             )
 
             if not success:
@@ -261,7 +279,7 @@ class ShortComposerAgent(ServiceAgent):
                     confidence_score=0.0,
                 )
 
-            # ── Step 5: Clean up & ship ────────────────────────────────────
+            # ── Step 6: Clean up & ship ────────────────────────────────────
             folder = (
                 f"{context.get('device_id', '__anonymous__')}/{job_id or 'standalone'}"
             )
@@ -301,6 +319,7 @@ class ShortComposerAgent(ServiceAgent):
         output_path: str,
         width: int,
         height: int,
+        music_path: Optional[str] = None,
     ) -> bool:
         cmd = ["ffmpeg", "-y"]
 
@@ -310,6 +329,10 @@ class ShortComposerAgent(ServiceAgent):
 
         # Voiceover input
         cmd.extend(["-i", voiceover_path])
+
+        # Background music input (optional)
+        if music_path:
+            cmd.extend(["-i", music_path])
 
         filters: List[str] = []
 
@@ -336,10 +359,16 @@ class ShortComposerAgent(ServiceAgent):
         # Burn subtitles
         filters.append(f"[concatv]ass={ass_path}[subv];")
 
-        # Audio
+        # Audio — voiceover with optional background music overlay
         audio_idx = len(scenes)
-        filters.append(f"[{audio_idx}:a]volume=1.0[a0];")
-        filters.append("[a0]acopy[audio];")
+        if music_path:
+            music_idx = len(scenes) + 1
+            filters.append(f"[{audio_idx}:a]volume=1.0[vo];")
+            filters.append(f"[{music_idx}:a]volume={MUSIC_VOLUME}[bm0];")
+            filters.append("[vo][bm0]amix=inputs=2:duration=first[audio];")
+        else:
+            filters.append(f"[{audio_idx}:a]volume=1.0[a0];")
+            filters.append("[a0]acopy[audio];")
 
         cmd.extend(["-filter_complex", "".join(filters)])
         cmd.extend(["-map", "[subv]", "-map", "[audio]"])
