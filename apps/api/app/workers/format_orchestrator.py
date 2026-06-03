@@ -74,6 +74,21 @@ def _build_format_content(format_type: str, payload: dict) -> str:
             )
         return "\n\n".join(parts)
 
+    if format_type == "SHORT":
+        scenes = payload.get("scenes", [])
+        parts = []
+        for scene in scenes:
+            num = scene.get("scene_number", "")
+            narration = scene.get("narration_text", "")
+            visual = scene.get("visual_prompt", "")
+            asset_type = scene.get("asset_type", "")
+            parts.append(
+                f"### Scene {num}\n\n"
+                f"**Narration:** {narration}\n\n"
+                f"**Visual ({asset_type}):** {visual}"
+            )
+        return "\n\n".join(parts)
+
     return payload.get("title", payload.get("thread_title", ""))
 
 
@@ -160,6 +175,12 @@ async def _transition_formatting(db: AsyncSession, format_job: FormatJob) -> Non
             max_retries=2,
         )
         formatter_specs.append(("VIDEO", video_harness, video_ctx))
+
+    if "SHORT" in target_format_names:
+        logger.warning(
+            f"SHORT format detected on FormatJob {format_job.id} — "
+            f"Discord bot SHORT support is not yet implemented; skipping"
+        )
 
     if not formatter_specs:
         logger.warning(
