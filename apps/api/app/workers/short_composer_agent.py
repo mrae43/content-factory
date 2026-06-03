@@ -10,7 +10,7 @@ import shutil
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Optional, Set, Tuple, Type
 
-import aiohttp
+import json
 from pydantic import BaseModel
 
 from app.services.short_config import (
@@ -151,53 +151,74 @@ class ShortComposerAgent(ServiceAgent):
 
         try:
             # ── Step 2: Concurrent download ──────────────────────────────
-            async with aiohttp.ClientSession() as session:
-                alignment_data = await self._download_json(session, vocal_alignment_url)
-                if not alignment_data:
-                    return AgentResult(
-                        status=AgentActionStatus.ERROR,
-                        payload={},
-                        reasoning="Empty or missing vocal_alignment_data",
-                        confidence_score=0.0,
-                    )
+            storage = get_storage()
 
-                voiceover_path = assets_dir / "voiceover.mp3"
-                try:
-                    await self._download_file(session, voiceover_url, voiceover_path)
-                except Exception as exc:
-                    return AgentResult(
-                        status=AgentActionStatus.ERROR,
-                        payload={},
-                        reasoning=f"Voiceover download failed: {exc}",
-                        confidence_score=0.0,
-                    )
+            # Vocal alignment JSON
+            try:
+                alignment_bytes = await asyncio.to_thread(
+                    storage.download_file, vocal_alignment_url
+                )
+                alignment_data = json.loads(alignment_bytes)
+            except Exception as exc:
+                return AgentResult(
+                    status=AgentActionStatus.ERROR,
+                    payload={},
+                    reasoning=f"Vocal alignment download failed: {exc}",
+                    confidence_score=0.0,
+                )
 
-                local_paths: List[Dict[str, Any]] = []
-                for scene in scenes:
-                    sn = scene.get("scene_number", 0)
-                    atype = scene.get("asset_type")
-                    if atype == "video_clip":
-                        url = scene["video_url"]
-                        dest = assets_dir / f"scene_{sn:02d}.mp4"
-                    else:
-                        url = scene["image_url"]
-                        dest = assets_dir / f"scene_{sn:02d}.png"
-                    try:
-                        await self._download_file(session, url, dest)
-                    except Exception as exc:
-                        return AgentResult(
-                            status=AgentActionStatus.ERROR,
-                            payload={},
-                            reasoning=(f"Scene {sn} asset download failed: {exc}"),
-                            confidence_score=0.0,
-                        )
-                    local_paths.append(
-                        {
-                            "scene_number": sn,
-                            "asset_type": atype,
-                            "local_path": str(dest),
-                        }
-                    )
+            if not alignment_data:
+                return AgentResult(
+                    status=AgentActionStatus.ERROR,
+                    payload={},
+                    reasoning="Empty or missing vocal_alignment_data",
+                    confidence_score=0.0,
+                )
+
+            # Voiceover audio
+            voiceover_path = assets_dir / "voiceover.mp3"
+            try:
+                voiceover_bytes = await asyncio.to_thread(
+                    storage.download_file, voiceover_url
+                )
+                voiceover_path.write_bytes(voiceover_bytes)
+            except Exception as exc:
+                return AgentResult(
+                    status=AgentActionStatus.ERROR,
+                    payload={},
+                    reasoning=f"Voiceover download failed: {exc}",
+                    confidence_score=0.0,
+                )
+
+            # Scene assets — concurrent via asyncio.gather
+            async def _download_scene(scene: Dict[str, Any]) -> Dict[str, Any]:
+                sn = scene.get("scene_number", 0)
+                atype = scene.get("asset_type")
+                if atype == "video_clip":
+                    url = scene["video_url"]
+                    dest = assets_dir / f"scene_{sn:02d}.mp4"
+                else:
+                    url = scene["image_url"]
+                    dest = assets_dir / f"scene_{sn:02d}.png"
+                data = await asyncio.to_thread(storage.download_file, url)
+                dest.write_bytes(data)
+                return {
+                    "scene_number": sn,
+                    "asset_type": atype,
+                    "local_path": str(dest),
+                }
+
+            try:
+                local_paths = await asyncio.gather(
+                    *[_download_scene(s) for s in scenes]
+                )
+            except Exception as exc:
+                return AgentResult(
+                    status=AgentActionStatus.ERROR,
+                    payload={},
+                    reasoning=f"Scene asset download failed: {exc}",
+                    confidence_score=0.0,
+                )
 
             # ── Step 3: Script compilation (ASS subtitles) ───────────────
             subtitle_preset = format_payload.get("subtitle_preset", "CENTER_POP_YELLOW")
@@ -269,34 +290,6 @@ class ShortComposerAgent(ServiceAgent):
                 shutil.rmtree(tmp_dir, ignore_errors=True)
 
     # ── Internal helpers ───────────────────────────────────────────────
-
-    async def _download_json(
-        self, session: aiohttp.ClientSession, url: str
-    ) -> Optional[List[Dict]]:
-        try:
-            async with session.get(url) as resp:
-                if resp.status != 200:
-                    logger.warning("Download JSON HTTP %d: %s", resp.status, url)
-                    return None
-                return await resp.json()
-        except Exception as exc:
-            logger.warning("Download JSON failed: %s", exc)
-            return None
-
-    async def _download_file(
-        self,
-        session: aiohttp.ClientSession,
-        url: str,
-        dest: Path,
-    ) -> None:
-        try:
-            async with session.get(url) as resp:
-                resp.raise_for_status()
-                content = await resp.read()
-                dest.write_bytes(content)
-        except Exception as exc:
-            logger.warning("Download file failed: %s", exc)
-            raise
 
     async def _run_ffmpeg(
         self,
