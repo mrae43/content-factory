@@ -36,6 +36,7 @@ from app.services.llm import get_embeddings, get_llm
 from app.services.format_validator import (
     BlogValidator,
     CarouselValidator,
+    ShortValidator,
     VideoValidator,
 )
 from app.workers.tasks import cleanup_local_research_chunks
@@ -52,7 +53,15 @@ from app.workers.formatters import (
     CarouselFormatterAgent,
     VideoFormatterAgent,
 )
+from app.workers.short_formatter import (
+    ShortFormatterAgent,
+    _resolve_voice_id,
+)
+from app.workers.short_visual_asset_agent import ShortVisualAssetAgent
+from app.workers.short_voiceover_agent import ShortVoiceoverAgent
+from app.workers.short_composer_agent import ShortComposerAgent
 from app.workers.harness import AgentHarness
+from app.db.models import Asset
 from app.schemas.shorts import (
     JobStatusEnum,
     AssembledContext,
@@ -115,6 +124,9 @@ async def execute_state_transition(db: AsyncSession, job) -> None:
 
         elif job.status == JobStatusEnum.ASSET_GENERATION:
             await _transition_asset_generation(db, job)
+
+        elif job.status == JobStatusEnum.COMPOSITION:
+            await _transition_composition(db, job)
 
         elif job.status == JobStatusEnum.COMPLETED:
             logger.info(f"Pipeline finished successfully for Job {job.id}")
@@ -714,14 +726,177 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
             await update_job_status(db, job.id, JobStatusEnum.HUMAN_REVIEW_NEEDED)
 
 
+async def _transition_short_asset_generation(
+    db: AsyncSession, job, short_script
+) -> bool:
+    payload = dict(short_script.format_payload) if short_script.format_payload else {}
+    if not payload:
+        logger.warning(f"No format_payload for SHORT script on Job {job.id}")
+        return False
+
+    visual_harness = AgentHarness(agent=ShortVisualAssetAgent())
+    voiceover_harness = AgentHarness(agent=ShortVoiceoverAgent())
+
+    visual_context: Dict[str, Any] = {
+        "format_type": "short",
+        "job_id": job.id,
+        "format_payload": payload,
+        "platform": job.platform or "tiktok",
+        "device_id": job.device_id,
+    }
+    voiceover_context: Dict[str, Any] = {
+        "format_type": "short",
+        "job_id": job.id,
+        "format_payload": payload,
+        "platform": job.platform or "tiktok",
+        "device_id": job.device_id,
+    }
+
+    visual_result, voiceover_result = await asyncio.gather(
+        visual_harness.run_with_harness(visual_context),
+        voiceover_harness.run_with_harness(voiceover_context),
+        return_exceptions=True,
+    )
+
+    any_success = False
+
+    # Handle visual result
+    if isinstance(visual_result, Exception):
+        logger.error(f"ShortVisualAssetAgent failed for Job {job.id}: {visual_result}")
+    elif visual_result.success:
+        updated_format_payload = visual_result.payload.get("updated_format_payload", {})
+        if updated_format_payload:
+            payload = dict(updated_format_payload)
+        for scene_url in visual_result.payload.get("scene_urls", []):
+            scene_number = scene_url.get("scene_number")
+            url = scene_url.get("url")
+            asset_type = scene_url.get("asset_type")
+            if url and asset_type:
+                enum_type = (
+                    "SHORT_VIDEO_CLIP"
+                    if asset_type == "video_clip"
+                    else "SHORT_STILL_IMAGE"
+                )
+                db.add(
+                    Asset(
+                        job_id=job.id,
+                        asset_type=enum_type,
+                        url_or_path=url,
+                        render_meta={"scene_number": scene_number},
+                    )
+                )
+        any_success = True
+    else:
+        error_msg = (
+            visual_result.error_log[0] if visual_result.error_log else "Unknown error"
+        )
+        logger.error(f"ShortVisualAssetAgent failed for Job {job.id}: {error_msg}")
+
+    # Handle voiceover result
+    voiceover_url = None
+    vocal_alignment_url = None
+    if isinstance(voiceover_result, Exception):
+        logger.error(f"ShortVoiceoverAgent failed for Job {job.id}: {voiceover_result}")
+    elif voiceover_result.success:
+        voiceover_url = voiceover_result.payload.get("voiceover_url")
+        vocal_alignment_url = voiceover_result.payload.get("vocal_alignment_url")
+        if voiceover_url:
+            db.add(
+                Asset(
+                    job_id=job.id,
+                    asset_type="VOICEOVER",
+                    url_or_path=voiceover_url,
+                    render_meta={},
+                )
+            )
+        if vocal_alignment_url:
+            db.add(
+                Asset(
+                    job_id=job.id,
+                    asset_type="VOCAL_ALIGNMENT",
+                    url_or_path=vocal_alignment_url,
+                    render_meta={},
+                )
+            )
+        any_success = True
+    else:
+        error_msg = (
+            voiceover_result.error_log[0]
+            if voiceover_result.error_log
+            else "Unknown error"
+        )
+        logger.error(f"ShortVoiceoverAgent failed for Job {job.id}: {error_msg}")
+
+    if any_success:
+        payload["voiceover_url"] = voiceover_url
+        payload["vocal_alignment_url"] = vocal_alignment_url
+        short_script.format_payload = payload
+        flag_modified(short_script, "format_payload")
+        await db.commit()
+
+    return any_success
+
+
+async def _transition_composition(db: AsyncSession, job) -> None:
+    short_script = await get_latest_format_script(db, job.id, "SHORT")
+    if not short_script or not short_script.format_payload:
+        logger.warning(f"No SHORT format script for Job {job.id} at COMPOSITION")
+        await log_error(
+            db,
+            job.id,
+            "No SHORT format script found at COMPOSITION",
+            phase="COMPOSITION",
+        )
+        await update_job_status(db, job.id, JobStatusEnum.FAILED)
+        return
+
+    payload = dict(short_script.format_payload)
+    voiceover_url = payload.get("voiceover_url")
+    vocal_alignment_url = payload.get("vocal_alignment_url")
+
+    if not voiceover_url or not vocal_alignment_url:
+        logger.warning(f"Missing voiceover or alignment URL for Job {job.id}")
+        await log_error(
+            db,
+            job.id,
+            "Missing voiceover or alignment data at COMPOSITION",
+            phase="COMPOSITION",
+        )
+        await update_job_status(db, job.id, JobStatusEnum.FAILED)
+        return
+
+    composer_harness = AgentHarness(agent=ShortComposerAgent())
+    context: Dict[str, Any] = {
+        "format_type": "short",
+        "job_id": job.id,
+        "format_payload": payload,
+        "platform": job.platform or "tiktok",
+        "device_id": job.device_id,
+        "voiceover_url": voiceover_url,
+        "vocal_alignment_url": vocal_alignment_url,
+    }
+
+    result = await composer_harness.run_with_harness(context)
+
+    if result.success:
+        job.final_video_url = result.payload.get("final_video_url")
+        await db.commit()
+        await update_job_status(db, job.id, JobStatusEnum.COMPLETED)
+    else:
+        error_msg = result.error_log[0] if result.error_log else "Unknown error"
+        await log_error(db, job.id, error_msg, phase="COMPOSITION")
+        await update_job_status(db, job.id, JobStatusEnum.FAILED)
+
+
 async def _transition_asset_generation(db: AsyncSession, job) -> None:
     video_script = await get_latest_format_script(db, job.id, "VIDEO")
     carousel_script = await get_latest_format_script(db, job.id, "CAROUSEL")
+    short_script = await get_latest_format_script(db, job.id, "SHORT")
 
-    if not video_script and not carousel_script:
+    if not video_script and not carousel_script and not short_script:
         raise Exception(
             f"Cannot proceed to ASSET_GENERATION for Job {job.id}: "
-            f"no approved format script with payload found (checked VIDEO, CAROUSEL)."
+            f"no approved format script with payload found (checked VIDEO, CAROUSEL, SHORT)."
         )
 
     any_success = False
@@ -779,9 +954,18 @@ async def _transition_asset_generation(db: AsyncSession, job) -> None:
                 phase="CAROUSEL_IMAGE_GENERATION",
             )
 
+    # --- Short asset generation ---
+    if short_script and short_script.format_payload:
+        short_ok = await _transition_short_asset_generation(db, job, short_script)
+        if short_ok:
+            any_success = True
+
     if any_success:
         await db.commit()
-        await update_job_status(db, job.id, JobStatusEnum.COMPLETED)
+        if short_script and short_script.format_payload:
+            await update_job_status(db, job.id, JobStatusEnum.COMPOSITION)
+        else:
+            await update_job_status(db, job.id, JobStatusEnum.COMPLETED)
     else:
         await db.commit()
         await update_job_status(db, job.id, JobStatusEnum.FAILED)
@@ -912,12 +1096,29 @@ def _build_format_content(format_type: str, payload: dict) -> str:
             )
         return "\n\n".join(parts)
 
+    if format_type == "SHORT":
+        scenes = payload.get("scenes", [])
+        parts = []
+        for scene in scenes:
+            num = scene.get("scene_number", "")
+            narration = scene.get("narration_text", "")
+            visual = scene.get("visual_prompt", "")
+            asset_type = scene.get("asset_type", "")
+            parts.append(
+                f"### Scene {num}\n\n"
+                f"**Narration:** {narration}\n\n"
+                f"**Visual ({asset_type}):** {visual}"
+            )
+        return "\n\n".join(parts)
+
     return payload.get("title", payload.get("thread_title", ""))
 
 
 def _next_status_after_formatting(
     resolved_formats: list[FormatTypeEnum],
 ) -> JobStatusEnum:
+    if FormatTypeEnum.SHORT in resolved_formats:
+        return JobStatusEnum.ASSET_GENERATION
     if (
         FormatTypeEnum.VIDEO in resolved_formats
         or FormatTypeEnum.CAROUSEL in resolved_formats
@@ -1004,6 +1205,26 @@ async def _transition_formatting(db: AsyncSession, job) -> None:
             max_retries=2,
         )
         formatter_specs.append(("VIDEO", video_harness, video_ctx))
+
+    if "SHORT" in target_format_names:
+        story_directives = job.story_directives or {}
+        voice_id = _resolve_voice_id(story_directives, job.platform or "tiktok")
+        short_ctx = {
+            **base_context,
+            "format_type": "short",
+            "voice_id": voice_id,
+            "loopable": story_directives.get("loopable", True),
+            "platform": job.platform or "tiktok",
+        }
+        short_harness = AgentHarness(
+            agent=ShortFormatterAgent(
+                model_name=settings.formatter_model,
+                temperature=settings.formatter_temperature,
+            ),
+            validator=ShortValidator(platform=job.platform or "tiktok"),
+            max_retries=2,
+        )
+        formatter_specs.append(("SHORT", short_harness, short_ctx))
 
     if not formatter_specs:
         logger.warning(
