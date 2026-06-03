@@ -102,3 +102,14 @@ class S3Storage:
             ContentType=content_type,
         )
         return f"{self.public_url}/{self.bucket_videos}/{key}"
+
+    def download_file(self, url: str) -> bytes:
+        if not url.startswith(self.public_url):
+            raise ValueError(f"URL does not match S3 public URL prefix: {url}")
+        path_part = url[len(self.public_url) + 1 :]
+        parts = path_part.split("/", 1)
+        if len(parts) != 2:
+            raise ValueError(f"Cannot parse bucket/key from URL: {url}")
+        bucket, key = parts
+        response = self.client.get_object(Bucket=bucket, Key=key)
+        return response["Body"].read()

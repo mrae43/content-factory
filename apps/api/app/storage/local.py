@@ -55,3 +55,17 @@ class LocalStorage:
         path.write_bytes(file_bytes)
         prefix = f"{folder}/" if folder else ""
         return f"/api/proxy/voiceovers/{prefix}{filename}"
+
+    def download_file(self, url_or_path: str) -> bytes:
+        if url_or_path.startswith("/api/proxy/images/"):
+            rel = url_or_path[len("/api/proxy/images/") :]
+            path = UPLOAD_DIR / rel
+        elif url_or_path.startswith("/api/proxy/videos/"):
+            rel = url_or_path[len("/api/proxy/videos/") :]
+            path = VIDEO_UPLOAD_DIR / rel
+        elif url_or_path.startswith("/api/proxy/voiceovers/"):
+            rel = url_or_path[len("/api/proxy/voiceovers/") :]
+            path = VOICEOVER_UPLOAD_DIR / rel
+        else:
+            path = Path(url_or_path)
+        return path.read_bytes()

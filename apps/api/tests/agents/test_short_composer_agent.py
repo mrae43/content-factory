@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
@@ -65,26 +66,6 @@ def _alignment(narration: str) -> list[dict]:
 
 
 @pytest.fixture(autouse=True)
-def _patch_aiohttp():
-    """Mock aiohttp so tests never hit the network."""
-    mock_resp = AsyncMock()
-    mock_resp.status = 200
-    mock_resp.read = AsyncMock(return_value=b"fake-media-bytes")
-    mock_resp.json = AsyncMock(return_value=[])
-    mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
-    mock_resp.__aexit__ = AsyncMock(return_value=None)
-    mock_resp.raise_for_status = MagicMock()
-
-    mock_session = MagicMock()
-    mock_session.get.return_value = mock_resp
-    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_session.__aexit__ = AsyncMock(return_value=None)
-
-    with patch("aiohttp.ClientSession", return_value=mock_session):
-        yield mock_resp
-
-
-@pytest.fixture(autouse=True)
 def _patch_ffmpeg():
     async def _mock_exec(*cmd, **kwargs):
         # Create the output file that FFmpeg would produce
@@ -105,8 +86,16 @@ def _patch_ffmpeg():
 
 @pytest.fixture(autouse=True)
 def _patch_storage():
+    default_alignment = _alignment("Hello world")
+
+    def _download_side_effect(url: str) -> bytes:
+        if url.endswith(".json"):
+            return json.dumps(default_alignment).encode()
+        return b"fake-media-bytes"
+
     mock_storage = MagicMock()
     mock_storage.upload_video = MagicMock(return_value="/api/proxy/videos/final.mp4")
+    mock_storage.download_file = MagicMock(side_effect=_download_side_effect)
 
     with patch(
         "app.workers.short_composer_agent.get_storage",
@@ -131,9 +120,8 @@ def _patch_to_thread():
 
 
 @pytest.mark.agent
-async def test_happy_path_composes_video(_patch_aiohttp):
+async def test_happy_path_composes_video(_patch_storage):
     jid = uuid4()
-    _patch_aiohttp.json = AsyncMock(return_value=_alignment("Hello world"))
     agent = _make_agent()
 
     result = await agent.run(
@@ -153,8 +141,7 @@ async def test_happy_path_composes_video(_patch_aiohttp):
 
 
 @pytest.mark.agent
-async def test_ken_burns_scene_includes_zoompan(_patch_aiohttp, _patch_ffmpeg):
-    _patch_aiohttp.json = AsyncMock(return_value=_alignment("Hello world"))
+async def test_ken_burns_scene_includes_zoompan(_patch_storage, _patch_ffmpeg):
     agent = _make_agent()
 
     await agent.run(
@@ -175,10 +162,13 @@ async def test_ken_burns_scene_includes_zoompan(_patch_aiohttp, _patch_ffmpeg):
 
 
 @pytest.mark.agent
-async def test_multiple_scenes_concatenated(_patch_aiohttp, _patch_ffmpeg):
-    _patch_aiohttp.json = AsyncMock(
-        return_value=_alignment("Scene one here Scene two now")
-    )
+async def test_multiple_scenes_concatenated(_patch_storage, _patch_ffmpeg):
+    def _custom_download(url: str) -> bytes:
+        if url.endswith(".json"):
+            return json.dumps(_alignment("Scene one here Scene two now")).encode()
+        return b"fake-media-bytes"
+
+    _patch_storage.download_file.side_effect = _custom_download
     agent = _make_agent()
 
     await agent.run(
@@ -204,8 +194,7 @@ async def test_multiple_scenes_concatenated(_patch_aiohttp, _patch_ffmpeg):
 
 
 @pytest.mark.agent
-async def test_subtitle_burn_in_filter(_patch_aiohttp, _patch_ffmpeg):
-    _patch_aiohttp.json = AsyncMock(return_value=_alignment("Hello world"))
+async def test_subtitle_burn_in_filter(_patch_storage, _patch_ffmpeg):
     agent = _make_agent()
 
     await agent.run(
@@ -225,8 +214,7 @@ async def test_subtitle_burn_in_filter(_patch_aiohttp, _patch_ffmpeg):
 
 
 @pytest.mark.agent
-async def test_platform_resolution_in_ffmpeg(_patch_aiohttp, _patch_ffmpeg):
-    _patch_aiohttp.json = AsyncMock(return_value=_alignment("Hello world"))
+async def test_platform_resolution_in_ffmpeg(_patch_storage, _patch_ffmpeg):
     agent = _make_agent()
 
     await agent.run(
@@ -245,8 +233,7 @@ async def test_platform_resolution_in_ffmpeg(_patch_aiohttp, _patch_ffmpeg):
 
 
 @pytest.mark.agent
-async def test_uploads_final_video(_patch_aiohttp, _patch_storage):
-    _patch_aiohttp.json = AsyncMock(return_value=_alignment("Hello world"))
+async def test_uploads_final_video(_patch_storage):
     agent = _make_agent()
 
     result = await agent.run(
@@ -359,8 +346,10 @@ async def test_returns_error_when_alignment_url_missing():
 
 
 @pytest.mark.agent
-async def test_returns_error_when_alignment_empty(_patch_aiohttp):
-    _patch_aiohttp.json = AsyncMock(return_value=[])
+async def test_returns_error_when_alignment_empty(_patch_storage):
+    _patch_storage.download_file.side_effect = lambda url: (
+        json.dumps([]).encode() if url.endswith(".json") else b"fake-media-bytes"
+    )
     agent = _make_agent()
     result = await agent.run(
         {
@@ -375,8 +364,7 @@ async def test_returns_error_when_alignment_empty(_patch_aiohttp):
 
 
 @pytest.mark.agent
-async def test_returns_error_when_ffmpeg_fails(_patch_aiohttp):
-    _patch_aiohttp.json = AsyncMock(return_value=_alignment("Hello world"))
+async def test_returns_error_when_ffmpeg_fails(_patch_storage):
     agent = _make_agent()
 
     mock_proc = AsyncMock()
@@ -399,8 +387,7 @@ async def test_returns_error_when_ffmpeg_fails(_patch_aiohttp):
 
 
 @pytest.mark.agent
-async def test_returns_error_on_ffmpeg_not_found(_patch_aiohttp, _patch_ffmpeg):
-    _patch_aiohttp.json = AsyncMock(return_value=_alignment("Hello world"))
+async def test_returns_error_on_ffmpeg_not_found(_patch_storage, _patch_ffmpeg):
     _patch_ffmpeg.side_effect = FileNotFoundError("ffmpeg not found")
     agent = _make_agent()
     result = await agent.run(
@@ -417,9 +404,8 @@ async def test_returns_error_on_ffmpeg_not_found(_patch_aiohttp, _patch_ffmpeg):
 
 
 @pytest.mark.agent
-async def test_returns_error_on_download_failure(_patch_aiohttp):
-    _patch_aiohttp.json = AsyncMock(return_value=_alignment("Hello world"))
-    _patch_aiohttp.raise_for_status.side_effect = Exception("HTTP 500")
+async def test_returns_error_on_download_failure(_patch_storage):
+    _patch_storage.download_file.side_effect = Exception("download failed")
     agent = _make_agent()
     result = await agent.run(
         {
@@ -431,11 +417,11 @@ async def test_returns_error_on_download_failure(_patch_aiohttp):
         }
     )
     assert result.status == AgentActionStatus.ERROR
+    assert "download failed" in result.reasoning
 
 
 @pytest.mark.agent
-async def test_temp_directory_cleaned_up(_patch_aiohttp, _patch_ffmpeg):
-    _patch_aiohttp.json = AsyncMock(return_value=_alignment("Hello world"))
+async def test_temp_directory_cleaned_up(_patch_storage, _patch_ffmpeg):
     jid = uuid4()
     agent = _make_agent()
 
@@ -455,8 +441,13 @@ async def test_temp_directory_cleaned_up(_patch_aiohttp, _patch_ffmpeg):
 
 
 @pytest.mark.agent
-async def test_mixed_scenes_both_asset_types(_patch_aiohttp, _patch_ffmpeg):
-    _patch_aiohttp.json = AsyncMock(return_value=_alignment("First scene Second scene"))
+async def test_mixed_scenes_both_asset_types(_patch_storage, _patch_ffmpeg):
+    def _custom_download(url: str) -> bytes:
+        if url.endswith(".json"):
+            return json.dumps(_alignment("First scene Second scene")).encode()
+        return b"fake-media-bytes"
+
+    _patch_storage.download_file.side_effect = _custom_download
     agent = _make_agent()
 
     await agent.run(
