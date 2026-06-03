@@ -1,4 +1,5 @@
 import asyncio
+import copy
 import logging
 import traceback
 from datetime import datetime, timezone
@@ -729,7 +730,11 @@ async def _transition_fact_checking_script(db: AsyncSession, job) -> None:
 async def _transition_short_asset_generation(
     db: AsyncSession, job, short_script
 ) -> bool:
-    payload = dict(short_script.format_payload) if short_script.format_payload else {}
+    payload = (
+        copy.deepcopy(short_script.format_payload)
+        if short_script.format_payload
+        else {}
+    )
     if not payload:
         logger.warning(f"No format_payload for SHORT script on Job {job.id}")
         return False
@@ -740,14 +745,14 @@ async def _transition_short_asset_generation(
     visual_context: Dict[str, Any] = {
         "format_type": "short",
         "job_id": job.id,
-        "format_payload": payload,
+        "format_payload": copy.deepcopy(payload),
         "platform": job.platform or "tiktok",
         "device_id": job.device_id,
     }
     voiceover_context: Dict[str, Any] = {
         "format_type": "short",
         "job_id": job.id,
-        "format_payload": payload,
+        "format_payload": copy.deepcopy(payload),
         "platform": job.platform or "tiktok",
         "device_id": job.device_id,
     }

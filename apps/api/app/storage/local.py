@@ -5,6 +5,7 @@ from app.core.config import settings
 UPLOAD_DIR = Path(settings.image_storage_path)
 VIDEO_UPLOAD_DIR = Path("static/videos")
 VOICEOVER_UPLOAD_DIR = Path("static/voiceovers")
+MUSIC_UPLOAD_DIR = Path("static/music")
 
 
 class LocalStorage:
@@ -66,6 +67,9 @@ class LocalStorage:
         elif url_or_path.startswith("/api/proxy/voiceovers/"):
             rel = url_or_path[len("/api/proxy/voiceovers/") :]
             path = VOICEOVER_UPLOAD_DIR / rel
+        elif url_or_path.startswith("/api/proxy/music/"):
+            rel = url_or_path[len("/api/proxy/music/") :]
+            path = MUSIC_UPLOAD_DIR / rel
         else:
             path = Path(url_or_path)
         return path.read_bytes()

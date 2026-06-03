@@ -143,6 +143,81 @@ async def test_happy_path_generates_voiceover_and_uploads():
 
 
 @pytest.mark.agent
+async def test_avoids_double_punctuation_when_narration_ends_with_period():
+    jid = uuid4()
+    scenes = [
+        _scene(1, "First sentence."),
+        _scene(2, "Second sentence."),
+    ]
+    gen_tool = _make_gen_voiceover_tool()
+    agent = _make_agent(
+        gen_tool=gen_tool,
+        upload_tool=_make_upload_voiceover_tool(),
+        alignment_tool=_make_get_alignment_tool(),
+    )
+
+    await agent.run(
+        {
+            "job_id": jid,
+            "format_payload": _format_payload(scenes),
+        }
+    )
+
+    args, kwargs = gen_tool.callable.call_args
+    assert kwargs["text"] == "First sentence. Second sentence."
+
+
+@pytest.mark.agent
+async def test_preserves_question_mark_when_narration_ends_with_question():
+    jid = uuid4()
+    scenes = [
+        _scene(1, "How are you?"),
+        _scene(2, "I am fine."),
+    ]
+    gen_tool = _make_gen_voiceover_tool()
+    agent = _make_agent(
+        gen_tool=gen_tool,
+        upload_tool=_make_upload_voiceover_tool(),
+        alignment_tool=_make_get_alignment_tool(),
+    )
+
+    await agent.run(
+        {
+            "job_id": jid,
+            "format_payload": _format_payload(scenes),
+        }
+    )
+
+    args, kwargs = gen_tool.callable.call_args
+    assert kwargs["text"] == "How are you? I am fine."
+
+
+@pytest.mark.agent
+async def test_adds_period_when_narration_lacks_terminal_punctuation():
+    jid = uuid4()
+    scenes = [
+        _scene(1, "First sentence"),
+        _scene(2, "Second sentence"),
+    ]
+    gen_tool = _make_gen_voiceover_tool()
+    agent = _make_agent(
+        gen_tool=gen_tool,
+        upload_tool=_make_upload_voiceover_tool(),
+        alignment_tool=_make_get_alignment_tool(),
+    )
+
+    await agent.run(
+        {
+            "job_id": jid,
+            "format_payload": _format_payload(scenes),
+        }
+    )
+
+    args, kwargs = gen_tool.callable.call_args
+    assert kwargs["text"] == "First sentence. Second sentence"
+
+
+@pytest.mark.agent
 async def test_concatenates_narration_text_with_separator():
     jid = uuid4()
     scenes = [

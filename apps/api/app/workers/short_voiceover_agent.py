@@ -21,6 +21,21 @@ class ShortVoiceoverAgent(ServiceAgent):
     _permissions: ClassVar[Set[str]] = {"ShortVoiceoverAgent"}
     input_schema: ClassVar[Optional[Type[BaseModel]]] = None
 
+    @staticmethod
+    def _join_narration_parts(parts: List[str]) -> str:
+        """Join narration parts avoiding double terminal punctuation."""
+        if not parts:
+            return ""
+        if len(parts) == 1:
+            return parts[0]
+        result = parts[0]
+        for part in parts[1:]:
+            if result and result[-1] in ".!?":
+                result += " " + part
+            else:
+                result += ". " + part
+        return result
+
     async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
         format_payload = context.get("format_payload", {})
         job_id = context.get("job_id")
@@ -82,7 +97,7 @@ class ShortVoiceoverAgent(ServiceAgent):
                 confidence_score=0.0,
             )
 
-        full_text = ". ".join(narration_parts)
+        full_text = self._join_narration_parts(narration_parts)
 
         try:
             tts_result = await gen_voiceover_tool.callable(

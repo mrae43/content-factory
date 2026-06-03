@@ -75,6 +75,7 @@ class Settings(BaseSettings):
     s3_secret_access_key: str = "factory-secret"
     s3_bucket_images: str = "media-images"
     s3_bucket_videos: str = "media-videos"
+    s3_bucket_music: str = "media-music"
     # Public URL for browser-accessible image URLs.
     # Docker dev: localhost reaches the host where SeaweedFS exposes port 8333.
     # Remote deploys: set to the external domain/port of your S3-compatible gateway.
