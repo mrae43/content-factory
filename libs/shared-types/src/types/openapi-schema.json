@@ -332,6 +332,18 @@
             ],
             "title": "Failure Reason",
             "description": "Reason for asset generation failure, if any"
+          },
+          "scene_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scene Number",
+            "description": "Scene number linking back to format payload"
           }
         },
         "type": "object",
@@ -380,7 +392,11 @@
           "AUDIO_LYRIA",
           "VOICEOVER",
           "SUBTITLE_JSON",
-          "DATA_CHART"
+          "DATA_CHART",
+          "SHORT_VIDEO_CLIP",
+          "SHORT_STILL_IMAGE",
+          "VOCAL_ALIGNMENT",
+          "SHORT_COMPOSED_VIDEO"
         ],
         "title": "AssetTypeEnum"
       },
@@ -645,7 +661,8 @@
           "all",
           "video",
           "blog",
-          "carousel"
+          "carousel",
+          "short"
         ],
         "title": "FormatTypeEnum"
       },
@@ -726,6 +743,7 @@
           "FACT_CHECKING_SCRIPT",
           "FORMATTING",
           "ASSET_GENERATION",
+          "COMPOSITION",
           "COMPLETED",
           "FAILED",
           "HUMAN_REVIEW_NEEDED"
@@ -984,6 +1002,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/CarouselFormatPayload"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ShortFormatPayload"
                   }
                 ]
               },
@@ -1054,6 +1075,155 @@
         ],
         "title": "SeoMeta"
       },
+      "ShortFormatPayload": {
+        "properties": {
+          "_format": {
+            "type": "string",
+            "const": "short",
+            "title": "Format",
+            "default": "short"
+          },
+          "_version": {
+            "type": "integer",
+            "title": "Version",
+            "default": 1
+          },
+          "scenes": {
+            "items": {
+              "$ref": "#/components/schemas/ShortScene"
+            },
+            "type": "array",
+            "maxItems": 12,
+            "minItems": 2,
+            "title": "Scenes"
+          },
+          "target_total_duration": {
+            "type": "number",
+            "maximum": 90.0,
+            "minimum": 15.0,
+            "title": "Target Total Duration"
+          },
+          "visual_style": {
+            "type": "string",
+            "minLength": 5,
+            "title": "Visual Style"
+          },
+          "audio_direction": {
+            "type": "string",
+            "title": "Audio Direction"
+          },
+          "music_mood": {
+            "type": "string",
+            "title": "Music Mood"
+          },
+          "voice_id": {
+            "type": "string",
+            "title": "Voice Id"
+          },
+          "subtitle_preset": {
+            "type": "string",
+            "enum": [
+              "CENTER_POP_YELLOW",
+              "CLEAN_WHITE_LOWER",
+              "NEON_BOXED"
+            ],
+            "title": "Subtitle Preset",
+            "default": "CENTER_POP_YELLOW"
+          },
+          "loop_hook": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loop Hook"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scenes",
+          "target_total_duration",
+          "visual_style",
+          "audio_direction",
+          "music_mood",
+          "voice_id"
+        ],
+        "title": "ShortFormatPayload"
+      },
+      "ShortScene": {
+        "properties": {
+          "scene_number": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Scene Number"
+          },
+          "narration_text": {
+            "type": "string",
+            "minLength": 10,
+            "title": "Narration Text"
+          },
+          "visual_prompt": {
+            "type": "string",
+            "minLength": 10,
+            "title": "Visual Prompt"
+          },
+          "asset_type": {
+            "type": "string",
+            "enum": [
+              "video_clip",
+              "ken_burns"
+            ],
+            "title": "Asset Type"
+          },
+          "kb_motion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "pan_left",
+                  "pan_right",
+                  "zoom_in",
+                  "zoom_out",
+                  "static_zoom_in"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kb Motion"
+          },
+          "sfx_cue": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sfx Cue"
+          },
+          "target_duration_seconds": {
+            "type": "number",
+            "maximum": 15.0,
+            "minimum": 3.0,
+            "title": "Target Duration Seconds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scene_number",
+          "narration_text",
+          "visual_prompt",
+          "asset_type",
+          "target_duration_seconds"
+        ],
+        "title": "ShortScene"
+      },
       "StoryDirectives": {
         "properties": {
           "target_audience": {
@@ -1098,6 +1268,24 @@
             ],
             "title": "Angle",
             "description": "Specific editorial angle or framing"
+          },
+          "voice_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voice Id",
+            "description": "ElevenLabs voice identifier string"
+          },
+          "loopable": {
+            "type": "boolean",
+            "title": "Loopable",
+            "description": "When True, formatter writes loop-hook narrative",
+            "default": true
           }
         },
         "type": "object",

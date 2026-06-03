@@ -2219,7 +2219,7 @@ class TestTransitionAssetGeneration:
                 "app.workers.orchestrator.update_job_status", new_callable=AsyncMock
             ) as mock_update,
         ):
-            mock_get_format_script.return_value = mock_format_script
+            mock_get_format_script.side_effect = [mock_format_script, None, None]
             await execute_state_transition(mock_db_session, mock_job)
 
             assert mock_job.final_video_url == (
@@ -2318,7 +2318,7 @@ class TestTransitionAssetGeneration:
                 "app.workers.orchestrator.update_job_status", new_callable=AsyncMock
             ) as mock_update,
         ):
-            mock_get_format_script.side_effect = [None, carousel_script]
+            mock_get_format_script.side_effect = [None, carousel_script, None]
             await execute_state_transition(mock_db_session, mock_job)
 
             assert carousel_script.format_payload["slides"][0]["image_url"] == (
@@ -2522,7 +2522,7 @@ class TestOrchestratorMultiStep:
         ):
             mock_web.return_value.search = AsyncMock(return_value=[])
             mock_get_script.return_value = mock_script
-            mock_get_format_script.return_value = mock_script
+            mock_get_format_script.side_effect = [mock_script, mock_script, None]
             mock_script.format_payload = {"scenes": [], "visual_style": "Cinematic"}
 
             transitions = [

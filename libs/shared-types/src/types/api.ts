@@ -118,6 +118,11 @@ export interface components {
              * @description Reason for asset generation failure, if any
              */
             failure_reason?: string | null;
+            /**
+             * Scene Number
+             * @description Scene number linking back to format payload
+             */
+            scene_number?: number | null;
         };
         /**
          * AssetResponse
@@ -143,7 +148,7 @@ export interface components {
          * AssetTypeEnum
          * @enum {string}
          */
-        AssetTypeEnum: "CAROUSEL_SLIDE" | "VISUAL_VEO" | "AUDIO_LYRIA" | "VOICEOVER" | "SUBTITLE_JSON" | "DATA_CHART";
+        AssetTypeEnum: "CAROUSEL_SLIDE" | "VISUAL_VEO" | "AUDIO_LYRIA" | "VOICEOVER" | "SUBTITLE_JSON" | "DATA_CHART" | "SHORT_VIDEO_CLIP" | "SHORT_STILL_IMAGE" | "VOCAL_ALIGNMENT" | "SHORT_COMPOSED_VIDEO";
         /** BlogFormatPayload */
         BlogFormatPayload: {
             /**
@@ -262,7 +267,7 @@ export interface components {
          * FormatTypeEnum
          * @enum {string}
          */
-        FormatTypeEnum: "all" | "video" | "blog" | "carousel";
+        FormatTypeEnum: "all" | "video" | "blog" | "carousel" | "short";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -302,7 +307,7 @@ export interface components {
          * JobStatusEnum
          * @enum {string}
          */
-        JobStatusEnum: "PENDING" | "RESEARCHING" | "RETRIEVAL" | "FACT_CHECKING_RESEARCH" | "SCRIPTING" | "FACT_CHECKING_SCRIPT" | "FORMATTING" | "ASSET_GENERATION" | "COMPLETED" | "FAILED" | "HUMAN_REVIEW_NEEDED";
+        JobStatusEnum: "PENDING" | "RESEARCHING" | "RETRIEVAL" | "FACT_CHECKING_RESEARCH" | "SCRIPTING" | "FACT_CHECKING_SCRIPT" | "FORMATTING" | "ASSET_GENERATION" | "COMPOSITION" | "COMPLETED" | "FAILED" | "HUMAN_REVIEW_NEEDED";
         /**
          * PlatformEnum
          * @enum {string}
@@ -421,7 +426,7 @@ export interface components {
             /** Format Type */
             format_type?: string | null;
             /** Format Payload */
-            format_payload?: (components["schemas"]["VideoFormatPayload"] | components["schemas"]["BlogFormatPayload"] | components["schemas"]["CarouselFormatPayload"]) | null;
+            format_payload?: (components["schemas"]["VideoFormatPayload"] | components["schemas"]["BlogFormatPayload"] | components["schemas"]["CarouselFormatPayload"] | components["schemas"]["ShortFormatPayload"]) | null;
             /**
              * Created At
              * Format: date-time
@@ -443,6 +448,60 @@ export interface components {
             keywords: string[];
             /** Canonical Url */
             canonical_url?: string | null;
+        };
+        /** ShortFormatPayload */
+        ShortFormatPayload: {
+            /**
+             * Format
+             * @default short
+             * @constant
+             */
+            _format: "short";
+            /**
+             * Version
+             * @default 1
+             */
+            _version: number;
+            /** Scenes */
+            scenes: components["schemas"]["ShortScene"][];
+            /** Target Total Duration */
+            target_total_duration: number;
+            /** Visual Style */
+            visual_style: string;
+            /** Audio Direction */
+            audio_direction: string;
+            /** Music Mood */
+            music_mood: string;
+            /** Voice Id */
+            voice_id: string;
+            /**
+             * Subtitle Preset
+             * @default CENTER_POP_YELLOW
+             * @enum {string}
+             */
+            subtitle_preset: "CENTER_POP_YELLOW" | "CLEAN_WHITE_LOWER" | "NEON_BOXED";
+            /** Loop Hook */
+            loop_hook?: string | null;
+        };
+        /** ShortScene */
+        ShortScene: {
+            /** Scene Number */
+            scene_number: number;
+            /** Narration Text */
+            narration_text: string;
+            /** Visual Prompt */
+            visual_prompt: string;
+            /**
+             * Asset Type
+             * @enum {string}
+             */
+            asset_type: "video_clip" | "ken_burns";
+            /** Kb Motion */
+            kb_motion?: ("pan_left" | "pan_right" | "zoom_in" | "zoom_out" | "static_zoom_in") | null;
+            /** Sfx Cue */
+            sfx_cue?: string | null;
+            /** Target Duration Seconds */
+            target_duration_seconds: number;
         };
         /**
          * StoryDirectives
@@ -477,6 +536,17 @@ export interface components {
              * @description Specific editorial angle or framing
              */
             angle?: string | null;
+            /**
+             * Voice Id
+             * @description ElevenLabs voice identifier string
+             */
+            voice_id?: string | null;
+            /**
+             * Loopable
+             * @description When True, formatter writes loop-hook narrative
+             * @default true
+             */
+            loopable: boolean;
         };
         /** ValidationError */
         ValidationError: {

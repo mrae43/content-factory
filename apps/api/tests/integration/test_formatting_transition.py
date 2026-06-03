@@ -539,7 +539,7 @@ class TestTransitionAssetGenerationMissingVideoScript:
         ):
             await execute_state_transition(mock_db_session, mock_job)
 
-            assert mock_get_script.await_count == 2
+            assert mock_get_script.await_count == 3
             mock_get_script.assert_any_await(mock_db_session, mock_job.id, "VIDEO")
             mock_get_script.assert_any_await(mock_db_session, mock_job.id, "CAROUSEL")
             mock_log.assert_awaited_once()
