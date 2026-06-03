@@ -74,6 +74,7 @@ class CarouselFormatPayload(BaseModel):
 
 class ShortScene(BaseModel):
     scene_number: int = Field(..., ge=1)
+    is_hook: bool = False
     narration_text: str = Field(..., min_length=10)
     visual_prompt: str = Field(..., min_length=10)
     asset_type: Literal["video_clip", "ken_burns"] = Field(...)
@@ -115,3 +116,6 @@ class ShortFormatPayload(BaseModel):
         "NEON_BOXED",
     ] = Field(default="CENTER_POP_YELLOW")
     loop_hook: Optional[str] = Field(None)
+    visual_style_theme: Optional[str] = Field(
+        None, description="e.g., cinematic, minimalist, newsroom, documentary, dynamic"
+    )
