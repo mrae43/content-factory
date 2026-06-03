@@ -119,4 +119,3 @@ class ShortFormatPayload(BaseModel):
     visual_style_theme: Optional[str] = Field(
         None, description="e.g., cinematic, minimalist, newsroom, documentary, dynamic"
     )
-
