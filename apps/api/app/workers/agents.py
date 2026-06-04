@@ -1,23 +1,22 @@
 import json as _json
+import logging
 from abc import ABC, abstractmethod
+from enum import Enum
 from typing import Any, ClassVar, Dict, List, Literal, Optional, Set, Type
 from uuid import UUID
 
-from pydantic import BaseModel, Field, ValidationError
-from enum import Enum
-import logging
-
-from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.prompts import ChatPromptTemplate
-
-from app.services.llm import get_llm
-from app.services.tools import Tool, ToolRegistry
-from app.core.config import settings
+from pydantic import BaseModel, Field, ValidationError
 from tenacity import (
     retry,
     stop_after_attempt,
     wait_exponential,
 )
+
+from app.core.config import settings
+from app.services.llm import get_llm
+from app.services.tools import Tool, ToolRegistry
 from app.workers.retry_policies import agent_api_retry, agent_parent_retry
 
 logger = logging.getLogger(__name__)
@@ -103,11 +102,16 @@ class LLMAgent(BaseAgent):
         self,
         model_name: str = "meta-llama/Llama-3.3-70B-Instruct-Turbo",
         temperature: float = 0.2,
+        max_tokens: int | None = None,
     ) -> None:
         super().__init__()
         self.model_name = model_name
         self.temperature = temperature
-        self.llm = get_llm(model_name=self.model_name, temperature=self.temperature)
+        self.llm = get_llm(
+            model_name=self.model_name,
+            temperature=self.temperature,
+            max_tokens=max_tokens,
+        )
 
     @agent_parent_retry
     async def run(self, context: Dict[str, Any], **kwargs) -> AgentResult:
