@@ -311,3 +311,52 @@ class TestShortValidator:
         assert scenes[1]["asset_type"] == "video_clip"  # scene 20
         assert scenes[2]["asset_type"] == "ken_burns"  # scene 30
         assert scenes[3]["asset_type"] == "ken_burns"  # scene 40
+
+    def test_short_scene_is_hook_default(self):
+        validator = ShortValidator()
+        payload = _valid_short_payload()
+
+        result = validator.validate(payload)
+
+        assert result.valid is True
+        for scene in result.validated_payload["scenes"]:
+            assert scene["is_hook"] is False
+
+    def test_short_scene_is_hook_true(self):
+        validator = ShortValidator()
+        payload = _valid_short_payload(
+            scenes=[
+                _valid_short_scene(
+                    1, asset_type="video_clip", kb_motion=None, is_hook=True
+                ),
+                _valid_short_scene(2, asset_type="ken_burns", kb_motion="zoom_in"),
+                _valid_short_scene(3, asset_type="ken_burns", kb_motion="pan_left"),
+            ]
+        )
+
+        result = validator.validate(payload)
+
+        assert result.valid is True
+        assert result.validated_payload["scenes"][0]["is_hook"] is True
+
+    def test_short_format_payload_visual_style_theme(self):
+        validator = ShortValidator()
+        payload = _valid_short_payload(visual_style_theme="cinematic")
+
+        result = validator.validate(payload)
+
+        assert result.valid is True
+        assert result.validated_payload["visual_style_theme"] == "cinematic"
+
+    def test_short_format_payload_visual_style_theme_optional(self):
+        validator = ShortValidator()
+        payload = _valid_short_payload()
+
+        assert (
+            "visual_style_theme" not in payload
+            or payload.get("visual_style_theme") is None
+        )
+
+        result = validator.validate(payload)
+
+        assert result.valid is True

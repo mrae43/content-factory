@@ -12,6 +12,10 @@ from app.db.format_crud import (
     log_format_job_error,
     update_format_job_format_payload,
     update_format_job_video_url,
+    update_format_job_working_memory,
+    get_format_jobs_for_watcher,
+    get_format_jobs_missed_terminal,
+    reset_format_job_to_composition,
 )
 from app.schemas.shorts import FormatJobStatusEnum
 
@@ -292,4 +296,102 @@ class TestUpdateFormatJobVideoUrl:
         )
 
         assert mock_job.final_video_url == "https://example.com/video.mp4"
+        mock_db.commit.assert_awaited_once()
+
+
+@pytest.mark.unit
+class TestUpdateFormatJobWorkingMemory:
+    async def test_updates_working_memory_and_commits(
+        self, mock_db, mock_scalar_result, format_job_id
+    ):
+        mock_job = MagicMock()
+        mock_job.working_memory = {}
+        mock_scalar_result.scalar_one_or_none.return_value = mock_job
+        new_wm = {"discord_thread_id": "123", "discord_message_id": "456"}
+
+        result = await update_format_job_working_memory(mock_db, format_job_id, new_wm)
+
+        assert result == mock_job
+        assert mock_job.working_memory == new_wm
+        mock_db.commit.assert_awaited_once()
+
+    async def test_returns_none_when_job_not_found(
+        self, mock_db, mock_scalar_result, format_job_id
+    ):
+        mock_scalar_result.scalar_one_or_none.return_value = None
+
+        result = await update_format_job_working_memory(
+            mock_db, format_job_id, {"key": "val"}
+        )
+
+        assert result is None
+        mock_db.commit.assert_not_awaited()
+
+
+@pytest.mark.unit
+class TestGetFormatJobsForWatcher:
+    async def test_returns_jobs_with_discord_thread_id(
+        self, mock_db, mock_scalar_result
+    ):
+        mock_job = MagicMock()
+        mock_scalar_result.scalars.return_value.all.return_value = [mock_job]
+
+        result = await get_format_jobs_for_watcher(mock_db)
+
+        assert result == [mock_job]
+        mock_db.execute.assert_awaited_once()
+
+    async def test_returns_empty_list_when_no_matching_jobs(
+        self, mock_db, mock_scalar_result
+    ):
+        mock_scalar_result.scalars.return_value.all.return_value = []
+
+        result = await get_format_jobs_for_watcher(mock_db)
+
+        assert result == []
+
+
+@pytest.mark.unit
+class TestGetFormatJobsMissedTerminal:
+    async def test_returns_completed_failed_without_final_embed_updated(
+        self, mock_db, mock_scalar_result
+    ):
+        mock_job = MagicMock()
+        mock_scalar_result.scalars.return_value.all.return_value = [mock_job]
+
+        result = await get_format_jobs_missed_terminal(mock_db)
+
+        assert result == [mock_job]
+        mock_db.execute.assert_awaited_once()
+
+    async def test_excludes_jobs_with_final_embed_updated(
+        self, mock_db, mock_scalar_result
+    ):
+        mock_scalar_result.scalars.return_value.all.return_value = []
+
+        result = await get_format_jobs_missed_terminal(mock_db)
+
+        assert result == []
+
+
+@pytest.mark.unit
+class TestResetFormatJobToComposition:
+    async def test_resets_status_and_clears_lock(
+        self, mock_db, mock_scalar_result, format_job_id
+    ):
+        mock_job = MagicMock()
+        mock_job.status = FormatJobStatusEnum.FAILED
+        mock_job.locked_at = MagicMock()
+        mock_job.locked_by = "worker-1"
+        mock_job.working_memory = {"final_embed_updated": True, "other_key": "val"}
+        mock_scalar_result.scalar_one_or_none.return_value = mock_job
+
+        result = await reset_format_job_to_composition(mock_db, format_job_id)
+
+        assert result == mock_job
+        assert mock_job.status == FormatJobStatusEnum.COMPOSITION
+        assert mock_job.locked_at is None
+        assert mock_job.locked_by is None
+        assert "final_embed_updated" not in mock_job.working_memory
+        assert mock_job.working_memory["other_key"] == "val"
         mock_db.commit.assert_awaited_once()

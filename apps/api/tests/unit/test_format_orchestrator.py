@@ -207,3 +207,302 @@ class TestNextStatusAfterFormatting:
 
         result = _next_status_after_formatting([FormatTypeEnum.BLOG])
         assert result == FormatJobStatusEnum.COMPLETED
+
+    def test_short_triggers_asset_generation(self):
+        from app.workers.format_orchestrator import _next_status_after_formatting
+        from app.schemas.shorts import FormatTypeEnum
+
+        result = _next_status_after_formatting([FormatTypeEnum.SHORT])
+        assert result == FormatJobStatusEnum.ASSET_GENERATION
+
+    def test_short_and_video_triggers_asset_generation(self):
+        from app.workers.format_orchestrator import _next_status_after_formatting
+        from app.schemas.shorts import FormatTypeEnum
+
+        result = _next_status_after_formatting(
+            [FormatTypeEnum.SHORT, FormatTypeEnum.VIDEO]
+        )
+        assert result == FormatJobStatusEnum.ASSET_GENERATION
+
+
+@pytest.mark.unit
+class TestTransitionFormattingShort:
+    async def test_short_formatter_harness_created(self, mock_db, mock_format_job):
+        mock_format_job.format_type = "short"
+        mock_format_job.platform = "tiktok"
+        mock_format_job.story_directives = {"tone": "analytical"}
+
+        with (
+            patch("app.workers.format_orchestrator.AgentHarness") as mock_harness_cls,
+            patch(
+                "app.workers.format_orchestrator.update_format_job_status",
+                new=AsyncMock(),
+            ),
+            patch(
+                "app.workers.format_orchestrator.update_format_job_format_payload",
+                new=AsyncMock(),
+            ),
+            patch("app.workers.format_orchestrator.ShortFormatterAgent"),
+        ):
+            mock_harness = MagicMock()
+            mock_result = MagicMock()
+            mock_result.success = True
+            mock_result.payload = {"scenes": []}
+            mock_result.attempts = 1
+            mock_result.error_log = None
+            mock_result.escalated = False
+            mock_harness.run_with_harness = AsyncMock(return_value=mock_result)
+            mock_harness_cls.return_value = mock_harness
+
+            from app.workers.format_orchestrator import _transition_formatting
+
+            await _transition_formatting(mock_db, mock_format_job)
+
+            mock_harness_cls.assert_called()
+
+
+@pytest.mark.unit
+class TestTransitionShortAssetGeneration:
+    async def test_success_writes_merged_payload_and_composition(
+        self, mock_db, mock_format_job
+    ):
+        mock_format_job.format_type = "short"
+        mock_format_job.platform = "tiktok"
+        mock_format_job.format_payload = {
+            "SHORT": {
+                "status": "SUCCESS",
+                "payload": {"scenes": [{"scene_number": 1}]},
+            }
+        }
+
+        visual_result = MagicMock()
+        visual_result.success = True
+        visual_result.payload = {
+            "updated_format_payload": {"scenes": [{"scene_number": 1}], "visual": "ok"}
+        }
+
+        voice_result = MagicMock()
+        voice_result.success = True
+        voice_result.payload = {
+            "voiceover_url": "https://s3/voice.mp3",
+            "vocal_alignment_url": "https://s3/align.json",
+        }
+
+        with (
+            patch(
+                "app.workers.format_orchestrator._run_short_visual_asset",
+                new=AsyncMock(return_value=visual_result),
+            ),
+            patch(
+                "app.workers.format_orchestrator._run_short_voiceover",
+                new=AsyncMock(return_value=voice_result),
+            ),
+            patch(
+                "app.workers.format_orchestrator.update_format_job_format_payload",
+                new=AsyncMock(),
+            ) as mock_update_payload,
+            patch(
+                "app.workers.format_orchestrator.update_format_job_status",
+                new=AsyncMock(),
+            ) as mock_update_status,
+        ):
+            from app.workers.format_orchestrator import (
+                _transition_short_asset_generation,
+            )
+
+            await _transition_short_asset_generation(mock_db, mock_format_job)
+
+            mock_update_payload.assert_awaited_once()
+            mock_update_status.assert_awaited_with(
+                mock_db, mock_format_job.id, FormatJobStatusEnum.COMPOSITION
+            )
+
+    async def test_taskgroup_failure_raises_and_logs(self, mock_db, mock_format_job):
+        mock_format_job.format_type = "short"
+        mock_format_job.platform = "tiktok"
+        mock_format_job.format_payload = {
+            "SHORT": {"status": "SUCCESS", "payload": {"scenes": []}}
+        }
+
+        with (
+            patch(
+                "app.workers.format_orchestrator._run_short_visual_asset",
+                new=AsyncMock(side_effect=RuntimeError("visual boom")),
+            ),
+            patch(
+                "app.workers.format_orchestrator._run_short_voiceover",
+                new=AsyncMock(side_effect=RuntimeError("voice boom")),
+            ),
+            patch(
+                "app.workers.format_orchestrator.log_format_job_error",
+                new=AsyncMock(),
+            ) as mock_log_error,
+        ):
+            from app.workers.format_orchestrator import (
+                _transition_short_asset_generation,
+            )
+
+            with pytest.raises(Exception):
+                await _transition_short_asset_generation(mock_db, mock_format_job)
+
+            mock_log_error.assert_awaited_once()
+
+    async def test_visual_fails_raises_exception(self, mock_db, mock_format_job):
+        mock_format_job.format_type = "short"
+        mock_format_job.platform = "tiktok"
+        mock_format_job.format_payload = {
+            "SHORT": {"status": "SUCCESS", "payload": {"scenes": []}}
+        }
+
+        visual_result = MagicMock()
+        visual_result.success = False
+        visual_result.payload = {}
+
+        voice_result = MagicMock()
+        voice_result.success = True
+        voice_result.payload = {
+            "voiceover_url": "https://s3/voice.mp3",
+            "vocal_alignment_url": "https://s3/align.json",
+        }
+
+        with (
+            patch(
+                "app.workers.format_orchestrator._run_short_visual_asset",
+                new=AsyncMock(return_value=visual_result),
+            ),
+            patch(
+                "app.workers.format_orchestrator._run_short_voiceover",
+                new=AsyncMock(return_value=voice_result),
+            ),
+        ):
+            from app.workers.format_orchestrator import (
+                _transition_short_asset_generation,
+            )
+
+            with pytest.raises(Exception, match="SHORT asset generation failed"):
+                await _transition_short_asset_generation(mock_db, mock_format_job)
+
+
+@pytest.mark.unit
+class TestTransitionComposition:
+    async def test_success_sets_video_url_and_completed(self, mock_db, mock_format_job):
+        mock_format_job.format_type = "short"
+        mock_format_job.platform = "tiktok"
+        mock_format_job.format_payload = {
+            "SHORT": {
+                "status": "SUCCESS",
+                "payload": {
+                    "scenes": [],
+                    "voiceover_url": "https://s3/voice.mp3",
+                    "vocal_alignment_url": "https://s3/align.json",
+                },
+            }
+        }
+
+        mock_result = MagicMock()
+        mock_result.success = True
+        mock_result.payload = {"final_video_url": "https://s3/final.mp4"}
+
+        with (
+            patch("app.workers.format_orchestrator.AgentHarness") as mock_harness_cls,
+            patch(
+                "app.workers.format_orchestrator.update_format_job_video_url",
+                new=AsyncMock(),
+            ) as mock_update_url,
+            patch(
+                "app.workers.format_orchestrator.update_format_job_status",
+                new=AsyncMock(),
+            ) as mock_update_status,
+        ):
+            mock_harness = MagicMock()
+            mock_harness.run_with_harness = AsyncMock(return_value=mock_result)
+            mock_harness_cls.return_value = mock_harness
+
+            from app.workers.format_orchestrator import _transition_composition
+
+            await _transition_composition(mock_db, mock_format_job)
+
+            mock_update_url.assert_awaited_with(
+                mock_db, mock_format_job.id, "https://s3/final.mp4"
+            )
+            mock_update_status.assert_awaited_with(
+                mock_db, mock_format_job.id, FormatJobStatusEnum.COMPLETED
+            )
+
+    async def test_failure_logs_error_and_sets_failed(self, mock_db, mock_format_job):
+        mock_format_job.format_type = "short"
+        mock_format_job.platform = "tiktok"
+        mock_format_job.format_payload = {
+            "SHORT": {
+                "status": "SUCCESS",
+                "payload": {
+                    "scenes": [],
+                    "voiceover_url": "https://s3/voice.mp3",
+                    "vocal_alignment_url": "https://s3/align.json",
+                },
+            }
+        }
+
+        mock_result = MagicMock()
+        mock_result.success = False
+        mock_result.error_log = ["Composition failed"]
+
+        with (
+            patch("app.workers.format_orchestrator.AgentHarness") as mock_harness_cls,
+            patch(
+                "app.workers.format_orchestrator.log_format_job_error",
+                new=AsyncMock(),
+            ) as mock_log_error,
+            patch(
+                "app.workers.format_orchestrator.update_format_job_status",
+                new=AsyncMock(),
+            ) as mock_update_status,
+        ):
+            mock_harness = MagicMock()
+            mock_harness.run_with_harness = AsyncMock(return_value=mock_result)
+            mock_harness_cls.return_value = mock_harness
+
+            from app.workers.format_orchestrator import _transition_composition
+
+            await _transition_composition(mock_db, mock_format_job)
+
+            mock_log_error.assert_awaited_once()
+            mock_update_status.assert_awaited_with(
+                mock_db, mock_format_job.id, FormatJobStatusEnum.FAILED
+            )
+
+
+@pytest.mark.unit
+class TestExecuteFormatStateTransitionComposition:
+    async def test_composition_routes_to_transition_composition(
+        self, mock_db, mock_format_job
+    ):
+        mock_format_job.status = FormatJobStatusEnum.COMPOSITION
+
+        with (
+            patch(
+                "app.workers.format_orchestrator._transition_composition",
+                new=AsyncMock(),
+            ) as mock_composition,
+        ):
+            from app.workers.format_orchestrator import execute_format_state_transition
+
+            await execute_format_state_transition(mock_db, mock_format_job)
+
+            mock_composition.assert_awaited_once_with(mock_db, mock_format_job)
+
+    async def test_short_asset_generation_dispatches(self, mock_db, mock_format_job):
+        mock_format_job.status = FormatJobStatusEnum.ASSET_GENERATION
+        mock_format_job.format_type = "short"
+
+        with (
+            patch(
+                "app.workers.format_orchestrator._transition_short_asset_generation",
+                new=AsyncMock(),
+            ) as mock_short_asset,
+        ):
+            from app.workers.format_orchestrator import execute_format_state_transition
+
+            await execute_format_state_transition(mock_db, mock_format_job)
+
+            mock_short_asset.assert_awaited_once_with(mock_db, mock_format_job)

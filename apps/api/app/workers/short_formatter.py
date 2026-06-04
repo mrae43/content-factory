@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 class ShortSceneOutline(BaseModel):
     scene_number: int
+    is_hook: bool = False
     purpose: str
     key_visual: str
     duration_estimate: float
@@ -88,7 +89,7 @@ _SHORT_PLAN_HUMAN = (
     "<platform>\n{platform}\n</platform>\n\n"
     "<platform_aspect_ratio>\n{platform_aspect_ratio}\n</platform_aspect_ratio>\n\n"
     "<voice_id>\n{voice_id}\n</voice_id>\n\n"
-    "<loopable>\n{loopable}\n</loopable>\n\n"
+    "<visual_style_theme>\n{visual_style_theme}\n</visual_style_theme>\n\n"
     "<correction_hint>\n{correction_hint}\n</correction_hint>\n\n"
     "Produce a structured scene outline with scene number, purpose, key visual, "
     "duration estimate, and suggested asset type per scene. "
@@ -120,7 +121,9 @@ _SHORT_FORMATTER_SYSTEM = (
     "11. If loopable=true, include a loop_hook that circles the closer back to the hook.\n"
     "12. Scene transitions should feel natural and maintain narrative flow.\n"
     "13. Write narration in a conversational, engaging tone — short-form pacing.\n"
-    "14. Visual prompts should describe what the scene shows (setting, subjects, action, mood, colors) — not how to film it.\n\n"
+    "14. Visual prompts should describe what the scene shows (setting, subjects, action, mood, colors) — not how to film it.\n"
+    "15. The user selected visual_style_theme: '{visual_style_theme}'. Let this guide your visual_style_direction, pacing, and visual choices.\n"
+    "16. Mark scene 1 as `is_hook: true` — this scene is the visual hook for the first 3 seconds.\n\n"
     "STOP CONDITIONS — evaluate as you read the input, before producing any output:\n"
     "- If the plan omits scene duration estimates or total short length targets,\n"
     "  state the pacing assumptions you are applying (e.g., 5s average scene,\n"
@@ -203,6 +206,7 @@ class ShortFormatterAgent(LLMAgent):
         platform = context.get("platform", "")
         loopable = context.get("loopable", True)
         voice_id = context.get("voice_id", "")
+        visual_style_theme = context.get("visual_style_theme", "")
         platform_aspect_ratio = _resolve_short_aspect_ratio(platform)
 
         if not script_content:
@@ -247,6 +251,7 @@ class ShortFormatterAgent(LLMAgent):
                 "platform_aspect_ratio": platform_aspect_ratio,
                 "voice_id": voice_id,
                 "loopable": str(loopable),
+                "visual_style_theme": visual_style_theme or "default",
                 "correction_hint": correction_hint,
             }
         )
@@ -275,6 +280,7 @@ class ShortFormatterAgent(LLMAgent):
                 "platform_aspect_ratio": platform_aspect_ratio,
                 "voice_id": voice_id,
                 "loopable": str(loopable),
+                "visual_style_theme": visual_style_theme or "default",
                 "correction_hint": correction_hint,
             }
         )
