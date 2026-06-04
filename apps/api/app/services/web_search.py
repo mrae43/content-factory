@@ -30,9 +30,10 @@ class TavilySearchService:
             search_depth="basic",
         )
 
-    async def search(self, query: str) -> list[dict]:
+    async def search(self, query: str, search_depth: str = "basic") -> list[dict]:
         try:
-            response = await self.client.ainvoke({"query": query})
+            invoke_kwargs = {"query": query, "search_depth": search_depth}
+            response = await self.client.ainvoke(invoke_kwargs)
             if isinstance(response, dict):
                 results = response.get("results", [])
                 logger.info(
