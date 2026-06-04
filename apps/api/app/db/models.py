@@ -140,7 +140,10 @@ class RenderJob(Base):
 
     # Relationships
     research_chunks = relationship(
-        "ResearchChunk", back_populates="job", cascade="all, delete-orphan"
+        "ResearchChunk",
+        back_populates="job",
+        primaryjoin="ResearchChunk.job_id == RenderJob.id",
+        foreign_keys="ResearchChunk.job_id",
     )
     scripts = relationship("Script", back_populates="job", cascade="all, delete-orphan")
     assets = relationship("Asset", back_populates="job", cascade="all, delete-orphan")
@@ -172,7 +175,6 @@ class ResearchChunk(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     job_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("factory.render_jobs.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
@@ -186,7 +188,13 @@ class ResearchChunk(Base):
 
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
 
-    job = relationship("RenderJob", back_populates="research_chunks")
+    job = relationship(
+        "RenderJob",
+        back_populates="research_chunks",
+        primaryjoin="ResearchChunk.job_id == RenderJob.id",
+        foreign_keys="ResearchChunk.job_id",
+        viewonly=True,
+    )
 
 
 class Script(Base):
