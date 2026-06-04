@@ -112,8 +112,9 @@ async def _run_script_pipeline(
                     f"🎬 **Starting script generation: *{title}***",
                     wait=True,
                 )
-                thread = await msg.create_thread(
+                thread = await interaction.channel.create_thread(
                     name=f"Script: {title[:90]}",
+                    message=msg,
                     auto_archive_duration=60,
                 )
 
