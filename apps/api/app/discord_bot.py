@@ -39,7 +39,16 @@ from app.discord_embeds import (
     build_completed_embed,
     build_failed_embed,
 )
-from app.discord_ui import ShortFormatSelectionView, RetryCompositionButton
+from app.discord_ui import (
+    ShortFormatSelectionView,
+    RetryCompositionButton,
+    SHORT_PLATFORMS,
+)
+from app.services.short_config import (
+    DEFAULT_VOICE_MAP,
+    DEFAULT_SUBTITLE_PRESET_MAP,
+    PLATFORM_ASPECT_RATIOS_SHORT,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -90,6 +99,112 @@ async def script(
     )
 
 
+@bot.tree.command(
+    guild=GUILD,
+    name="retry-short",
+    description="Create Short format from a completed script (bypasses the selection view)",
+)
+async def retry_short(
+    interaction: discord.Interaction,
+    script_job_id: str,
+    platform: str = "tiktok",
+):
+    await interaction.response.defer(ephemeral=False)
+
+    platform = platform.lower()
+    if platform not in SHORT_PLATFORMS:
+        await interaction.followup.send(
+            f"❌ Invalid platform. Choose from: {', '.join(SHORT_PLATFORMS)}",
+            ephemeral=True,
+        )
+        return
+
+    try:
+        async with AsyncSessionLocal() as db:
+            job = await get_script_job(db, UUID(script_job_id))
+            if not job:
+                await interaction.followup.send(
+                    "❌ Script job not found.", ephemeral=True
+                )
+                return
+
+            voice_id = DEFAULT_VOICE_MAP.get(platform, "")
+            aspect = PLATFORM_ASPECT_RATIOS_SHORT.get(platform, (1080, 1920))
+            subtitle = DEFAULT_SUBTITLE_PRESET_MAP.get(platform, "CENTER_POP_YELLOW")
+
+            enriched = dict(job.story_directives or {})
+            enriched.update(
+                {
+                    "voice_id": voice_id,
+                    "loopable": True,
+                    "visual_style_theme": "cinematic",
+                    "aspect_ratio": f"{aspect[0]}x{aspect[1]}",
+                    "subtitle_preset": subtitle,
+                }
+            )
+
+            snapshot_data = {
+                "title": job.title,
+                "script_content": job.script_content,
+                "claims": job.claims,
+                "refined_context": job.refined_context,
+                "story_directives": enriched,
+                "hedge_index": job.hedge_index,
+                "epistemic_ledger": (
+                    job.working_memory.get("epistemic_ledger")
+                    if job.working_memory
+                    else None
+                ),
+            }
+
+            fmt_job = await create_format_job(
+                db,
+                source_job_id=job.id,
+                platform=platform,
+                format_type="short",
+                snapshot_data=snapshot_data,
+                working_memory={},
+            )
+
+            channel = interaction.channel
+            if isinstance(channel, discord.Thread):
+                channel = channel.parent
+            if channel is None:
+                await interaction.followup.send(
+                    "❌ Cannot create thread: parent channel not found.",
+                    ephemeral=True,
+                )
+                return
+
+            thread = await channel.create_thread(
+                name=f"🎬｜short-gen-{str(fmt_job.id)[:8]}",
+                type=discord.ChannelType.public_thread,
+                auto_archive_duration=60,
+            )
+            embed = build_format_embed(fmt_job, elapsed_seconds=0)
+            msg = await thread.send(embed=embed)
+
+            await update_format_job_working_memory(
+                db,
+                fmt_job.id,
+                {
+                    "discord_thread_id": str(thread.id),
+                    "discord_message_id": str(msg.id),
+                },
+            )
+
+            await interaction.followup.send(
+                f"✅ **Short video job created for {SHORT_PLATFORMS.get(platform, platform)}!**\n"
+                f"Track progress in {thread.mention}",
+            )
+    except Exception as exc:
+        logger.exception("Failed to create Short job via retry-short")
+        await interaction.followup.send(
+            f"❌ Failed to create Short job: {exc}",
+            ephemeral=True,
+        )
+
+
 async def _run_script_pipeline(
     interaction: discord.Interaction,
     title: str,
@@ -112,7 +227,16 @@ async def _run_script_pipeline(
                     f"🎬 **Starting script generation: *{title}***",
                     wait=True,
                 )
-                thread = await interaction.channel.create_thread(
+                channel = interaction.channel
+                if isinstance(channel, discord.Thread):
+                    channel = channel.parent
+                if channel is None:
+                    await interaction.followup.send(
+                        "❌ Cannot create thread: parent channel not found.",
+                        ephemeral=True,
+                    )
+                    return
+                thread = await channel.create_thread(
                     name=f"Script: {title[:90]}",
                     message=msg,
                     auto_archive_duration=60,
@@ -296,7 +420,16 @@ class PlatformModal(discord.ui.Modal):
                 )
 
                 # Step 2: Create Discord thread + post initial embed
-                thread = await interaction.channel.create_thread(
+                channel = interaction.channel
+                if isinstance(channel, discord.Thread):
+                    channel = channel.parent
+                if channel is None:
+                    await interaction.followup.send(
+                        "❌ Cannot create thread: parent channel not found.",
+                        ephemeral=True,
+                    )
+                    return
+                thread = await channel.create_thread(
                     name=f"🎬｜{self.format_type}-gen-{str(fmt_job.id)[:8]}",
                     type=discord.ChannelType.public_thread,
                     auto_archive_duration=60,
