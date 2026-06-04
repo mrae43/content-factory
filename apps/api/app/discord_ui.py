@@ -5,19 +5,19 @@ from uuid import UUID
 
 import discord
 
-from app.db.session import AsyncSessionLocal
-from app.db.script_crud import get_script_job
 from app.db.format_crud import (
     create_format_job,
-    update_format_job_working_memory,
     reset_format_job_to_composition,
+    update_format_job_working_memory,
 )
+from app.db.script_crud import get_script_job
+from app.db.session import AsyncSessionLocal
+from app.discord_embeds import build_format_embed
 from app.services.short_config import (
-    DEFAULT_VOICE_MAP,
     DEFAULT_SUBTITLE_PRESET_MAP,
+    DEFAULT_VOICE_MAP,
     PLATFORM_ASPECT_RATIOS_SHORT,
 )
-from app.discord_embeds import build_format_embed
 
 logger = logging.getLogger(__name__)
 
@@ -213,7 +213,7 @@ class ShortFormatSelectionView(discord.ui.View):
         except Exception as exc:
             logger.exception("Failed to create SHORT format job")
             await interaction.followup.send(
-                f"❌ Failed to create Short job: {exc}",
+                f"❌ Failed to create Short job: {str(exc)[:1500]}",
                 ephemeral=True,
             )
 
@@ -255,6 +255,6 @@ class RetryCompositionButton(discord.ui.Button):
         except Exception as exc:
             logger.exception("Retry composition failed")
             await interaction.followup.send(
-                f"❌ Retry failed: {exc}",
+                f"❌ Retry failed: {str(exc)[:1500]}",
                 ephemeral=True,
             )

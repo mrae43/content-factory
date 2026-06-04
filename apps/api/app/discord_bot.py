@@ -18,7 +18,12 @@ import discord
 from discord.ext import commands
 
 from app.core.config import settings
-from app.db.session import AsyncSessionLocal
+from app.db.format_crud import (
+    create_format_job,
+    get_format_jobs_for_watcher,
+    get_format_jobs_missed_terminal,
+    update_format_job_working_memory,
+)
 from app.db.script_crud import (
     create_script_job,
     get_script_job,
@@ -26,27 +31,22 @@ from app.db.script_crud import (
     log_script_job_error,
     update_script_job_status,
 )
-from app.db.format_crud import (
-    create_format_job,
-    get_format_jobs_for_watcher,
-    get_format_jobs_missed_terminal,
-    update_format_job_working_memory,
+from app.db.session import AsyncSessionLocal
+from app.discord_embeds import (
+    build_completed_embed,
+    build_failed_embed,
+    build_format_embed,
+)
+from app.discord_ui import (
+    SHORT_PLATFORMS,
+    RetryCompositionButton,
+    ShortFormatSelectionView,
 )
 from app.schemas.shorts import ScriptJobStatusEnum
 from app.services.script_pipeline import ScriptPipelineRunner
-from app.discord_embeds import (
-    build_format_embed,
-    build_completed_embed,
-    build_failed_embed,
-)
-from app.discord_ui import (
-    ShortFormatSelectionView,
-    RetryCompositionButton,
-    SHORT_PLATFORMS,
-)
 from app.services.short_config import (
-    DEFAULT_VOICE_MAP,
     DEFAULT_SUBTITLE_PRESET_MAP,
+    DEFAULT_VOICE_MAP,
     PLATFORM_ASPECT_RATIOS_SHORT,
 )
 
@@ -72,7 +72,7 @@ class DiscordProgressNotifier:
         self._thread = thread
 
     async def notify(self, message: str) -> None:
-        await self._thread.send(message)
+        await self._thread.send(message[:2000])
 
 
 # ── Slash Command: /script ──────────────────────────────────────────────
@@ -194,13 +194,13 @@ async def retry_short(
             )
 
             await interaction.followup.send(
-                f"✅ **Short video job created for {SHORT_PLATFORMS.get(platform, platform)}!**\n"
+                f"✅ **Short video job created for {SHORT_PLATFORMS.get(platform, platform[:50])}!**\n"
                 f"Track progress in {thread.mention}",
             )
     except Exception as exc:
         logger.exception("Failed to create Short job via retry-short")
         await interaction.followup.send(
-            f"❌ Failed to create Short job: {exc}",
+            f"❌ Failed to create Short job: {str(exc)[:1500]}",
             ephemeral=True,
         )
 
@@ -224,7 +224,7 @@ async def _run_script_pipeline(
                 )
 
                 msg = await interaction.followup.send(
-                    f"🎬 **Starting script generation: *{title}***",
+                    f"🎬 **Starting script generation: *{title[:500]}***",
                     wait=True,
                 )
                 channel = interaction.channel
@@ -267,7 +267,8 @@ async def _run_script_pipeline(
                         if error_log
                         else "Unknown error"
                     )
-                    await thread.send(f"❌ **Pipeline failed**: {error_msg[:2000]}")
+                    msg = f"❌ **Pipeline failed**: {error_msg}"
+                    await thread.send(msg[:2000])
         except Exception:
             logger.exception("Script pipeline crashed")
             try:
@@ -452,13 +453,13 @@ class PlatformModal(discord.ui.Modal):
                 )
 
                 await interaction.followup.send(
-                    f"✅ **{self.format_type.title()}** job created for **{platform}**!\n"
+                    f"✅ **{self.format_type.title()}** job created for **{platform[:50]}**!\n"
                     f"Track progress in {thread.mention}",
                 )
         except Exception as exc:
             logger.exception("Failed to create format job")
             await interaction.followup.send(
-                f"❌ Failed to create format job: {exc}",
+                f"❌ Failed to create format job: {str(exc)[:1500]}",
                 ephemeral=True,
             )
 
