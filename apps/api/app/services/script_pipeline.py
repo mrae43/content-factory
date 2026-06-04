@@ -11,27 +11,27 @@ from app.core.config import settings
 from app.db.discord_models import ScriptJob
 from app.db.script_crud import (
     get_script_job,
-    update_script_job_status,
     log_script_job_error,
+    update_script_job_status,
 )
-from app.schemas.shorts import ScriptJobStatusEnum, AssembledContext
+from app.schemas.shorts import AssembledContext, ScriptJobStatusEnum
 from app.services.chunking import process_extraction_job
 from app.services.context_builder import build as build_context
 from app.services.llm import get_llm
+from app.services.optimizer_tools import make_gated_search_tool
+from app.services.tools import ToolRegistry
 from app.services.vector_store import (
     ContentFactoryVectorStore,
     make_ingest_chunks_tool,
     make_semantic_search_tool,
 )
-from app.services.optimizer_tools import make_gated_search_tool
-from app.services.tools import ToolRegistry
 from app.services.web_search import get_tavily_service
-from app.workers.harness import AgentHarness
 from app.workers.agents import (
+    AgentActionStatus,
     CopywriterAgent,
     RedTeamAgent,
-    AgentActionStatus,
 )
+from app.workers.harness import AgentHarness
 from app.workers.optimizer import ScriptOptimizerAgent
 
 logger = logging.getLogger(__name__)
@@ -209,6 +209,7 @@ class ScriptPipelineRunner:
                 llm = get_llm(
                     model_name=settings.optimizer_model,
                     temperature=settings.optimizer_temperature,
+                    max_tokens=8192,
                 )
                 prompt = ChatPromptTemplate.from_messages(
                     [
@@ -377,7 +378,7 @@ class ScriptPipelineRunner:
                 logger.error(f"Red Team escalated job {job.id}: {error_msg}")
                 await self._set_status(ScriptJobStatusEnum.HUMAN_REVIEW_NEEDED)
                 await self.notifier.notify(
-                    f"⚠️ **Escalated**: {error_msg}\n\nHuman review is needed."
+                    f"⚠️ **Escalated**: {error_msg[:1500]}\n\nHuman review is needed."
                 )
                 return
 
@@ -428,6 +429,7 @@ class ScriptPipelineRunner:
                 optimizer = ScriptOptimizerAgent(
                     model_name=settings.optimizer_model,
                     temperature=settings.optimizer_temperature,
+                    max_tokens=8192,
                 )
                 await self._register_bot_tools()
 
