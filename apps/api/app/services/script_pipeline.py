@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Protocol
 from uuid import UUID
 
+from langchain_core.prompts import ChatPromptTemplate
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -16,11 +17,13 @@ from app.db.script_crud import (
 from app.schemas.shorts import ScriptJobStatusEnum, AssembledContext
 from app.services.chunking import process_extraction_job
 from app.services.context_builder import build as build_context
+from app.services.llm import get_llm
 from app.services.vector_store import (
     ContentFactoryVectorStore,
     make_ingest_chunks_tool,
     make_semantic_search_tool,
 )
+from app.services.optimizer_tools import make_gated_search_tool
 from app.services.tools import ToolRegistry
 from app.services.web_search import get_tavily_service
 from app.workers.harness import AgentHarness
@@ -145,7 +148,11 @@ class ScriptPipelineRunner:
         ingest_tool = make_ingest_chunks_tool(vs)
         web_service = get_tavily_service()
 
-        web_results = await web_service.search(job.title)
+        search_query = job.title
+        if job.user_reference and len(job.user_reference.strip()) > 20:
+            search_query = f"{job.title}: {job.user_reference.strip()[:500]}"
+        search_depth = "advanced" if len(search_query) > 100 else "basic"
+        web_results = await web_service.search(search_query, search_depth=search_depth)
         if web_results:
             valid_results = [r for r in web_results if r.get("content")]
             web_texts = [r["content"] for r in valid_results]
@@ -179,6 +186,75 @@ class ScriptPipelineRunner:
 
         await self._set_status(ScriptJobStatusEnum.RETRIEVAL)
 
+    async def _synthesize_narrative(self, job: ScriptJob) -> str:
+        """Synthesize a narrative summary from retrieved evidence via LLM.
+
+        Falls back to raw ``user_reference`` verbatim if no evidence is
+        available in the vector store or the LLM call fails.
+        """
+        vs = ContentFactoryVectorStore(self.db)
+        chunks = await vs.semantic_search(
+            query=job.title,
+            job_id=job.id,
+            scopes=["LOCAL"],
+            top_k=8,
+        )
+
+        if chunks:
+            evidence = "\n\n---\n\n".join(
+                c["content"][:2000] for c in chunks if c.get("content")
+            )[:8000]
+
+            try:
+                llm = get_llm(
+                    model_name=settings.optimizer_model,
+                    temperature=settings.optimizer_temperature,
+                )
+                prompt = ChatPromptTemplate.from_messages(
+                    [
+                        (
+                            "system",
+                            (
+                                "You are a research synthesis assistant. Synthesize the "
+                                "retrieved evidence for a topic into a coherent narrative "
+                                "summary for a scriptwriter.\n\n"
+                                "Rules:\n"
+                                "1. Write 3-5 paragraphs covering key facts, context, and "
+                                "implications.\n"
+                                "2. Include specific data: numbers, dates, names, "
+                                "statistics, and attributions.\n"
+                                "3. Organise with a clear narrative thread.\n"
+                                "4. Flag contradictions or uncertainties explicitly.\n"
+                                "5. Do NOT add information not present in the evidence.\n"
+                                "6. Do NOT write a script or use narrative hooks — this "
+                                "is a research summary.\n"
+                                "7. Keep it 300-500 words."
+                            ),
+                        ),
+                        (
+                            "human",
+                            (
+                                "<topic>\n{topic}\n</topic>\n\n"
+                                "<evidence>\n{evidence}\n</evidence>\n\n"
+                                "Synthesize a narrative summary:"
+                            ),
+                        ),
+                    ]
+                )
+                chain = prompt | llm
+                result = await chain.ainvoke({"topic": job.title, "evidence": evidence})
+                summary = result.content.strip()
+                if summary:
+                    return summary
+            except Exception:
+                logger.warning(
+                    f"Narrative synthesis LLM failed for job {job.id}, "
+                    "falling back to raw user_reference",
+                    exc_info=True,
+                )
+
+        return _format_narrative(job.user_reference, job.story_directives or {})
+
     async def _phase_retrieval(self) -> None:
         job = await self._get_job()
         if job.status != ScriptJobStatusEnum.RETRIEVAL:
@@ -188,9 +264,13 @@ class ScriptPipelineRunner:
             "**Phase 3/4: Scripting** — assembling context and drafting..."
         )
 
-        job.refined_context = _format_narrative(
-            job.user_reference, job.story_directives or {}
-        )
+        # Inject sensible defaults for missing editorial directives
+        story_directives = dict(job.story_directives or {})
+        story_directives.setdefault("target_audience", "General")
+        story_directives.setdefault("tone", "conversational, authoritative")
+        job.story_directives = story_directives
+
+        job.refined_context = await self._synthesize_narrative(job)
         if not job.refined_context:
             raise Exception(
                 "No refined_context could be built — user_reference is empty."
@@ -199,7 +279,6 @@ class ScriptPipelineRunner:
         await self.db.commit()
 
         vs = ContentFactoryVectorStore(self.db)
-        story_directives = job.story_directives or {}
         assembled = await build_context(
             title=job.title,
             story_directives=story_directives,
@@ -335,12 +414,34 @@ class ScriptPipelineRunner:
                     f"🔄 **Revising** — patching {len(failed_claims)} broken claims..."
                 )
 
+                red_team_evidence = {
+                    c["claim_text"]: {
+                        "evidence_text": c.get("evidence_text", ""),
+                        "evidence_references": c.get("evidence_text_inline", []),
+                        "confidence": c.get("confidence", 0.0),
+                        "verdict": c.get("verdict", "UNSUPPORTED"),
+                    }
+                    for c in claims_data
+                    if c.get("verdict") in ("UNSUPPORTED", "CONTESTED", "UNCERTAIN")
+                }
+
                 optimizer = ScriptOptimizerAgent(
                     model_name=settings.optimizer_model,
                     temperature=settings.optimizer_temperature,
                 )
                 await self._register_bot_tools()
+
+                vector_store = ContentFactoryVectorStore(self.db)
+                gated_tool = make_gated_search_tool(
+                    vector_store=vector_store,
+                    red_team_evidence=red_team_evidence,
+                    job_id=job.id,
+                    top_k=3,
+                )
+                registry = ToolRegistry()
+                registry.register(gated_tool, replace=True)
                 opt_harness = AgentHarness(agent=optimizer)
+                registry.unregister("retrieve_evidence_for_claim")
 
                 active_failures = []
                 for c in failed_claims:
@@ -355,16 +456,6 @@ class ScriptPipelineRunner:
                 script_content = job.script_content or ""
                 refined_context = job.refined_context or ""
                 assembled = AssembledContext(**(job.assembled_context or {}))
-                red_team_evidence = {
-                    c["claim_text"]: {
-                        "evidence_text": c.get("evidence_text", ""),
-                        "evidence_references": c.get("evidence_text_inline", []),
-                        "confidence": c.get("confidence", 0.0),
-                        "verdict": c.get("verdict", "UNSUPPORTED"),
-                    }
-                    for c in claims_data
-                    if c.get("verdict") in ("UNSUPPORTED", "CONTESTED", "UNCERTAIN")
-                }
 
                 opt_context = {
                     "job_id": job.id,
