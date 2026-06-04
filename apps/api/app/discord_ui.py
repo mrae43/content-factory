@@ -178,7 +178,16 @@ class ShortFormatSelectionView(discord.ui.View):
                 )
 
                 # Step 2: Create Discord thread + post initial embed
-                thread = await interaction.channel.create_thread(
+                channel = interaction.channel
+                if isinstance(channel, discord.Thread):
+                    channel = channel.parent
+                if channel is None:
+                    await interaction.followup.send(
+                        "❌ Cannot create thread: parent channel not found.",
+                        ephemeral=True,
+                    )
+                    return
+                thread = await channel.create_thread(
                     name=f"🎬｜short-gen-{str(fmt_job.id)[:8]}",
                     type=discord.ChannelType.public_thread,
                     auto_archive_duration=60,
