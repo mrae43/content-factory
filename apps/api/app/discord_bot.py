@@ -8,9 +8,12 @@ Slash commands:
 """
 
 import asyncio
+import io
 import logging
+from datetime import datetime, timezone
 from uuid import UUID
 
+import aiohttp
 import discord
 from discord.ext import commands
 
@@ -23,9 +26,20 @@ from app.db.script_crud import (
     log_script_job_error,
     update_script_job_status,
 )
-from app.db.format_crud import create_format_job
+from app.db.format_crud import (
+    create_format_job,
+    get_format_jobs_for_watcher,
+    get_format_jobs_missed_terminal,
+    update_format_job_working_memory,
+)
 from app.schemas.shorts import ScriptJobStatusEnum
 from app.services.script_pipeline import ScriptPipelineRunner
+from app.discord_embeds import (
+    build_format_embed,
+    build_completed_embed,
+    build_failed_embed,
+)
+from app.discord_ui import ShortFormatSelectionView, RetryCompositionButton
 
 logging.basicConfig(
     level=logging.INFO,
@@ -205,6 +219,21 @@ class FormatSelectionView(discord.ui.View):
     ):
         await interaction.response.send_modal(PlatformModal(self.script_job_id, "blog"))
 
+    @discord.ui.button(
+        label="Create Short",
+        style=discord.ButtonStyle.success,
+        custom_id="format_short",
+    )
+    async def short_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        view = ShortFormatSelectionView(self.script_job_id)
+        await interaction.response.send_message(
+            "**Create Short Video**\nSelect platform, style, and options:",
+            view=view,
+            ephemeral=False,
+        )
+
 
 # ── Platform Modal ──────────────────────────────────────────────────────
 
@@ -255,18 +284,42 @@ class PlatformModal(discord.ui.Modal):
                     ),
                 }
 
+                # Step 1: Insert FormatJob with empty working_memory
                 fmt_job = await create_format_job(
                     db,
                     source_job_id=self.script_job_id,
                     platform=platform,
                     format_type=self.format_type,
                     snapshot_data=snapshot_data,
+                    working_memory={},
+                )
+
+                # Step 2: Create Discord thread + post initial embed
+                thread = await interaction.channel.create_thread(
+                    name=f"🎬｜{self.format_type}-gen-{str(fmt_job.id)[:8]}",
+                    type=discord.ChannelType.public_thread,
+                    auto_archive_duration=60,
+                )
+                embed = build_format_embed(
+                    fmt_job,
+                    elapsed_seconds=0,
+                    format_label=self.format_type.title(),
+                )
+                msg = await thread.send(embed=embed)
+
+                # Step 3: Update working_memory with thread/message IDs
+                await update_format_job_working_memory(
+                    db,
+                    fmt_job.id,
+                    {
+                        "discord_thread_id": str(thread.id),
+                        "discord_message_id": str(msg.id),
+                    },
                 )
 
                 await interaction.followup.send(
                     f"✅ **{self.format_type.title()}** job created for **{platform}**!\n"
-                    f"Job ID: `{fmt_job.id}`\n"
-                    f"The QueueWorker will process it shortly.",
+                    f"Track progress in {thread.mention}",
                 )
         except Exception as exc:
             logger.exception("Failed to create format job")
@@ -311,6 +364,11 @@ async def on_ready():
         logger.info("  - %s (%s)", g.name, g.id)
 
     await recover_stuck_script_jobs()
+    await _resync_format_jobs()
+
+    global _format_job_watcher
+    _format_job_watcher = FormatJobWatcher()
+    await _format_job_watcher.start()
 
 
 async def _safe_resume(runner: ScriptPipelineRunner, job_id: UUID) -> None:
@@ -373,12 +431,219 @@ async def recover_stuck_script_jobs():
                 await update_script_job_status(db, job.id, ScriptJobStatusEnum.FAILED)
 
 
+class FormatJobWatcher:
+    """Background task that polls format_jobs and updates Living Embeds."""
+
+    def __init__(self):
+        self._previous_states: dict[UUID, str] = {}
+        self._task: asyncio.Task | None = None
+        self._running = False
+
+    async def start(self):
+        self._running = True
+        self._task = asyncio.create_task(self._poll_loop())
+        logger.info("FormatJob Watcher started")
+
+    async def stop(self):
+        self._running = False
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+        logger.info("FormatJob Watcher stopped")
+
+    async def _poll_loop(self):
+        while self._running:
+            try:
+                await self._check_format_jobs()
+            except Exception:
+                logger.exception("FormatJob watcher poll error")
+            await asyncio.sleep(5)
+
+    async def _check_format_jobs(self):
+        async with AsyncSessionLocal() as db:
+            jobs = await get_format_jobs_for_watcher(db)
+
+            for job in jobs:
+                prev = self._previous_states.get(job.id)
+                current = (
+                    job.status.value
+                    if hasattr(job.status, "value")
+                    else str(job.status)
+                )
+
+                if prev != current:
+                    await self._update_living_embed(job, current)
+                    self._previous_states[job.id] = current
+
+                # Terminal states
+                if current in ("COMPLETED", "FAILED"):
+                    await self._finalize_job(job, current)
+                    self._previous_states.pop(job.id, None)
+
+    async def _update_living_embed(self, job, status: str) -> None:
+        wm = job.working_memory or {}
+        thread_id = wm.get("discord_thread_id")
+        message_id = wm.get("discord_message_id")
+        if not thread_id or not message_id:
+            return
+
+        try:
+            thread = await bot.fetch_channel(int(thread_id))
+            msg = await thread.fetch_message(int(message_id))
+
+            elapsed = None
+            if job.created_at:
+                elapsed = (datetime.now(timezone.utc) - job.created_at).total_seconds()
+
+            embed = build_format_embed(job, elapsed_seconds=elapsed)
+            await msg.edit(embed=embed)
+        except discord.NotFound:
+            logger.warning("Thread/message not found for FormatJob %s", job.id)
+        except Exception:
+            logger.exception("Failed to update embed for FormatJob %s", job.id)
+
+    async def _finalize_job(self, job, status: str) -> None:
+        wm = job.working_memory or {}
+        thread_id = wm.get("discord_thread_id")
+        if not thread_id:
+            return
+
+        try:
+            thread = await bot.fetch_channel(int(thread_id))
+
+            elapsed = None
+            if job.created_at:
+                elapsed = (datetime.now(timezone.utc) - job.created_at).total_seconds()
+
+            if status == "COMPLETED":
+                embed = build_completed_embed(job, elapsed_seconds=elapsed)
+                await thread.send(embed=embed)
+
+                # Attempt file upload (fallback to link if >25MB)
+                if job.final_video_url:
+                    try:
+                        async with aiohttp.ClientSession() as session:
+                            async with session.get(job.final_video_url) as resp:
+                                if (
+                                    resp.status == 200
+                                    and int(resp.headers.get("Content-Length", 0))
+                                    < 25 * 1024 * 1024
+                                ):
+                                    data = await resp.read()
+                                    await thread.send(
+                                        file=discord.File(
+                                            io.BytesIO(data),
+                                            filename=f"short-{str(job.id)[:8]}.mp4",
+                                        )
+                                    )
+                    except Exception as exc:
+                        logger.warning(
+                            "Failed to upload video for FormatJob %s: %s",
+                            job.id,
+                            exc,
+                        )
+            elif status == "FAILED":
+                embed = build_failed_embed(job, elapsed_seconds=elapsed)
+                view = discord.ui.View()
+                has_composition_error = any(
+                    "COMPOSITION" in k.upper() for k in (job.error_log or {}).keys()
+                )
+                if has_composition_error:
+                    view.add_item(RetryCompositionButton(job.id))
+                await thread.send(embed=embed, view=view)
+
+            # Mark as finalized
+            wm["final_embed_updated"] = True
+            async with AsyncSessionLocal() as db:
+                await update_format_job_working_memory(db, job.id, wm)
+
+        except discord.NotFound:
+            logger.warning(
+                "Thread %s not found for FormatJob %s; marking finalized",
+                thread_id,
+                job.id,
+            )
+            wm["final_embed_updated"] = True
+            async with AsyncSessionLocal() as db:
+                await update_format_job_working_memory(db, job.id, wm)
+        except Exception:
+            logger.exception("Failed to finalize FormatJob %s", job.id)
+
+
+# Create watcher instance
+_format_job_watcher: FormatJobWatcher | None = None
+
+
+async def _resync_format_jobs():
+    """Post final result embeds for FormatJobs missed during downtime."""
+    logger.info("Checking for missed terminal FormatJobs...")
+    async with AsyncSessionLocal() as db:
+        missed = await get_format_jobs_missed_terminal(db)
+        logger.info("Found %d missed terminal FormatJobs", len(missed))
+
+        for job in missed:
+            wm = job.working_memory or {}
+            thread_id = wm.get("discord_thread_id")
+            if not thread_id:
+                continue
+
+            try:
+                thread = await bot.fetch_channel(int(thread_id))
+                status = (
+                    job.status.value
+                    if hasattr(job.status, "value")
+                    else str(job.status)
+                )
+
+                elapsed = None
+                if job.created_at:
+                    elapsed = (
+                        datetime.now(timezone.utc) - job.created_at
+                    ).total_seconds()
+
+                if status == "FAILED":
+                    embed = build_failed_embed(job, elapsed_seconds=elapsed)
+                    view = discord.ui.View()
+                    has_composition_error = any(
+                        "COMPOSITION" in k.upper() for k in (job.error_log or {}).keys()
+                    )
+                    if has_composition_error:
+                        view.add_item(RetryCompositionButton(job.id))
+                    await thread.send(embed=embed, view=view)
+                else:
+                    embed = build_completed_embed(job, elapsed_seconds=elapsed)
+                    await thread.send(embed=embed)
+
+                wm["final_embed_updated"] = True
+                await update_format_job_working_memory(db, job.id, wm)
+                logger.info("Re-synced FormatJob %s to thread %s", job.id, thread_id)
+
+            except discord.NotFound:
+                logger.warning(
+                    "Thread %s not found for FormatJob %s; marking finalized",
+                    thread_id,
+                    job.id,
+                )
+                wm["final_embed_updated"] = True
+                await update_format_job_working_memory(db, job.id, wm)
+            except Exception:
+                logger.exception("Failed to re-sync FormatJob %s", job.id)
+
+
 async def main():
     if not settings.discord_token or not settings.discord_guild_id:
         logger.error("DISCORD_TOKEN and DISCORD_GUILD_ID must be set in .env")
         return
     async with bot:
-        await bot.start(settings.discord_token)
+        try:
+            await bot.start(settings.discord_token)
+        finally:
+            global _format_job_watcher
+            if _format_job_watcher:
+                await _format_job_watcher.stop()
 
 
 if __name__ == "__main__":
