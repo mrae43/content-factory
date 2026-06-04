@@ -39,6 +39,11 @@ class TogetherVideoGen(VideoGenProvider):
         duration: int = 30,
         **kwargs,
     ) -> str:
+        if not model:
+            raise ValueError(
+                "model is required for video generation. "
+                "Set VIDEO_GEN_MODEL in .env or pass a model explicitly."
+            )
         response = await self.client.videos.create(
             model=model,
             prompt=prompt,
@@ -98,6 +103,11 @@ def make_generate_video_tool() -> Tool:
     ) -> dict:
         provider = get_video_gen_provider(settings.video_gen_provider)
         resolved_model = model or settings.video_gen_model
+        if not resolved_model:
+            raise ValueError(
+                "video_gen_model is not configured. Set VIDEO_GEN_MODEL "
+                "in .env or provide a model explicitly."
+            )
         job_id = await provider.generate_video(
             prompt=prompt, model=resolved_model, duration=duration
         )

@@ -58,7 +58,7 @@ class Settings(BaseSettings):
 
     # Video Generation
     video_gen_provider: str = "together"
-    video_gen_model: str = ""
+    video_gen_model: str = "minimax/video-01-director"
     video_gen_poll_interval_seconds: int = 5
     video_gen_max_poll_retries: int = 60
 
