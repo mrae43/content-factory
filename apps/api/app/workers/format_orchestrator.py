@@ -18,19 +18,25 @@ from app.schemas.shorts import (
     PlatformEnum,
     resolve_formats,
 )
-from app.workers.harness import AgentHarness
+from app.workers.harness import AgentHarness, HarnessResult
 from app.workers.formatters import (
     BlogFormatterAgent,
     CarouselFormatterAgent,
     VideoFormatterAgent,
 )
+from app.workers.short_formatter import ShortFormatterAgent, _resolve_voice_id
 from app.workers.video_generator_agent import VideoGeneratorAgent
 from app.workers.carousel_image_agent import CarouselImageAgent, merge_image_urls
+from app.workers.short_visual_asset_agent import ShortVisualAssetAgent
+from app.workers.short_voiceover_agent import ShortVoiceoverAgent
+from app.workers.short_composer_agent import ShortComposerAgent
 from app.services.format_validator import (
     BlogValidator,
     CarouselValidator,
+    ShortValidator,
     VideoValidator,
 )
+from app.services.short_config import DEFAULT_SUBTITLE_PRESET_MAP
 from app.core.config import settings
 
 logger = logging.getLogger("factory.format_orchestrator")
@@ -98,6 +104,7 @@ def _next_status_after_formatting(
     if (
         FormatTypeEnum.VIDEO in resolved_formats
         or FormatTypeEnum.CAROUSEL in resolved_formats
+        or FormatTypeEnum.SHORT in resolved_formats
     ):
         return FormatJobStatusEnum.ASSET_GENERATION
     return FormatJobStatusEnum.COMPLETED
@@ -177,10 +184,29 @@ async def _transition_formatting(db: AsyncSession, format_job: FormatJob) -> Non
         formatter_specs.append(("VIDEO", video_harness, video_ctx))
 
     if "SHORT" in target_format_names:
-        logger.warning(
-            f"SHORT format detected on FormatJob {format_job.id} — "
-            f"Discord bot SHORT support is not yet implemented; skipping"
+        story_directives = format_job.story_directives or {}
+        voice_id = _resolve_voice_id(story_directives, format_job.platform or "tiktok")
+        subtitle_preset = DEFAULT_SUBTITLE_PRESET_MAP.get(
+            format_job.platform or "tiktok", "CENTER_POP_YELLOW"
         )
+        short_ctx = {
+            **base_context,
+            "format_type": "short",
+            "voice_id": voice_id,
+            "loopable": story_directives.get("loopable", True),
+            "platform": format_job.platform or "tiktok",
+            "visual_style_theme": story_directives.get("visual_style_theme"),
+            "subtitle_preset": subtitle_preset,
+        }
+        short_harness = AgentHarness(
+            agent=ShortFormatterAgent(
+                model_name=settings.formatter_model,
+                temperature=settings.formatter_temperature,
+            ),
+            validator=ShortValidator(platform=format_job.platform or "tiktok"),
+            max_retries=2,
+        )
+        formatter_specs.append(("SHORT", short_harness, short_ctx))
 
     if not formatter_specs:
         logger.warning(
@@ -346,6 +372,105 @@ async def _transition_asset_generation(db: AsyncSession, format_job: FormatJob) 
         await update_format_job_status(db, format_job.id, FormatJobStatusEnum.FAILED)
 
 
+async def _run_short_visual_asset(
+    format_job: FormatJob, sub_payload: dict
+) -> HarnessResult:
+    context = {
+        "format_type": "short",
+        "job_id": format_job.id,
+        "format_payload": sub_payload,
+        "platform": format_job.platform or "tiktok",
+        "device_id": None,
+    }
+    harness = AgentHarness(agent=ShortVisualAssetAgent())
+    return await harness.run_with_harness(context)
+
+
+async def _run_short_voiceover(
+    format_job: FormatJob, sub_payload: dict
+) -> HarnessResult:
+    context = {
+        "format_type": "short",
+        "job_id": format_job.id,
+        "format_payload": sub_payload,
+        "platform": format_job.platform or "tiktok",
+        "device_id": None,
+    }
+    harness = AgentHarness(agent=ShortVoiceoverAgent())
+    return await harness.run_with_harness(context)
+
+
+async def _transition_short_asset_generation(
+    db: AsyncSession, format_job: FormatJob
+) -> None:
+    sub_payload = format_job.format_payload.get("SHORT", {}).get(
+        "payload", format_job.format_payload
+    )
+
+    try:
+        async with asyncio.TaskGroup() as tg:
+            visual_task = tg.create_task(
+                _run_short_visual_asset(format_job, sub_payload)
+            )
+            voice_task = tg.create_task(_run_short_voiceover(format_job, sub_payload))
+    except Exception:
+        await log_format_job_error(
+            db, format_job.id, traceback.format_exc(), "SHORT_ASSET_GENERATION"
+        )
+        raise
+
+    visual_result = visual_task.result()
+    voice_result = voice_task.result()
+
+    # Merge results into format_payload
+    merged = dict(sub_payload)
+    if visual_result.success:
+        merged.update(visual_result.payload.get("updated_format_payload", merged))
+    if voice_result.success:
+        merged["voiceover_url"] = voice_result.payload["voiceover_url"]
+        merged["vocal_alignment_url"] = voice_result.payload["vocal_alignment_url"]
+
+    if not visual_result.success or not voice_result.success:
+        raise Exception(
+            f"SHORT asset generation failed: "
+            f"visual={visual_result.success}, voice={voice_result.success}"
+        )
+
+    payload = dict(format_job.format_payload or {})
+    payload["SHORT"] = {"status": "SUCCESS", "payload": merged}
+    await update_format_job_format_payload(db, format_job.id, payload)
+    await update_format_job_status(db, format_job.id, FormatJobStatusEnum.COMPOSITION)
+
+
+async def _transition_composition(db: AsyncSession, format_job: FormatJob) -> None:
+    sub_payload = format_job.format_payload.get("SHORT", {}).get(
+        "payload", format_job.format_payload
+    )
+
+    context = {
+        "format_type": "short",
+        "job_id": format_job.id,
+        "format_payload": sub_payload,
+        "platform": format_job.platform or "tiktok",
+        "device_id": None,
+        "voiceover_url": sub_payload.get("voiceover_url"),
+        "vocal_alignment_url": sub_payload.get("vocal_alignment_url"),
+    }
+
+    composer_harness = AgentHarness(agent=ShortComposerAgent())
+    result = await composer_harness.run_with_harness(context)
+
+    if result.success:
+        await update_format_job_video_url(
+            db, format_job.id, result.payload["final_video_url"]
+        )
+        await update_format_job_status(db, format_job.id, FormatJobStatusEnum.COMPLETED)
+    else:
+        error_msg = result.error_log[-1] if result.error_log else "Composition failed"
+        await log_format_job_error(db, format_job.id, error_msg, "COMPOSITION")
+        await update_format_job_status(db, format_job.id, FormatJobStatusEnum.FAILED)
+
+
 async def execute_format_state_transition(
     db: AsyncSession, format_job: FormatJob
 ) -> None:
@@ -353,7 +478,13 @@ async def execute_format_state_transition(
         if format_job.status == FormatJobStatusEnum.PENDING:
             await _transition_formatting(db, format_job)
         elif format_job.status == FormatJobStatusEnum.ASSET_GENERATION:
-            await _transition_asset_generation(db, format_job)
+            fmt_type = (format_job.format_type or "").lower()
+            if fmt_type == "short":
+                await _transition_short_asset_generation(db, format_job)
+            else:
+                await _transition_asset_generation(db, format_job)
+        elif format_job.status == FormatJobStatusEnum.COMPOSITION:
+            await _transition_composition(db, format_job)
         elif format_job.status in (
             FormatJobStatusEnum.COMPLETED,
             FormatJobStatusEnum.FAILED,
