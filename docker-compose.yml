@@ -133,3 +133,25 @@ services:
         limits:
           cpus: '1.0'
           memory: 1G
+
+  discord_bot:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: factory_discord_bot
+    entrypoint: ["python", "-m", "app.discord_bot"]
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - factory-net
+    volumes:
+      - ./apps/api/app:/workspace/app
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
