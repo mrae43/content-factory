@@ -28,10 +28,23 @@ PLATFORM_DIMENSIONS: dict[str, tuple[int, int]] = {
     "linkedin": (1088, 1344),
     "twitter": (1088, 1616),
     "tiktok": (1088, 1920),
-    "youtube": (1920, 1088),
+    "youtube": (1088, 1920),
 }
 
 DEFAULT_DIMENSIONS = (1088, 1344)
+
+# Together AI FLUX model limits: 64–1792 per side, multiples of 16.
+_MAX_DIM = 1792
+_MULTIPLE = 16
+
+
+def _clamp_dimensions(width: int, height: int) -> tuple[int, int]:
+    scale = min(_MAX_DIM / width, _MAX_DIM / height, 1.0)
+    if scale < 1.0:
+        width = round(width * scale / _MULTIPLE) * _MULTIPLE
+        height = round(height * scale / _MULTIPLE) * _MULTIPLE
+    return width, height
+
 
 # Class-level rate-limit state shared across all ImageGenerationService instances.
 # Together AI's FLUX endpoint uses per-minute sliding-window quotas; this
@@ -132,6 +145,7 @@ class ImageGenerationService:
     ) -> ImageGenResult:
         prompt = _enrich_prompt(visual_description)
         width, height = _get_dimensions(platform)
+        width, height = _clamp_dimensions(width, height)
 
         last_exception: Optional[Exception] = None
         retry_after: float = 0.0
