@@ -42,22 +42,17 @@ class TogetherVideoGen(VideoGenProvider):
         response = await self.client.videos.create(
             model=model,
             prompt=prompt,
-            n=1,
-            duration=duration,
+            seconds=str(duration),
         )
         return response.id
 
     async def poll_video(self, job_id: str) -> VideoGenResult:
         video = await self.client.videos.retrieve(id=job_id)
-        download_url = getattr(video, "output_url", None)
-        if download_url is None:
-            output = getattr(video, "output", None)
-            if output is not None:
-                download_url = getattr(output, "url", None)
+        download_url = video.outputs.video_url if video.outputs else None
         return VideoGenResult(
             status=video.status,
             download_url=download_url,
-            failure_reason=getattr(video, "error", None),
+            failure_reason=video.error.message if video.error else None,
         )
 
 
