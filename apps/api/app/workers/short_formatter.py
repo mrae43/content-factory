@@ -161,8 +161,9 @@ _SHORT_FORMATTER_HUMAN = (
 
 def _resolve_voice_id(directives: dict, platform: str) -> str:
     """Return user-specified voice_id or fall back to platform default."""
-    if directives.get("voice_id"):
-        return directives["voice_id"]
+    user_voice = (directives.get("voice_id") or "").strip()
+    if user_voice and user_voice != "default":
+        return user_voice
     return DEFAULT_VOICE_MAP.get(platform.lower().strip(), "")
 
 
