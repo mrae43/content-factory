@@ -1,8 +1,11 @@
+import json
 import logging
+import re
 from typing import Any, ClassVar, Dict, List, Optional, Set, Type
 
+from langchain_core.exceptions import OutputParserException
 from langchain_core.prompts import ChatPromptTemplate
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from app.workers.agents import AgentActionStatus, AgentResult, LLMAgent
 from app.workers.formatters import _build_hedge_block, _resolve_aspect_ratio
@@ -186,6 +189,21 @@ def _resolve_short_aspect_ratio(platform: str) -> str:
     return short_map.get(platform.lower().strip(), _resolve_aspect_ratio(platform))
 
 
+def _extract_json_fallback(text: str) -> dict:
+    """Extract the first JSON object from a text string."""
+    text = text.strip()
+    # Try markdown code block first
+    match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+    if match:
+        return json.loads(match.group(1))
+    # Fall back to first brace-delimited block
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        raise ValueError("No JSON object found in text")
+    return json.loads(text[start : end + 1])
+
+
 # ---------------------------------------------------------------------------
 # Agent
 # ---------------------------------------------------------------------------
@@ -197,13 +215,155 @@ class ShortFormatterAgent(LLMAgent):
     _permissions: ClassVar[Set[str]] = {"ShortFormatterAgent"}
     input_schema: ClassVar[Optional[Type[BaseModel]]] = None
 
+    async def _plan(self, context: Dict[str, Any]) -> ShortPlan:
+        """Plan step: produce a structured scene outline."""
+        script_content = context["script_content"]
+        refined_context = context["refined_context"]
+        verified_claims = context["verified_claims"]
+        hedge_index = context["hedge_index"]
+        epistemic_ledger = context["epistemic_ledger"]
+        correction_hint = context["correction_hint"]
+        platform = context["platform"]
+        voice_id = context["voice_id"]
+        visual_style_theme = context["visual_style_theme"]
+        platform_aspect_ratio = context["platform_aspect_ratio"]
+
+        claims_text = "\n".join(
+            f"- {c.get('claim_text', '')} [{c.get('verdict', 'UNKNOWN')}]: {c.get('evidence_text', 'N/A')}"
+            for c in verified_claims
+        )
+
+        hedge_block = _build_hedge_block(hedge_index, epistemic_ledger)
+        short_plan_system = (
+            f"{hedge_block}{_SHORT_PLAN_SYSTEM}" if hedge_block else _SHORT_PLAN_SYSTEM
+        )
+
+        plan_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", short_plan_system),
+                ("human", _SHORT_PLAN_HUMAN),
+            ]
+        )
+        plan_chain = plan_prompt | self.llm.with_structured_output(ShortPlan)
+        return await plan_chain.ainvoke(
+            {
+                "script_content": script_content,
+                "refined_context": refined_context,
+                "verified_claims": claims_text,
+                "platform": platform or "default",
+                "platform_aspect_ratio": platform_aspect_ratio,
+                "voice_id": voice_id,
+                "loopable": str(context.get("loopable", True)),
+                "visual_style_theme": visual_style_theme or "default",
+                "correction_hint": correction_hint,
+            }
+        )
+
+    async def _execute_formatter(
+        self, context: Dict[str, Any], plan: ShortPlan
+    ) -> ShortFormatterOutput:
+        """Execute step: produce complete scenes from a plan."""
+        script_content = context["script_content"]
+        refined_context = context["refined_context"]
+        verified_claims = context["verified_claims"]
+        hedge_index = context["hedge_index"]
+        epistemic_ledger = context["epistemic_ledger"]
+        correction_hint = context["correction_hint"]
+        platform = context["platform"]
+        voice_id = context["voice_id"]
+        visual_style_theme = context["visual_style_theme"]
+        platform_aspect_ratio = context["platform_aspect_ratio"]
+        loopable = context.get("loopable", True)
+
+        claims_text = "\n".join(
+            f"- {c.get('claim_text', '')} [{c.get('verdict', 'UNKNOWN')}]: {c.get('evidence_text', 'N/A')}"
+            for c in verified_claims
+        )
+
+        hedge_block = _build_hedge_block(hedge_index, epistemic_ledger)
+        short_exec_system = (
+            f"{hedge_block}{_SHORT_FORMATTER_SYSTEM}"
+            if hedge_block
+            else _SHORT_FORMATTER_SYSTEM
+        )
+        exec_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", short_exec_system),
+                ("human", _SHORT_FORMATTER_HUMAN),
+            ]
+        )
+        exec_chain = exec_prompt | self.llm.with_structured_output(
+            ShortFormatterOutput
+        )
+        return await exec_chain.ainvoke(
+            {
+                "plan": plan.model_dump_json(indent=2),
+                "script_content": script_content,
+                "refined_context": refined_context,
+                "verified_claims": claims_text,
+                "platform": platform or "default",
+                "platform_aspect_ratio": platform_aspect_ratio,
+                "voice_id": voice_id,
+                "loopable": str(loopable),
+                "visual_style_theme": visual_style_theme or "default",
+                "correction_hint": correction_hint,
+            }
+        )
+
+    async def _execute_formatter_fallback(
+        self, context: Dict[str, Any], plan: ShortPlan
+    ) -> ShortFormatterOutput:
+        """Fallback: raw LLM invocation + manual JSON extraction."""
+        script_content = context["script_content"]
+        refined_context = context["refined_context"]
+        verified_claims = context["verified_claims"]
+        hedge_index = context["hedge_index"]
+        epistemic_ledger = context["epistemic_ledger"]
+        correction_hint = context["correction_hint"]
+        platform = context["platform"]
+        voice_id = context["voice_id"]
+        visual_style_theme = context["visual_style_theme"]
+        platform_aspect_ratio = context["platform_aspect_ratio"]
+        loopable = context.get("loopable", True)
+
+        claims_text = "\n".join(
+            f"- {c.get('claim_text', '')} [{c.get('verdict', 'UNKNOWN')}]: {c.get('evidence_text', 'N/A')}"
+            for c in verified_claims
+        )
+
+        hedge_block = _build_hedge_block(hedge_index, epistemic_ledger)
+        short_exec_system = (
+            f"{hedge_block}{_SHORT_FORMATTER_SYSTEM}"
+            if hedge_block
+            else _SHORT_FORMATTER_SYSTEM
+        )
+        exec_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", short_exec_system),
+                ("human", _SHORT_FORMATTER_HUMAN),
+            ]
+        )
+        raw_chain = exec_prompt | self.llm
+        msg = await raw_chain.ainvoke(
+            {
+                "plan": plan.model_dump_json(indent=2),
+                "script_content": script_content,
+                "refined_context": refined_context,
+                "verified_claims": claims_text,
+                "platform": platform or "default",
+                "platform_aspect_ratio": platform_aspect_ratio,
+                "voice_id": voice_id,
+                "loopable": str(loopable),
+                "visual_style_theme": visual_style_theme or "default",
+                "correction_hint": correction_hint,
+            }
+        )
+        json_data = _extract_json_fallback(msg.content)
+        return ShortFormatterOutput.model_validate(json_data)
+
     async def _execute(self, context: Dict[str, Any], **kwargs) -> AgentResult:
         script_content = context.get("script_content", "")
         refined_context = context.get("refined_context", "")
-        verified_claims = context.get("verified_claims", [])
-        hedge_index = context.get("hedge_index", [])
-        epistemic_ledger = context.get("epistemic_ledger", {})
-        correction_hint = context.get("correction_hint", "")
         platform = context.get("platform", "")
         loopable = context.get("loopable", True)
         voice_id = context.get("voice_id", "")
@@ -226,65 +386,58 @@ class ShortFormatterAgent(LLMAgent):
                 confidence_score=0.0,
             )
 
-        claims_text = "\n".join(
-            f"- {c.get('claim_text', '')} [{c.get('verdict', 'UNKNOWN')}]: {c.get('evidence_text', 'N/A')}"
-            for c in verified_claims
-        )
+        # Normalize context keys for plan/execute helpers
+        _ctx = {
+            "script_content": script_content,
+            "refined_context": refined_context,
+            "verified_claims": context.get("verified_claims", []),
+            "hedge_index": context.get("hedge_index", []),
+            "epistemic_ledger": context.get("epistemic_ledger", {}),
+            "correction_hint": context.get("correction_hint", ""),
+            "platform": platform,
+            "voice_id": voice_id,
+            "visual_style_theme": visual_style_theme,
+            "platform_aspect_ratio": platform_aspect_ratio,
+            "loopable": loopable,
+        }
 
-        hedge_block = _build_hedge_block(hedge_index, epistemic_ledger)
-        short_plan_system = (
-            f"{hedge_block}{_SHORT_PLAN_SYSTEM}" if hedge_block else _SHORT_PLAN_SYSTEM
-        )
+        # Plan step (cached in context across harness retries)
+        plan_key = "_short_plan_checkpoint"
+        plan = context.get(plan_key)
+        if plan is None:
+            try:
+                plan = await self._plan(_ctx)
+            except (OutputParserException, ValidationError) as exc:
+                logger.warning("Short plan structured output failed: %s", exc)
+                return AgentResult(
+                    status=AgentActionStatus.ERROR,
+                    payload={},
+                    reasoning=f"Short plan structured output failed: {exc}",
+                    confidence_score=0.0,
+                )
+            context[plan_key] = plan
 
-        plan_prompt = ChatPromptTemplate.from_messages(
-            [
-                ("system", short_plan_system),
-                ("human", _SHORT_PLAN_HUMAN),
-            ]
-        )
-        plan_chain = plan_prompt | self.llm.with_structured_output(ShortPlan)
-        plan: ShortPlan = await plan_chain.ainvoke(
-            {
-                "script_content": script_content,
-                "refined_context": refined_context,
-                "verified_claims": claims_text,
-                "platform": platform or "default",
-                "platform_aspect_ratio": platform_aspect_ratio,
-                "voice_id": voice_id,
-                "loopable": str(loopable),
-                "visual_style_theme": visual_style_theme or "default",
-                "correction_hint": correction_hint,
-            }
-        )
-        plan_text = plan.model_dump_json(indent=2)
         logger.info("Short plan produced: %d scenes", len(plan.scene_outline))
 
-        short_exec_system = (
-            f"{hedge_block}{_SHORT_FORMATTER_SYSTEM}"
-            if hedge_block
-            else _SHORT_FORMATTER_SYSTEM
-        )
-        exec_prompt = ChatPromptTemplate.from_messages(
-            [
-                ("system", short_exec_system),
-                ("human", _SHORT_FORMATTER_HUMAN),
-            ]
-        )
-        exec_chain = exec_prompt | self.llm.with_structured_output(ShortFormatterOutput)
-        result: ShortFormatterOutput = await exec_chain.ainvoke(
-            {
-                "plan": plan_text,
-                "script_content": script_content,
-                "refined_context": refined_context,
-                "verified_claims": claims_text,
-                "platform": platform or "default",
-                "platform_aspect_ratio": platform_aspect_ratio,
-                "voice_id": voice_id,
-                "loopable": str(loopable),
-                "visual_style_theme": visual_style_theme or "default",
-                "correction_hint": correction_hint,
-            }
-        )
+        # Execute step with JSON fallback
+        try:
+            result = await self._execute_formatter(_ctx, plan)
+        except (OutputParserException, ValidationError) as exc:
+            logger.warning(
+                "Short formatter structured output failed, "
+                "attempting JSON fallback: %s",
+                exc,
+            )
+            try:
+                result = await self._execute_formatter_fallback(_ctx, plan)
+            except Exception as fb_exc:
+                logger.warning("JSON fallback also failed: %s", fb_exc)
+                return AgentResult(
+                    status=AgentActionStatus.ERROR,
+                    payload={},
+                    reasoning=f"Short formatter failed: {exc}; fallback also failed: {fb_exc}",
+                    confidence_score=0.0,
+                )
 
         payload = result.model_dump()
         payload["_format"] = "short"
