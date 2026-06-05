@@ -111,9 +111,7 @@ class KlingVideoGen(VideoGenProvider):
 
     def _auth_headers(self) -> dict:
         if time.time() >= self._jwt_expires_at - 300:  # refresh 5 min before expiry
-            self._jwt_token = _generate_kling_jwt(
-                self.access_key, self.secret_key
-            )
+            self._jwt_token = _generate_kling_jwt(self.access_key, self.secret_key)
             self._jwt_expires_at = time.time() + 1800
         return {
             "Authorization": f"Bearer {self._jwt_token}",

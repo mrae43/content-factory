@@ -155,8 +155,10 @@ class TestElevenLabsTTSSuccess:
         resp = self._make_response(resp_data)
         cm = self._make_post_cm(resp)
 
-        with patch("aiohttp.ClientSession") as mock_session_cls, \
-             patch("app.services.tts.settings") as mock_settings:
+        with (
+            patch("aiohttp.ClientSession") as mock_session_cls,
+            patch("app.services.tts.settings") as mock_settings,
+        ):
             mock_settings.tts_model_id = "eleven_flash_v2_5"
             session = MagicMock()
             session.post = MagicMock(return_value=cm)

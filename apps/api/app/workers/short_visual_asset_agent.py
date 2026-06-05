@@ -364,7 +364,7 @@ class ShortVisualAssetAgent(ServiceAgent):
                 )
                 return None
 
-            wait = min(base_interval * (backoff_factor ** attempt), max_interval)
+            wait = min(base_interval * (backoff_factor**attempt), max_interval)
             await asyncio.sleep(wait)
 
         logger.warning(
