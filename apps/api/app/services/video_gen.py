@@ -9,6 +9,12 @@ from pydantic import BaseModel
 from app.core.config import settings
 from app.services.tools import Tool
 
+MINIMAX_6S_MODELS = frozenset(
+    {
+        "minimax/video-01-director",
+    }
+)
+
 logger = logging.getLogger("factory.video_gen")
 
 
@@ -44,6 +50,14 @@ class TogetherVideoGen(VideoGenProvider):
                 "model is required for video generation. "
                 "Set VIDEO_GEN_MODEL in .env or pass a model explicitly."
             )
+        model_key = model.lower().strip()
+        if model_key in MINIMAX_6S_MODELS and duration != 6:
+            logger.info(
+                "Model %s requires exactly 6 seconds; clamping duration from %d to 6",
+                model,
+                duration,
+            )
+            duration = 6
         response = await self.client.videos.create(
             model=model,
             prompt=prompt,

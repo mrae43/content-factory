@@ -407,6 +407,11 @@ async def _transition_short_asset_generation(
         "payload", format_job.format_payload
     )
 
+    story_directives = format_job.story_directives or {}
+    resolved_voice_id = _resolve_voice_id(story_directives, format_job.platform or "tiktok")
+    if resolved_voice_id:
+        sub_payload["voice_id"] = resolved_voice_id
+
     try:
         async with asyncio.TaskGroup() as tg:
             visual_task = tg.create_task(
