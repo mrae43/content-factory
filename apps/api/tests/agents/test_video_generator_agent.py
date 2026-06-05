@@ -93,7 +93,7 @@ def _format_payload(
 @pytest.fixture(autouse=True)
 def _patch_settings():
     with patch("app.workers.video_generator_agent.settings") as mock:
-        mock.video_gen_model = ""
+        mock.video_gen_model = "minimax/video-01-director"
         mock.video_gen_poll_interval_seconds = 0.01
         mock.video_gen_max_poll_retries = 60
         yield mock

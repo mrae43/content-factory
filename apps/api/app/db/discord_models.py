@@ -12,7 +12,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID, JSONB, ENUM
 from sqlalchemy.orm import relationship
 
-from app.db.models import Base, TrackedJSONB
+from app.db.models import Base
 
 
 ScriptJobStatusEnum = ENUM(
@@ -60,7 +60,7 @@ class ScriptJob(Base):
     refined_context = Column(Text, nullable=True)
     assembled_context = Column(JSONB, nullable=True)
     script_content = Column(Text, nullable=True)
-    claims = Column(TrackedJSONB, nullable=True)
+    claims = Column(JSONB, nullable=True)
     working_memory = Column(JSONB, nullable=True)
     hedge_index = Column(JSONB, nullable=True)
     error_log = Column(JSONB, nullable=True)

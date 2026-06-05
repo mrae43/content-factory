@@ -9,6 +9,12 @@ from pydantic import BaseModel
 from app.core.config import settings
 from app.services.tools import Tool
 
+MINIMAX_6S_MODELS = frozenset(
+    {
+        "minimax/video-01-director",
+    }
+)
+
 logger = logging.getLogger("factory.video_gen")
 
 
@@ -39,25 +45,33 @@ class TogetherVideoGen(VideoGenProvider):
         duration: int = 30,
         **kwargs,
     ) -> str:
+        if not model:
+            raise ValueError(
+                "model is required for video generation. "
+                "Set VIDEO_GEN_MODEL in .env or pass a model explicitly."
+            )
+        model_key = model.lower().strip()
+        if model_key in MINIMAX_6S_MODELS and duration != 6:
+            logger.info(
+                "Model %s requires exactly 6 seconds; clamping duration from %d to 6",
+                model,
+                duration,
+            )
+            duration = 6
         response = await self.client.videos.create(
             model=model,
             prompt=prompt,
-            n=1,
-            duration=duration,
+            seconds=str(duration),
         )
         return response.id
 
     async def poll_video(self, job_id: str) -> VideoGenResult:
         video = await self.client.videos.retrieve(id=job_id)
-        download_url = getattr(video, "output_url", None)
-        if download_url is None:
-            output = getattr(video, "output", None)
-            if output is not None:
-                download_url = getattr(output, "url", None)
+        download_url = video.outputs.video_url if video.outputs else None
         return VideoGenResult(
             status=video.status,
             download_url=download_url,
-            failure_reason=getattr(video, "error", None),
+            failure_reason=video.error.message if video.error else None,
         )
 
 
@@ -103,6 +117,11 @@ def make_generate_video_tool() -> Tool:
     ) -> dict:
         provider = get_video_gen_provider(settings.video_gen_provider)
         resolved_model = model or settings.video_gen_model
+        if not resolved_model:
+            raise ValueError(
+                "video_gen_model is not configured. Set VIDEO_GEN_MODEL "
+                "in .env or provide a model explicitly."
+            )
         job_id = await provider.generate_video(
             prompt=prompt, model=resolved_model, duration=duration
         )

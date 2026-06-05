@@ -155,7 +155,9 @@ class TestElevenLabsTTSSuccess:
         resp = self._make_response(resp_data)
         cm = self._make_post_cm(resp)
 
-        with patch("aiohttp.ClientSession") as mock_session_cls:
+        with patch("aiohttp.ClientSession") as mock_session_cls, \
+             patch("app.services.tts.settings") as mock_settings:
+            mock_settings.tts_model_id = "eleven_flash_v2_5"
             session = MagicMock()
             session.post = MagicMock(return_value=cm)
             session.__aenter__ = AsyncMock(return_value=session)
@@ -166,7 +168,7 @@ class TestElevenLabsTTSSuccess:
 
             call_kwargs = session.post.call_args[1]
             assert call_kwargs["json"]["text"] == "Hello world"
-            assert call_kwargs["json"]["model_id"] == "eleven_multilingual_v2"
+            assert call_kwargs["json"]["model_id"] == "eleven_flash_v2_5"
             assert call_kwargs["headers"]["xi-api-key"] == "test-key"
             assert call_kwargs["headers"]["Content-Type"] == "application/json"
 

@@ -45,7 +45,17 @@ async def create_format_job(
                 FormatJob.format_type == format_type,
             )
             result = await db.execute(stmt)
-            return result.scalar_one()
+            job = result.scalar_one()
+            job.status = FormatJobStatusEnum.PENDING
+            job.error_log = None
+            job.format_payload = None
+            job.final_video_url = None
+            job.locked_at = None
+            job.locked_by = None
+            job.working_memory = working_memory or {}
+            await db.commit()
+            await db.refresh(job)
+            return job
         raise
 
 

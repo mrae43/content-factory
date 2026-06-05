@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from typing import Any, ClassVar, Dict, List, Optional, Set, Type
 
 import aiohttp
@@ -88,15 +89,25 @@ class ShortVisualAssetAgent(ServiceAgent):
 
             if asset_type == "video_clip":
                 # Attempt video generation with one retry on failure
+                # Clamp to at least 6s (minimum supported by MiniMax 01 Director)
+                raw_duration = scene.get("target_duration_seconds", 5)
+                clamped = max(raw_duration, 6)
+                if clamped != raw_duration:
+                    logger.info(
+                        "Scene %d: clamped target_duration from %s to %d",
+                        scene_number,
+                        raw_duration,
+                        clamped,
+                    )
                 url = await self._try_generate_video_clip(
                     visual_prompt=visual_prompt,
-                    target_duration=scene.get("target_duration_seconds", 5),
+                    target_duration=clamped,
                     gen_tool=gen_video_tool,
                     poll_tool=poll_video_tool,
                     upload_tool=upload_video_tool,
                     folder=folder,
                     scene_number=scene_number,
-                    max_retries=2,  # initial + 1 retry
+                    max_retries=2,  # one original attempt + one retry, then fallback to Ken Burns
                 )
                 if url:
                     scene["video_url"] = url
@@ -205,7 +216,7 @@ class ShortVisualAssetAgent(ServiceAgent):
                 )
                 if not download_url:
                     logger.warning(
-                        "Scene %d: Poll timed out on attempt %d",
+                        "Scene %d: video generation attempt %d failed (no download URL)",
                         scene_number,
                         attempt,
                     )
@@ -238,20 +249,35 @@ class ShortVisualAssetAgent(ServiceAgent):
         poll_tool: Any,
         video_job_id: str,
         scene_number: int,
+        total_timeout: int = 900,
     ) -> Optional[str]:
-        """Poll until completion or timeout. Returns download URL or None."""
-        poll_interval = settings.video_gen_poll_interval_seconds
+        """Poll with exponential backoff until completion or deadline.
+
+        Returns download URL or None.
+        Backoff: base_interval * (backoff_factor ** attempt), capped at max_interval.
+        """
+        base_interval = settings.video_gen_poll_interval_seconds
+        max_interval = 60
+        backoff_factor = 1.5
         max_retries = settings.video_gen_max_poll_retries
+        deadline = time.monotonic() + total_timeout
 
         for attempt in range(max_retries):
+            if time.monotonic() >= deadline:
+                logger.warning(
+                    "Scene %d: video generation timed out after %ds",
+                    scene_number,
+                    total_timeout,
+                )
+                return None
+
             try:
                 poll_result = await poll_tool.callable(job_id=video_job_id)
             except Exception as exc:
                 logger.warning(
-                    "Scene %d poll attempt %d/%d failed: %s",
+                    "Scene %d poll attempt %d failed: %s",
                     scene_number,
                     attempt + 1,
-                    max_retries,
                     exc,
                 )
                 continue
@@ -275,10 +301,11 @@ class ShortVisualAssetAgent(ServiceAgent):
                 )
                 return None
 
-            await asyncio.sleep(poll_interval)
+            wait = min(base_interval * (backoff_factor ** attempt), max_interval)
+            await asyncio.sleep(wait)
 
         logger.warning(
-            "Scene %d: video generation timed out after %d polls",
+            "Scene %d: exhausted %d poll attempts",
             scene_number,
             max_retries,
         )

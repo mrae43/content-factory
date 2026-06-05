@@ -10,6 +10,7 @@ from app.services.image_gen import (
     ImageGenResult,
     _enrich_prompt,
     _get_dimensions,
+    _clamp_dimensions,
     _STYLE_ENRICHMENT,
     DEFAULT_DIMENSIONS,
     PLATFORM_DIMENSIONS,
@@ -54,6 +55,46 @@ class TestImageGenHelpers:
 
     def test_get_dimensions_empty_string_returns_default(self):
         assert _get_dimensions("") == DEFAULT_DIMENSIONS
+
+
+@pytest.mark.unit
+class TestClampDimensions:
+    def test_returns_unchanged_when_within_limits(self):
+        assert _clamp_dimensions(1088, 1344) == (1088, 1344)
+
+    def test_scales_down_tiktok_height_to_max(self):
+        w, h = _clamp_dimensions(1088, 1920)
+        assert h <= 1792
+        assert w % 16 == 0
+        assert h % 16 == 0
+
+    def test_scales_down_youtube_short_height_to_max(self):
+        w, h = _clamp_dimensions(1088, 1920)
+        assert h <= 1792
+        assert w % 16 == 0
+        assert h % 16 == 0
+
+    def test_scales_down_both_dimensions_when_needed(self):
+        w, h = _clamp_dimensions(2048, 2048)
+        assert w <= 1792
+        assert h <= 1792
+        assert w % 16 == 0
+        assert h % 16 == 0
+
+    def test_preserves_aspect_ratio(self):
+        w, h = _clamp_dimensions(1088, 1920)
+        ratio_in = 1088 / 1920
+        ratio_out = w / h
+        assert abs(ratio_out - ratio_in) < 0.02
+
+    def test_edge_case_just_under_limit(self):
+        assert _clamp_dimensions(1792, 1792) == (1792, 1792)
+
+    def test_edge_case_one_dimension_over(self):
+        w, h = _clamp_dimensions(100, 2000)
+        assert h <= 1792
+        assert w % 16 == 0
+        assert h % 16 == 0
 
 
 @pytest.mark.unit

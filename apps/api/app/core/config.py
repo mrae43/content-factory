@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     optimizer_temperature: float = 0.3
     asset_model: str = "openai/gpt-oss-20b"
     asset_temperature: float = 0.5
-    formatter_model: str = "openai/gpt-oss-20b"
+    formatter_model: str = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
     formatter_temperature: float = 0.3
     promotion_model: str = "openai/gpt-oss-20b"
     promotion_temperature: float = 0.3
@@ -58,12 +58,13 @@ class Settings(BaseSettings):
 
     # Video Generation
     video_gen_provider: str = "together"
-    video_gen_model: str = ""
+    video_gen_model: str = "minimax/video-01-director"
     video_gen_poll_interval_seconds: int = 5
     video_gen_max_poll_retries: int = 60
 
     # TTS (Text-to-Speech)
     tts_provider: str = "elevenlabs"
+    tts_model_id: str = "eleven_flash_v2_5"
     tts_api_key: str = ""
     default_voice_map: dict[str, str] = {}
 

@@ -1,11 +1,11 @@
 import math
 from typing import List, Tuple
 
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_openai import ChatOpenAI
-from langchain_core.language_models.chat_models import BaseChatModel
-from app.core.config import settings
 
+from app.core.config import settings
 
 # ── Provider Registry ──────────────────────────────────────────────────────────
 
@@ -46,6 +46,7 @@ def _resolve_provider(model_name: str) -> Tuple[str, str, dict]:
 def get_llm(
     model_name: str = "meta-llama/Llama-3.3-70B-Instruct-Turbo",
     temperature: float = 0.2,
+    max_tokens: int | None = None,
 ) -> BaseChatModel:
     provider_key, model, config = _resolve_provider(model_name)
     kwargs = {
@@ -65,7 +66,7 @@ def get_llm(
         kwargs["base_url"] = base_url
 
     if provider_key != "gemini":
-        kwargs["max_tokens"] = 4096
+        kwargs["max_tokens"] = max_tokens or 4096
 
     return config["class"](**kwargs)
 
