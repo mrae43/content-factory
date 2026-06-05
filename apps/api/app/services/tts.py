@@ -43,7 +43,7 @@ class ElevenLabsTTS(TTSProvider):
         url = f"{_ELEVENLABS_BASE_URL}/v1/text-to-speech/{voice_id}/with-timestamps"
         payload = {
             "text": text,
-            "model_id": "eleven_multilingual_v2",
+            "model_id": settings.tts_model_id,
         }
         headers = {
             "xi-api-key": self.api_key,

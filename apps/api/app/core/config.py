@@ -64,6 +64,7 @@ class Settings(BaseSettings):
 
     # TTS (Text-to-Speech)
     tts_provider: str = "elevenlabs"
+    tts_model_id: str = "eleven_flash_v2_5"
     tts_api_key: str = ""
     default_voice_map: dict[str, str] = {}
 
