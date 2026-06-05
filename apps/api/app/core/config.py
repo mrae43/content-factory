@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     optimizer_temperature: float = 0.3
     asset_model: str = "openai/gpt-oss-20b"
     asset_temperature: float = 0.5
-    formatter_model: str = "openai/gpt-oss-20b"
+    formatter_model: str = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
     formatter_temperature: float = 0.3
     promotion_model: str = "openai/gpt-oss-20b"
     promotion_temperature: float = 0.3
