@@ -408,7 +408,9 @@ async def _transition_short_asset_generation(
     )
 
     story_directives = format_job.story_directives or {}
-    resolved_voice_id = _resolve_voice_id(story_directives, format_job.platform or "tiktok")
+    resolved_voice_id = _resolve_voice_id(
+        story_directives, format_job.platform or "tiktok"
+    )
     if resolved_voice_id:
         sub_payload["voice_id"] = resolved_voice_id
 

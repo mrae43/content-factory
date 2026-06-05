@@ -52,7 +52,9 @@ def _clamp_dimensions(width: int, height: int) -> tuple[int, int]:
 # exponential backoff when a 429 is encountered.
 _rate_limit_lock = asyncio.Lock()
 _last_api_call: float = 0.0
-_min_gap: float = settings.image_gen_min_gap  # seconds; doubles on each 429, capped at 60
+_min_gap: float = (
+    settings.image_gen_min_gap
+)  # seconds; doubles on each 429, capped at 60
 _cooldown_until: float = 0.0
 
 

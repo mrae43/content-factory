@@ -292,9 +292,7 @@ class ShortFormatterAgent(LLMAgent):
                 ("human", _SHORT_FORMATTER_HUMAN),
             ]
         )
-        exec_chain = exec_prompt | self.llm.with_structured_output(
-            ShortFormatterOutput
-        )
+        exec_chain = exec_prompt | self.llm.with_structured_output(ShortFormatterOutput)
         return await exec_chain.ainvoke(
             {
                 "plan": plan.model_dump_json(indent=2),
