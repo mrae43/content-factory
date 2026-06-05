@@ -62,7 +62,7 @@ _Avoid_: Calling a Carousel a "Format Output" — it's a Visual Asset that gets 
 
 ## Visual Generation
 
-The role of the Video Generator Agent: accept a structured video scene payload (produced by the Layout Desk's VideoFormatterAgent) and produce a playable video file by calling a model-agnostic video generation API (Together AI for testing, Seedance V2 for production). The agent orchestrates three deterministic steps: submit generation job, poll for completion, upload result to S3. Visual Generation explicitly does NOT generate text or typography — text captions are a separate concern handled by the text generation layer (CopywriterAgent, formatters). This is a hard domain separation boundary: the visual model renders the image; the text agent renders the caption.
+The role of the Video Generator Agent: accept a structured video scene payload (produced by the Layout Desk's VideoFormatterAgent) and produce a playable video file by calling a model-agnostic video generation API (Kling AI for SHORT pipeline video clips, Together AI for legacy VIDEO pipeline, Seedance V2 planned for production). The agent orchestrates three deterministic steps: submit generation job, poll for completion, upload result to S3. Visual Generation explicitly does NOT generate text or typography — text captions are a separate concern handled by the text generation layer (CopywriterAgent, formatters). This is a hard domain separation boundary: the visual model renders the image; the text agent renders the caption.
 
 _Avoid_: Asking the Video Generator Agent to embed text into generated videos. That is an integration failure, not a feature gap.
 
@@ -82,7 +82,7 @@ A `ServiceAgent` (no LLM) that orchestrates the video rendering pipeline. Inject
 
 ## Video Generation Provider
 
-A provider-agnostic abstraction (`VideoGenProvider` ABC in `app/services/video_gen.py`) that mirrors the LLM provider registry pattern. Two implementations: `TogetherVideoGen` (testing, single-shot) and planned `SeedanceVideoGen` (production, per-scene). Selected via `video_gen_provider` env var.
+A provider-agnostic abstraction (`VideoGenProvider` ABC in `app/services/video_gen.py`) that mirrors the LLM provider registry pattern. Three implementations: `KlingVideoGen` (SHORT pipeline video clips), `TogetherVideoGen` (legacy VIDEO pipeline, single-shot), and planned `SeedanceVideoGen` (production, per-scene). Selected via `video_gen_provider` env var. SHORT pipeline uses Kling AI because Together's `minimax/video-01-director` model has a 0% success rate in practice (always times out).
 
 ## Audio Direction
 
@@ -311,7 +311,7 @@ The structured output of the `ShortFormatterAgent`. A `ShortFormatPayload` conta
 
 ## Asset Hybridization
 
-Per-scene visual generation strategy where the LLM tags each scene as either `video_clip` (generated via Together AI) or `ken_burns` (a FLUX still animated with slow pan/zoom via FFmpeg `zoompan`). A validator enforces 1–2 `video_clip` scenes minimum per Short (auto-fixes violations). Cost-efficient and visually varied — avoids the monolithic single-shot approach of the `VIDEO` format.
+Per-scene visual generation strategy where the LLM tags each scene as either `video_clip` (generated via Kling AI) or `ken_burns` (a FLUX still animated with slow pan/zoom via FFmpeg `zoompan`). A validator enforces 1–2 `video_clip` scenes minimum per Short (auto-fixes violations). Cost-efficient and visually varied — avoids the monolithic single-shot approach of the `VIDEO` format.
 
 ## Ken Burns Motion
 
@@ -341,7 +341,7 @@ A `ServiceAgent` (no LLM) that runs the 5-step composition pipeline: pre-flight 
 
 ## Short Visual Asset Agent
 
-A `ServiceAgent` that generates per-scene visual assets for a Short. For scenes tagged `video_clip`, calls Together AI's video generation API. For scenes tagged `ken_burns`, calls FLUX image generation. On video clip failure, retries once then falls back to Ken Burns, updating `asset_type` in-place. All assets uploaded to S3 with appropriate `AssetType` (`SHORT_VIDEO_CLIP` or `SHORT_STILL_IMAGE`) and `render_meta.scene_number`.
+A `ServiceAgent` that generates per-scene visual assets for a Short. For scenes tagged `video_clip`, calls Kling AI's text-to-video API. For scenes tagged `ken_burns`, calls FLUX image generation. On video clip failure, retries once then falls back to Ken Burns, updating `asset_type` in-place. Ken Burns scenes are generated concurrently; video_clip scenes are sequential (submit→poll→download→upload per scene). All assets uploaded to S3 with appropriate `AssetType` (`SHORT_VIDEO_CLIP` or `SHORT_STILL_IMAGE`) and `render_meta.scene_number`.
 
 ## Short Voiceover Agent
 
@@ -350,4 +350,22 @@ A `ServiceAgent` that generates a continuous TTS voiceover track via a `TTSProvi
 ## Loop Hook
 
 A narrative bridge on `ShortFormatPayload` (populated when `story_directives.loopable = true`) describing how the final scene's narration connects back to the opening hook. Instructs the `ShortFormatterAgent` to write circular narrative structure. No FFmpeg stitch — the content itself loops by design.
+
+## Kling Video Generation
+
+The AI video generation service used by the SHORT pipeline for `video_clip` scenes. Kling AI produces 5-second or 10-second video clips from text prompts via the `text2video` API endpoint. Supports `9:16` aspect ratio natively (matching TikTok/YouTube Shorts). Authentication uses JWT (access key + secret key). Free tier provides 66 credits/day. Default model for testing: `kling-v1-6` with `std` mode (720p). Upgrade path: `kling-v2-6` or `kling-v3` with `pro` mode (1080p) via env var. See ADR 0013.
+
+_Avoid:_ Using Kling for the legacy `VIDEO` format pipeline — that path still uses `TogetherVideoGen`.
+
+## JWT Authentication (Kling)
+
+The authentication scheme required by the Kling AI API. A JWT token is generated from an `access_key` + `secret_key` pair using `HS256` signing, valid for 30 minutes. The `KlingVideoGen` provider instance caches the token and refreshes it when within 5 minutes of expiry. This is stateful authentication (unlike Together's simple API key). Requires the `pyjwt` package.
+
+## Duration Mapping
+
+The rounding of a scene's `target_duration_seconds` to the nearest Kling-supported duration value. Kling's `text2video` endpoint accepts only `"5"` or `"10"` seconds (for v1/v2 models). Scenes targeting 3.0–7.0 seconds are rounded to `"5"`; scenes targeting 7.1–15.0 seconds are rounded to `"10"`. The generated video is slightly longer than the target, but the `ShortComposerAgent` already trims all scenes to their exact `target_duration_seconds` in FFmpeg, so no extra composition logic is needed.
+
+## Scene Parallelism
+
+The concurrent execution of Ken Burns scene generation within `ShortVisualAssetAgent`. Ken Burns scenes (FLUX image generation + upload) run in parallel via `asyncio.gather()`, while `video_clip` scenes remain sequential (each requires submit→poll→download→upload, which blocks on its own completion). The global FLUX rate limiter (`_min_gap`) still throttles concurrent requests, but the overhead between calls is parallelized. This is a performance optimization that reduces visual asset wall time for still-heavy shorts.
 

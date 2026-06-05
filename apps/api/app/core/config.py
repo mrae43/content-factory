@@ -53,14 +53,21 @@ class Settings(BaseSettings):
     image_model: str = "black-forest-labs/FLUX.1-schnell"
     image_gen_max_retries: int = 3
     image_gen_timeout_seconds: int = 30
+    image_gen_min_gap: float = 3.0
     image_storage_path: str = "static/carousel_images"
     image_gen_slide_delay: float = 1.5
 
     # Video Generation
-    video_gen_provider: str = "together"
-    video_gen_model: str = "minimax/video-01-director"
+    video_gen_provider: str = "kling"
+    video_gen_model: str = "kling-v1-6"
+    video_gen_mode: str = "std"
     video_gen_poll_interval_seconds: int = 5
     video_gen_max_poll_retries: int = 60
+
+    # Kling AI
+    kling_access_key: str = ""
+    kling_secret_key: str = ""
+    kling_base_url: str = "https://api-singapore.klingai.com/v1"
 
     # TTS (Text-to-Speech)
     tts_provider: str = "elevenlabs"

@@ -73,11 +73,50 @@ class ShortVisualAssetAgent(ServiceAgent):
         failures: list[dict] = []
         scene_urls: list[dict] = []
 
+        # Partition scenes
+        video_scenes: list[dict] = []
+        kb_scenes: list[dict] = []
         for i, scene in enumerate(scenes):
-            scene_number = scene.get("scene_number", i + 1)
-            asset_type = scene.get("asset_type")
-            visual_prompt = scene.get("visual_prompt", "")
+            scene["scene_number"] = scene.get("scene_number", i + 1)
+            if scene.get("asset_type") == "video_clip":
+                video_scenes.append(scene)
+            else:
+                kb_scenes.append(scene)
 
+        # Run original Ken Burns scenes in parallel
+        kb_tasks = [
+            self._generate_ken_burns_scene(
+                scene=scene,
+                platform=platform,
+                gen_image_tool=gen_image_tool,
+                upload_image_tool=upload_image_tool,
+                folder=folder,
+            )
+            for scene in kb_scenes
+        ]
+        kb_results = await asyncio.gather(*kb_tasks, return_exceptions=True)
+        for scene, result in zip(kb_scenes, kb_results):
+            if isinstance(result, Exception):
+                logger.warning(
+                    "Scene %d: Ken Burns generation failed: %s",
+                    scene["scene_number"],
+                    result,
+                )
+                failures.append(
+                    {
+                        "scene_number": scene["scene_number"],
+                        "reason": str(result),
+                    }
+                )
+            else:
+                scene["image_url"] = result["url"]
+                scene_urls.append(result)
+
+        # Run video_clip scenes sequentially
+        kb_fallback_scenes: list[dict] = []
+        for scene in video_scenes:
+            scene_number = scene["scene_number"]
+            visual_prompt = scene.get("visual_prompt", "")
             if not visual_prompt:
                 failures.append(
                     {
@@ -87,74 +126,70 @@ class ShortVisualAssetAgent(ServiceAgent):
                 )
                 continue
 
-            if asset_type == "video_clip":
-                # Attempt video generation with one retry on failure
-                # Clamp to at least 6s (minimum supported by MiniMax 01 Director)
-                raw_duration = scene.get("target_duration_seconds", 5)
-                clamped = max(raw_duration, 6)
-                if clamped != raw_duration:
-                    logger.info(
-                        "Scene %d: clamped target_duration from %s to %d",
-                        scene_number,
-                        raw_duration,
-                        clamped,
-                    )
-                url = await self._try_generate_video_clip(
-                    visual_prompt=visual_prompt,
-                    target_duration=clamped,
-                    gen_tool=gen_video_tool,
-                    poll_tool=poll_video_tool,
-                    upload_tool=upload_video_tool,
+            raw_duration = scene.get("target_duration_seconds", 5)
+            url = await self._try_generate_video_clip(
+                visual_prompt=visual_prompt,
+                target_duration=raw_duration,
+                gen_tool=gen_video_tool,
+                poll_tool=poll_video_tool,
+                upload_tool=upload_video_tool,
+                folder=folder,
+                scene_number=scene_number,
+                max_retries=2,
+            )
+            if url:
+                scene["video_url"] = url
+                scene_urls.append(
+                    {
+                        "scene_number": scene_number,
+                        "url": url,
+                        "asset_type": "video_clip",
+                    }
+                )
+                continue
+
+            # Fallback to Ken Burns still
+            logger.warning(
+                "Scene %d video generation failed, falling back to Ken Burns",
+                scene_number,
+            )
+            scene["asset_type"] = "ken_burns"
+            scene["kb_motion"] = "zoom_in"
+            kb_fallback_scenes.append(scene)
+
+        # Run any fallback Ken Burns scenes in parallel
+        if kb_fallback_scenes:
+            fb_tasks = [
+                self._generate_ken_burns_scene(
+                    scene=scene,
+                    platform=platform,
+                    gen_image_tool=gen_image_tool,
+                    upload_image_tool=upload_image_tool,
                     folder=folder,
-                    scene_number=scene_number,
-                    max_retries=2,  # one original attempt + one retry, then fallback to Ken Burns
                 )
-                if url:
-                    scene["video_url"] = url
-                    scene_urls.append(
-                        {
-                            "scene_number": scene_number,
-                            "url": url,
-                            "asset_type": "video_clip",
-                        }
+                for scene in kb_fallback_scenes
+            ]
+            fb_results = await asyncio.gather(*fb_tasks, return_exceptions=True)
+            for scene, result in zip(kb_fallback_scenes, fb_results):
+                if isinstance(result, Exception):
+                    logger.warning(
+                        "Scene %d: fallback Ken Burns generation failed: %s",
+                        scene["scene_number"],
+                        result,
                     )
-                    continue
-
-                # Fallback to Ken Burns still
-                logger.warning(
-                    "Scene %d video generation failed, falling back to Ken Burns",
-                    scene_number,
-                )
-                scene["asset_type"] = "ken_burns"
-                scene["kb_motion"] = "zoom_in"
-                asset_type = "ken_burns"
-
-            if asset_type == "ken_burns":
-                img_result = await gen_image_tool.callable(visual_prompt, platform)
-                if img_result["success"] and img_result["image_bytes"]:
-                    filename = f"scene_{scene_number:02d}.png"
-                    url = await upload_image_tool.callable(
-                        img_result["image_bytes"], filename, folder=folder
-                    )
-                    scene["image_url"] = url
-                    scene_urls.append(
+                    failures.append(
                         {
-                            "scene_number": scene_number,
-                            "url": url,
-                            "asset_type": "ken_burns",
+                            "scene_number": scene["scene_number"],
+                            "reason": str(result),
                         }
                     )
                 else:
-                    failures.append(
-                        {
-                            "scene_number": scene_number,
-                            "reason": img_result.get("failure_reason", "Unknown error"),
-                        }
-                    )
+                    scene["image_url"] = result["url"]
+                    scene_urls.append(result)
 
-            # Rate-limit delay between scenes (not after the last one)
-            if i < len(scenes) - 1:
-                await asyncio.sleep(settings.image_gen_slide_delay)
+        # Preserve original scene order in outputs
+        scene_urls.sort(key=lambda u: u["scene_number"])
+        failures.sort(key=lambda f: f["scene_number"])
 
         success_count = len(scenes) - len(failures)
         status = (
@@ -180,6 +215,34 @@ class ShortVisualAssetAgent(ServiceAgent):
                 "failures": failures,
             },
         )
+
+    async def _generate_ken_burns_scene(
+        self,
+        scene: dict,
+        platform: str,
+        gen_image_tool: Any,
+        upload_image_tool: Any,
+        folder: str,
+    ) -> dict:
+        """Generate a single Ken Burns scene. Returns scene_url dict."""
+        scene_number = scene["scene_number"]
+        visual_prompt = scene.get("visual_prompt", "")
+        if not visual_prompt:
+            raise RuntimeError("Empty visual_prompt")
+        img_result = await gen_image_tool.callable(visual_prompt, platform)
+        if img_result["success"] and img_result["image_bytes"]:
+            filename = f"scene_{scene_number:02d}.png"
+            url = await upload_image_tool.callable(
+                img_result["image_bytes"], filename, folder=folder
+            )
+            scene["image_url"] = url
+            return {
+                "scene_number": scene_number,
+                "url": url,
+                "asset_type": "ken_burns",
+            }
+        failure_reason = img_result.get("failure_reason", "Unknown error")
+        raise RuntimeError(failure_reason)
 
     async def _try_generate_video_clip(
         self,
@@ -249,7 +312,7 @@ class ShortVisualAssetAgent(ServiceAgent):
         poll_tool: Any,
         video_job_id: str,
         scene_number: int,
-        total_timeout: int = 900,
+        total_timeout: int = 450,
     ) -> Optional[str]:
         """Poll with exponential backoff until completion or deadline.
 
