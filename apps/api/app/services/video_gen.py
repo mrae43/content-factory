@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import logging
+import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 
+import aiohttp
+import jwt
 from pydantic import BaseModel
 
 from app.core.config import settings
@@ -75,14 +78,120 @@ class TogetherVideoGen(VideoGenProvider):
         )
 
 
+def _generate_kling_jwt(access_key: str, secret_key: str) -> str:
+    headers = {"alg": "HS256", "typ": "JWT"}
+    now = int(time.time())
+    payload = {
+        "iss": access_key,
+        "exp": now + 1800,
+        "nbf": now - 5,
+    }
+    return jwt.encode(payload, secret_key, headers=headers)
+
+
+def _map_duration_to_kling(target_duration: float) -> str:
+    """Map 3-15s scene duration to Kling-supported 5s or 10s."""
+    if target_duration <= 7.0:
+        return "5"
+    return "10"
+
+
+class KlingVideoGen(VideoGenProvider):
+    """
+    Kling AI text-to-video provider.
+    Uses JWT authentication with a 30-minute token expiry.
+    """
+
+    def __init__(self, access_key: str, secret_key: str, base_url: str = ""):
+        self.access_key = access_key
+        self.secret_key = secret_key
+        self.base_url = base_url or "https://api-singapore.klingai.com/v1"
+        self._jwt_token: str = ""
+        self._jwt_expires_at: float = 0.0
+
+    def _auth_headers(self) -> dict:
+        if time.time() >= self._jwt_expires_at - 300:  # refresh 5 min before expiry
+            self._jwt_token = _generate_kling_jwt(
+                self.access_key, self.secret_key
+            )
+            self._jwt_expires_at = time.time() + 1800
+        return {
+            "Authorization": f"Bearer {self._jwt_token}",
+            "Content-Type": "application/json",
+        }
+
+    async def generate_video(
+        self,
+        prompt: str,
+        model: str = "",
+        duration: int = 5,
+        aspect_ratio: str = "9:16",
+        sound: str = "off",
+        **kwargs,
+    ) -> str:
+        mapped_duration = _map_duration_to_kling(duration)
+        payload = {
+            "model_name": model or settings.video_gen_model,
+            "mode": settings.video_gen_mode,
+            "prompt": prompt,
+            "duration": mapped_duration,
+            "aspect_ratio": aspect_ratio,
+            "sound": sound,
+        }
+        headers = self._auth_headers()
+        url = f"{self.base_url}/videos/text2video"
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=payload, headers=headers) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+                task_id = data.get("data", {}).get("task_id")
+                if not task_id:
+                    raise ValueError(
+                        f"Kling API did not return a task_id. Response: {data}"
+                    )
+                return task_id
+
+    async def poll_video(self, job_id: str) -> VideoGenResult:
+        headers = self._auth_headers()
+        url = f"{self.base_url}/videos/text2video/{job_id}"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+                task_data = data.get("data", {})
+                status = task_data.get("status", "unknown")
+                download_url = None
+                if status == "succeed":
+                    videos = task_data.get("task_result", {}).get("videos", [])
+                    if videos:
+                        download_url = videos[0].get("url")
+                    status = "completed"
+                failure_reason = None
+                if status == "failed":
+                    failure_reason = (
+                        task_data.get("task_status_reason")
+                        or task_data.get("message")
+                        or "Unknown failure"
+                    )
+                return VideoGenResult(
+                    status=status,
+                    download_url=download_url,
+                    failure_reason=failure_reason,
+                )
+
+
 VIDEO_GEN_PROVIDERS: Dict[str, Dict[str, Any]] = {
     "together": {
         "class": TogetherVideoGen,
         "api_key_attr": "together_api_key",
     },
+    "kling": {
+        "class": KlingVideoGen,
+        "api_key_attr": None,  # handled via kling_access_key + kling_secret_key
+    },
 }
 
-_DEFAULT_VIDEO_PROVIDER = "together"
+_DEFAULT_VIDEO_PROVIDER = "kling"
 
 
 def _resolve_video_provider(provider_name: str = "") -> tuple[str, dict]:
@@ -104,8 +213,16 @@ def get_video_gen_provider(provider_name: str = "") -> VideoGenProvider:
     key = provider_name or _DEFAULT_VIDEO_PROVIDER
     if key not in _video_gen_provider_cache:
         _, config = _resolve_video_provider(key)
-        api_key = getattr(settings, config["api_key_attr"], None)
-        _video_gen_provider_cache[key] = config["class"](api_key=api_key)
+        api_key_attr = config.get("api_key_attr")
+        if api_key_attr:
+            api_key = getattr(settings, api_key_attr, None)
+            _video_gen_provider_cache[key] = config["class"](api_key=api_key)
+        else:
+            _video_gen_provider_cache[key] = config["class"](
+                access_key=settings.kling_access_key,
+                secret_key=settings.kling_secret_key,
+                base_url=settings.kling_base_url,
+            )
     return _video_gen_provider_cache[key]
 
 
