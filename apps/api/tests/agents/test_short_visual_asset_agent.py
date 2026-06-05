@@ -166,7 +166,7 @@ def _format_payload(scenes: list[dict]) -> dict:
 @pytest.fixture(autouse=True)
 def _patch_settings():
     with patch("app.workers.short_visual_asset_agent.settings") as mock:
-        mock.video_gen_model = ""
+        mock.video_gen_model = "minimax/video-01-director"
         mock.video_gen_poll_interval_seconds = 0.005
         mock.video_gen_max_poll_retries = 60
         mock.image_gen_slide_delay = 0.0

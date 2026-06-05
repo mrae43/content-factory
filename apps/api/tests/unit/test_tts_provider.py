@@ -166,7 +166,7 @@ class TestElevenLabsTTSSuccess:
 
             call_kwargs = session.post.call_args[1]
             assert call_kwargs["json"]["text"] == "Hello world"
-            assert call_kwargs["json"]["model_id"] == "eleven_multilingual_v2"
+            assert call_kwargs["json"]["model_id"] == "eleven_flash_v2_5"
             assert call_kwargs["headers"]["xi-api-key"] == "test-key"
             assert call_kwargs["headers"]["Content-Type"] == "application/json"
 

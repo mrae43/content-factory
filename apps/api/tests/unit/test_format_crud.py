@@ -93,9 +93,13 @@ class TestCreateFormatJob:
 
         from sqlalchemy.exc import IntegrityError
 
-        mock_db.commit.side_effect = IntegrityError(
-            "mock", "mock", Exception("uq_format_jobs_source_platform_type")
-        )
+        mock_db.commit.side_effect = [
+            IntegrityError(
+                "mock", "mock", Exception("uq_format_jobs_source_platform_type")
+            ),
+            None,
+        ]
+        mock_db.refresh = AsyncMock()
         mock_scalar_result.scalar_one.return_value = existing
 
         result = await create_format_job(
@@ -107,6 +111,12 @@ class TestCreateFormatJob:
         )
 
         assert result == existing
+        assert result.status == FormatJobStatusEnum.PENDING
+        assert result.error_log is None
+        assert result.format_payload is None
+        assert result.locked_at is None
+        assert result.locked_by is None
+        mock_db.refresh.assert_awaited_once_with(existing)
 
     async def test_empty_claims_in_snapshot(
         self, mock_db, mock_scalar_result, source_job_id
